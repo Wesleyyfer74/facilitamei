@@ -25,6 +25,16 @@ const isLocalHost = ["localhost", "127.0.0.1"].includes(window.location.hostname
 const configuredApiBase = String(window.FACILITA_API_BASE || "").replace(/\/$/, "");
 const API_BASE = configuredApiBase || (isLocalFile || (isLocalHost && window.location.port !== "3000") ? "http://localhost:3000" : "");
 
+async function parseJsonResponse(response, fallbackMessage) {
+  const text = await response.text();
+
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw new Error(fallbackMessage || "A API retornou uma resposta invalida. Confira a URL do backend no config.js.");
+  }
+}
+
 let planDetails = {
   "start-mei": {
     title: "Start MEI",
@@ -191,7 +201,7 @@ function formatPrice(value) {
 async function loadPlansFromBackend() {
   try {
     const response = await fetch(`${API_BASE}/api/plans`);
-    const data = await response.json();
+    const data = await parseJsonResponse(response, "Nao foi possivel carregar os planos. Confira a URL do backend no config.js.");
 
     if (!response.ok || !Array.isArray(data.plans)) return;
 
@@ -300,7 +310,7 @@ function startPaymentStatusPolling(paymentId) {
   statusPollingId = window.setInterval(async () => {
     try {
       const response = await fetch(`${API_BASE}/api/payments/${paymentId}/status`);
-      const data = await response.json();
+      const data = await parseJsonResponse(response, "Nao foi possivel consultar o status do pagamento.");
 
       if (!response.ok) return;
 
@@ -320,7 +330,7 @@ async function loadMercadoPago() {
   if (mercadoPagoInstance) return mercadoPagoInstance;
 
   const configResponse = await fetch(`${API_BASE}/api/config`);
-  const config = await configResponse.json();
+  const config = await parseJsonResponse(configResponse, "Nao foi possivel carregar a configuracao do Mercado Pago. Confira a URL do backend no config.js.");
   const publicKey = config.mercadoPagoPublicKey || config.publicKey;
 
   if (!publicKey) {
@@ -376,7 +386,7 @@ async function submitSubscriptionWithToken(cardTokenId) {
       cardTokenId,
     }),
   });
-  const data = await response.json();
+  const data = await parseJsonResponse(response, "O backend retornou uma resposta invalida. Confira se o config.js aponta para o Railway.");
 
   if (!response.ok) {
     throw new Error(data.error || "Nao foi possivel criar a assinatura.");
