@@ -1,0 +1,20 @@
+Options -Indexes
+DirectoryIndex index.html
+
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+
+  RewriteRule ^(\.env|\.env\..*|server\.js|backend\.log|package\.json|package-lock\.json|DEPLOYMENT\.md|HOSTINGER_DEPLOY\.md)$ - [F,L,NC]
+  RewriteRule ^(database|docs|scripts|node_modules|\.git|\.agents|\.codex)(/|$) - [F,L,NC]
+
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteCond %{REQUEST_FILENAME} !-d
+  RewriteRule ^ index.html [L]
+</IfModule>
+
+<IfModule mod_headers.c>
+  Header always set X-Content-Type-Options "nosniff"
+  Header always set X-Frame-Options "DENY"
+  Header always set Referrer-Policy "strict-origin-when-cross-origin"
+  Header always set Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=()"
+</IfModule>

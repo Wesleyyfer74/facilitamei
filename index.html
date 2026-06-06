@@ -1,0 +1,343 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Facilita MEI</title>
+    <meta
+      name="description"
+      content="Facilita MEI ajuda empreendedores a abrir, regularizar e cuidar do MEI com atendimento simples e seguro."
+    />
+    <link rel="preload" href="./assets/fundo.png" as="image" />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <header class="site-header" data-header>
+      <a class="brand" href="#inicio" aria-label="Facilita MEI">
+        <img src="./assets/logo.png" alt="Facilita MEI" />
+      </a>
+
+      <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="menu" data-menu-toggle>
+        <span></span>
+        <span></span>
+        <span></span>
+      </button>
+
+      <nav class="nav" id="menu" data-menu>
+        <a href="#servicos">Servicos</a>
+        <a href="#planos">Planos</a>
+        <a class="nav-cta" href="#planos">Comecar agora</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="hero reveal" id="inicio">
+        <div class="hero-bg" aria-hidden="true"></div>
+        <div class="hero-content reveal">
+          <p class="eyebrow">Atendimento para MEI</p>
+          <h1>Proteja seu MEI</h1>
+          <p class="hero-copy">
+            Evite multas, dividas e problemas com o governo. Regularize sua empresa com suporte contabil
+            especializado, facilidade e economia.
+          </p>
+          <div class="hero-actions reveal">
+            <a class="button primary" href="#planos">Quero proteger meu MEI</a>
+            <a class="button secondary" href="#servicos">Ver servicos</a>
+          </div>
+          <div class="trust-row" aria-label="Destaques">
+            <span>Regularizacao completa</span>
+            <span>Facilidade e economia</span>
+            <span>Suporte contabil especializado</span>
+          </div>
+        </div>
+        <img class="hero-person lock-hero reveal" src="./assets/cadeado.png" alt="" />
+      </section>
+
+      <section class="section services reveal" id="servicos">
+        <div class="section-heading reveal">
+          <p class="eyebrow">Servicos</p>
+          <h2>Seu MEI sem complicacao, rapido e seguro</h2>
+        </div>
+        <div class="service-grid">
+          <article class="service-card">
+            <span>01</span>
+            <h3>Abrir MEI</h3>
+            <p>Consultoria para abertura de CNPJ MEI, com coleta orientada dos dados e acompanhamento do pedido.</p>
+          </article>
+          <article class="service-card">
+            <span>02</span>
+            <h3>Gestao de MEI</h3>
+            <p>Apoio para manter o MEI organizado, com controle fiscal, prazos e acompanhamento de pendencias.</p>
+          </article>
+          <article class="service-card">
+            <span>03</span>
+            <h3>Certificado Digital</h3>
+            <p>Orientacao para emissao e uso do certificado, deixando o atendimento pronto para etapas digitais.</p>
+          </article>
+          <article class="service-card">
+            <span>04</span>
+            <h3>Registro de Funcionarios para MEI</h3>
+            <p>Suporte para reunir dados, entender exigencias e encaminhar o processo com mais seguranca.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="section plans reveal" id="planos">
+        <div class="section-heading center reveal">
+          <p class="eyebrow">Planos mensais</p>
+          <h2>Nossos Planos e Servicos</h2>
+          <p>Encontre o plano ideal para manter seu MEI seguro, organizado e em dia com as obrigacoes fiscais.</p>
+        </div>
+        <div class="plan-grid">
+          <article class="plan-card">
+            <div>
+              <span class="plan-kicker">Inicio</span>
+              <h3>Start MEI</h3>
+              <div class="plan-price-box">
+                <span class="plan-price-currency">R$</span>
+                <span class="plan-price">89,99</span>
+                <span class="plan-price-month">/mes</span>
+              </div>
+              <p class="plan-desc">Ideal para quem ja possui MEI aberto.</p>
+            </div>
+            <ul class="plan-features">
+              <li>CNPJ ja aberto</li>
+              <li>Orientacao inicial</li>
+              <li>Emissao de ate 3 NFS-e por mes</li>
+              <li>PGDAS anual</li>
+            </ul>
+            <button class="button primary" type="button" data-plan-id="start-mei">Assinar</button>
+          </article>
+
+          <article class="plan-card">
+            <div>
+              <span class="plan-kicker">Plano mensal</span>
+              <h3>Facilita MEI Servicos</h3>
+              <div class="plan-price-box">
+                <span class="plan-price-currency">R$</span>
+                <span class="plan-price">99,99</span>
+                <span class="plan-price-month">/mes</span>
+              </div>
+              <p class="plan-desc">Perfeito para prestadores de servicos com MEI aberto.</p>
+            </div>
+            <ul class="plan-features">
+              <li>Emissao de ate 10 NFS-e por mes</li>
+              <li>Suporte e orientacao com a equipe</li>
+              <li>PGDAS anual</li>
+            </ul>
+            <button class="button primary" type="button" data-plan-id="servicos">Assinar</button>
+          </article>
+
+          <article class="plan-card featured">
+            <div>
+              <span class="plan-kicker">Mais contratado</span>
+              <h3>Facilita Premium</h3>
+              <div class="plan-price-box">
+                <span class="plan-price-currency">R$</span>
+                <span class="plan-price">149,99</span>
+                <span class="plan-price-month">/mes</span>
+              </div>
+              <div class="plan-bonus">Bonus exclusivo</div>
+            </div>
+            <ul class="plan-features dark-check">
+              <li>Emissao de ate 20 NFS-e por mes</li>
+              <li>Suporte e orientacao com contador</li>
+              <li>PGDAS anual</li>
+              <li>Certificado Digital Pessoa Fisica de brinde</li>
+            </ul>
+            <button class="button primary" type="button" data-plan-id="premium">Assinar</button>
+          </article>
+
+          <article class="plan-card">
+            <div>
+              <span class="plan-kicker">Comercio</span>
+              <h3>Facilita MEI Comercio</h3>
+              <div class="plan-price-box">
+                <span class="plan-price-currency">R$</span>
+                <span class="plan-price">110,00</span>
+                <span class="plan-price-month">/mes</span>
+              </div>
+              <p class="plan-desc">Ideal para MEIs que vendem produtos.</p>
+            </div>
+            <ul class="plan-features">
+              <li>Emissao de ate 10 notas fiscais</li>
+              <li>Suporte e orientacao com a equipe</li>
+              <li>PGDAS anual</li>
+              <li>Abertura de inscricao estadual</li>
+              <li>Acrescimo de R$ 250,00 no primeiro mes caso nao possua inscricao estadual</li>
+            </ul>
+            <button class="button primary" type="button" data-plan-id="comercio">Assinar</button>
+          </article>
+
+          <article class="plan-card">
+            <div>
+              <span class="plan-kicker">Completo</span>
+              <h3>Facilita MEI Full</h3>
+              <div class="plan-price-box">
+                <span class="plan-price-currency">R$</span>
+                <span class="plan-price">199,99</span>
+                <span class="plan-price-month">/mes</span>
+              </div>
+              <p class="plan-desc">Plano completo para abertura e gestao total do MEI.</p>
+            </div>
+            <ul class="plan-features">
+              <li>Abertura completa do MEI</li>
+              <li>Emissao ilimitada de NFS-e</li>
+              <li>Registro de 1 funcionario ou pro-labore</li>
+              <li>Suporte com contador</li>
+              <li>PGDAS anual</li>
+              <li>Declaracao anual do MEI</li>
+              <li>Certificado Digital Pessoa Fisica de brinde</li>
+            </ul>
+            <button class="button primary" type="button" data-plan-id="full">Assinar</button>
+          </article>
+        </div>
+      </section>
+
+      <div class="checkout-modal" data-checkout-modal hidden>
+        <div class="checkout-modal-backdrop" data-checkout-close></div>
+        <section class="checkout-dialog" role="dialog" aria-modal="true" aria-labelledby="checkout-title">
+          <button class="checkout-close" type="button" aria-label="Fechar checkout" data-checkout-close>&times;</button>
+          <div class="checkout-copy">
+            <p class="eyebrow">Checkout seguro</p>
+            <h2 id="checkout-title">Finalize sua assinatura</h2>
+            <p>
+              Informe seus dados e assine com cartao de credito pelo checkout seguro.
+            </p>
+          </div>
+
+          <form id="form-checkout" class="checkout-form" data-checkout-form>
+            <div class="checkout-column customer-column">
+              <div class="checkout-summary-card">
+                <span>Plano selecionado</span>
+                <strong data-checkout-plan>Start MEI</strong>
+                <p data-checkout-price>R$ 89,99 /mes</p>
+              </div>
+
+              <div class="payment-methods single-method" aria-label="Metodo de pagamento">
+                <span class="payment-method is-selected">Cartao recorrente</span>
+              </div>
+
+              <label>
+                Nome completo
+                <input id="nome" name="name" autocomplete="name" required />
+              </label>
+              <label>
+                WhatsApp
+                <input id="telefone" name="phone" inputmode="tel" autocomplete="tel" required />
+              </label>
+              <label>
+                E-mail
+                <input id="form-checkout__cardholderEmail" name="email" type="email" autocomplete="email" required />
+              </label>
+              <label>
+                CPF ou CNPJ
+                <input id="form-checkout__identificationNumber" name="document" inputmode="numeric" autocomplete="off" required />
+              </label>
+            </div>
+
+            <div class="checkout-column card-column">
+              <select id="form-checkout__issuer" class="mp-hidden-field" aria-hidden="true" tabindex="-1"></select>
+              <select id="form-checkout__installments" class="mp-hidden-field" aria-hidden="true" tabindex="-1"></select>
+              <select id="form-checkout__identificationType" class="mp-hidden-field" aria-hidden="true" tabindex="-1">
+                <option value="CPF" selected>CPF</option>
+                <option value="CNPJ">CNPJ</option>
+              </select>
+              <label>
+                Plano
+                <select name="planId" required data-checkout-select>
+                  <option value="start-mei">Start MEI</option>
+                  <option value="servicos">Facilita MEI Servicos</option>
+                  <option value="premium">Facilita Premium</option>
+                  <option value="comercio">Facilita MEI Comercio</option>
+                  <option value="full">Facilita MEI Full</option>
+                </select>
+              </label>
+              <label>
+                Nome impresso no cartao
+                <input id="cardholderName" name="cardholderName" autocomplete="cc-name" required />
+              </label>
+              <label>
+                Numero do cartao
+                <div id="form-checkout__cardNumber" class="mp-card-field"></div>
+              </label>
+              <div class="form-row">
+                <label>
+                  Validade
+                  <div id="form-checkout__expirationDate" class="mp-card-field"></div>
+                </label>
+                <label>
+                  CVV
+                  <div id="form-checkout__securityCode" class="mp-card-field"></div>
+                </label>
+              </div>
+              <button id="form-checkout__submit" class="button primary" type="submit" data-payment-submit>Assinar plano</button>
+              <p class="form-status" role="status" data-checkout-status></p>
+            </div>
+          </form>
+
+          <div class="payment-result" data-payment-result hidden>
+            <div class="checkout-summary-card">
+              <span data-result-kicker>Assinatura</span>
+              <strong data-result-plan>Start MEI</strong>
+              <p data-result-status>Aguardando confirmacao</p>
+            </div>
+            <p class="form-status" role="status" data-subscription-message></p>
+            <a
+              class="button primary attendance-button"
+              href="https://wa.me/5567996750853?text=Ola%2C%20acabei%20de%20assinar%20um%20plano."
+              target="_blank"
+              rel="noopener noreferrer"
+              data-whatsapp-attendance
+            >Ir para o atendimento</a>
+            <button class="button secondary" type="button" data-back-to-payment>Voltar ao checkout</button>
+          </div>
+        </section>
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div>
+        <strong>Facilita MEI</strong>
+        <span>Seu MEI sem complicacao, rapido e seguro!</span>
+      </div>
+      <div>
+        <strong>Links</strong>
+        <a href="#inicio">Politica de Privacidade</a>
+        <a href="#inicio">Termos de Uso</a>
+      </div>
+      <div>
+        <strong>Servicos</strong>
+        <a href="#planos">Abrir MEI</a>
+        <a href="#planos">Planos</a>
+      </div>
+      <div>
+        <strong>Contato</strong>
+        <a href="mailto:atendimento@facilita-mei.com">atendimento@facilita-mei.com</a>
+        <a
+          class="button secondary footer-whatsapp"
+          href="https://wa.me/5567996750853?text=Ola%2C%20gostaria%20de%20mais%20informacoes"
+          target="_blank"
+          rel="noopener noreferrer"
+        >WhatsApp</a>
+        <span class="footer-note">
+          A Facilita MEI nao e um site governamental. Servicos privados e opcionais; tambem podem ser
+          realizados gratuitamente pelo gov.br.
+        </span>
+      </div>
+    </footer>
+
+    <a
+      class="whatsapp-float"
+      href="https://wa.me/5567996750853?text=Ola%2C%20gostaria%20de%20mais%20informacoes"
+      target="_blank"
+      rel="noopener noreferrer"
+      aria-label="Contatar pelo WhatsApp"
+    >
+      <span>WhatsApp</span>
+    </a>
+    <script src="https://sdk.mercadopago.com/js/v2"></script>
+    <script src="./config.js"></script>
+    <script src="./app.js"></script>
+  </body>
+</html>
