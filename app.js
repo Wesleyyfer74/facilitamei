@@ -129,40 +129,98 @@ function initHeroParticles() {
   });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.8));
 
-  const particleCount = window.innerWidth < 720 ? 520 : 1200;
-  const positions = new Float32Array(particleCount * 3);
-  const colors = new Float32Array(particleCount * 3);
   const gold = new THREE.Color("#ffd978");
   const amber = new THREE.Color("#b86d18");
+  const galaxyLayers = [
+    {
+      count: window.innerWidth < 720 ? 240 : 520,
+      radiusX: 620,
+      radiusY: 260,
+      depth: 360,
+      size: 0.82,
+      opacity: 0.38,
+      speed: 0.00028,
+      drift: 0.00012,
+      x: 96,
+    },
+    {
+      count: window.innerWidth < 720 ? 220 : 470,
+      radiusX: 500,
+      radiusY: 220,
+      depth: 260,
+      size: 1.18,
+      opacity: 0.58,
+      speed: 0.00062,
+      drift: 0.00022,
+      x: 78,
+    },
+    {
+      count: window.innerWidth < 720 ? 90 : 210,
+      radiusX: 380,
+      radiusY: 170,
+      depth: 170,
+      size: 1.78,
+      opacity: 0.78,
+      speed: 0.00108,
+      drift: 0.00038,
+      x: 46,
+    },
+  ];
 
-  for (let index = 0; index < particleCount; index += 1) {
-    const i = index * 3;
-    positions[i] = (Math.random() - 0.1) * 460;
-    positions[i + 1] = (Math.random() - 0.5) * 240;
-    positions[i + 2] = (Math.random() - 0.5) * 260;
+  const particleGroups = galaxyLayers.map((layer) => {
+    const positions = new Float32Array(layer.count * 3);
+    const colors = new Float32Array(layer.count * 3);
+    const baseY = new Float32Array(layer.count);
+    const phases = new Float32Array(layer.count);
+    const amplitudes = new Float32Array(layer.count);
 
-    const color = gold.clone().lerp(amber, Math.random() * 0.62);
-    colors[i] = color.r;
-    colors[i + 1] = color.g;
-    colors[i + 2] = color.b;
-  }
+    for (let index = 0; index < layer.count; index += 1) {
+      const i = index * 3;
+      const angle = Math.random() * Math.PI * 2;
+      const radius = Math.pow(Math.random(), 0.55);
+      const verticalNoise = (Math.random() - 0.5) * 34;
 
-  const geometry = new THREE.BufferGeometry();
-  geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
-  geometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+      positions[i] = Math.cos(angle) * layer.radiusX * radius;
+      positions[i + 1] = Math.sin(angle) * layer.radiusY * radius + verticalNoise;
+      positions[i + 2] = (Math.random() - 0.5) * layer.depth;
+      baseY[index] = positions[i + 1];
+      phases[index] = Math.random() * Math.PI * 2;
+      amplitudes[index] = 1.5 + Math.random() * (4 + layer.size * 3);
 
-  const material = new THREE.PointsMaterial({
-    size: 1.25,
-    transparent: true,
-    opacity: 0.78,
-    vertexColors: true,
-    blending: THREE.AdditiveBlending,
-    depthWrite: false,
+      const color = gold.clone().lerp(amber, Math.random() * 0.68);
+      colors[i] = color.r;
+      colors[i + 1] = color.g;
+      colors[i + 2] = color.b;
+    }
+
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+    geometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+
+    const material = new THREE.PointsMaterial({
+      size: layer.size,
+      transparent: true,
+      opacity: layer.opacity,
+      vertexColors: true,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    });
+
+    const points = new THREE.Points(geometry, material);
+    points.position.x = layer.x;
+    scene.add(points);
+
+    return {
+      ...layer,
+      amplitudes,
+      baseY,
+      geometry,
+      material,
+      phases,
+      points,
+      positions,
+    };
   });
-
-  const points = new THREE.Points(geometry, material);
-  points.position.x = 72;
-  scene.add(points);
 
   function resizeParticles() {
     const rect = heroParticlesCanvas.getBoundingClientRect();
@@ -173,9 +231,24 @@ function initHeroParticles() {
 
   let frameId;
   function animateParticles() {
-    points.rotation.y += 0.0009;
-    points.rotation.x = Math.sin(Date.now() * 0.00018) * 0.08;
-    material.opacity = 0.62 + Math.sin(Date.now() * 0.001) * 0.12;
+    const elapsed = Date.now() * 0.001;
+
+    particleGroups.forEach((group, groupIndex) => {
+      group.points.rotation.y += group.speed;
+      group.points.rotation.x = Math.sin(elapsed * (0.12 + groupIndex * 0.04)) * (0.035 + groupIndex * 0.018);
+      group.points.rotation.z = Math.sin(elapsed * (0.08 + groupIndex * 0.03)) * (0.018 + groupIndex * 0.01);
+      group.material.opacity = group.opacity + Math.sin(elapsed * (0.75 + groupIndex * 0.22)) * 0.08;
+
+      const positionAttribute = group.geometry.attributes.position;
+      for (let index = 0; index < group.count; index += 1) {
+        const yIndex = index * 3 + 1;
+        const waveSpeed = 0.25 + groupIndex * 0.18 + group.drift * 900;
+        positionAttribute.array[yIndex] =
+          group.baseY[index] + Math.sin(elapsed * waveSpeed + group.phases[index]) * group.amplitudes[index];
+      }
+      positionAttribute.needsUpdate = true;
+    });
+
     renderer.render(scene, camera);
     frameId = window.requestAnimationFrame(animateParticles);
   }
@@ -187,8 +260,10 @@ function initHeroParticles() {
   heroParticlesCleanup = () => {
     window.cancelAnimationFrame(frameId);
     window.removeEventListener("resize", resizeParticles);
-    geometry.dispose();
-    material.dispose();
+    particleGroups.forEach((group) => {
+      group.geometry.dispose();
+      group.material.dispose();
+    });
     renderer.dispose();
   };
 }
