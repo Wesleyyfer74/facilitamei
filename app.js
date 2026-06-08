@@ -8,6 +8,10 @@ const checkoutPlan = document.querySelector("[data-checkout-plan]");
 const checkoutPrice = document.querySelector("[data-checkout-price]");
 const checkoutModal = document.querySelector("[data-checkout-modal]");
 const checkoutCloseButtons = document.querySelectorAll("[data-checkout-close]");
+const aboutModal = document.querySelector("[data-about-modal]");
+const aboutOpenButton = document.querySelector("[data-about-open]");
+const aboutCloseButtons = document.querySelectorAll("[data-about-close]");
+const aboutScroll = document.querySelector("[data-about-scroll]");
 const paymentSubmit = document.querySelector("[data-payment-submit]");
 const paymentResult = document.querySelector("[data-payment-result]");
 const resultKicker = document.querySelector("[data-result-kicker]");
@@ -71,6 +75,7 @@ let planDetails = {
 let statusPollingId;
 let mercadoPagoInstance;
 let mercadoPagoCardForm;
+let aboutRevealObserver;
 
 function syncHeader() {
   header.classList.toggle("is-scrolled", window.scrollY > 24);
@@ -258,6 +263,48 @@ function closeCheckout() {
   resetPaymentResult();
 }
 
+function initAboutReveal() {
+  if (!aboutScroll || aboutRevealObserver || prefersReducedMotion) return;
+
+  aboutRevealObserver = new IntersectionObserver(
+    (entries) => {
+      entries.forEach((entry) => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add("is-visible");
+        }
+      });
+    },
+    {
+      root: aboutScroll,
+      threshold: 0.18,
+      rootMargin: "0px 0px -10% 0px",
+    },
+  );
+
+  document.querySelectorAll(".about-reveal").forEach((item) => aboutRevealObserver.observe(item));
+}
+
+function openAboutModal() {
+  if (!aboutModal) return;
+
+  aboutModal.hidden = false;
+  document.body.classList.add("modal-open");
+  if (aboutScroll) aboutScroll.scrollTop = 0;
+  initAboutReveal();
+  window.setTimeout(() => {
+    document.querySelectorAll(".about-reveal").forEach((item) => {
+      if (prefersReducedMotion) item.classList.add("is-visible");
+    });
+  }, 40);
+}
+
+function closeAboutModal() {
+  if (!aboutModal) return;
+
+  aboutModal.hidden = true;
+  document.body.classList.remove("modal-open");
+}
+
 function animatePlanToCheckout(card, planId) {
   openCheckout(planId);
 }
@@ -273,7 +320,18 @@ checkoutCloseButtons.forEach((button) => {
   button.addEventListener("click", closeCheckout);
 });
 
+aboutOpenButton?.addEventListener("click", openAboutModal);
+
+aboutCloseButtons.forEach((button) => {
+  button.addEventListener("click", closeAboutModal);
+});
+
 window.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && aboutModal && !aboutModal.hidden) {
+    closeAboutModal();
+    return;
+  }
+
   if (event.key === "Escape" && checkoutModal && !checkoutModal.hidden) {
     closeCheckout();
   }

@@ -9,7 +9,7 @@
       content="Facilita MEI ajuda empreendedores a abrir, regularizar e cuidar do MEI com atendimento simples e seguro."
     />
     <link rel="preload" href="./assets/fundo.png" as="image" />
-    <link rel="stylesheet" href="./styles.css?v=20260608-premium-glow" />
+    <link rel="stylesheet" href="./styles.css?v=20260608-about-modal" />
   </head>
   <body>
     <header class="site-header" data-header>
@@ -43,6 +43,7 @@
           <div class="hero-actions reveal">
             <a class="button primary" href="#planos">Quero proteger meu MEI</a>
             <a class="button secondary" href="#servicos">Ver servicos</a>
+            <button class="button secondary about-trigger" type="button" data-about-open>Quem somos nos</button>
           </div>
           <div class="trust-row" aria-label="Destaques">
             <span>Regularizacao completa</span>
@@ -52,6 +53,72 @@
         </div>
         <img class="hero-person lock-hero reveal" src="./assets/cadeado.png" alt="" />
       </section>
+
+      <div class="about-modal" data-about-modal hidden>
+        <div class="about-backdrop" data-about-close></div>
+        <section class="about-dialog" role="dialog" aria-modal="true" aria-labelledby="about-title">
+          <button class="checkout-close" type="button" aria-label="Fechar quem somos nos" data-about-close>&times;</button>
+          <div class="about-scroll" data-about-scroll>
+            <section class="about-hero about-reveal">
+              <div>
+                <p class="eyebrow">Quem somos nos</p>
+                <h2 id="about-title">A Facilita MEI nasceu para tirar peso da rotina do empreendedor.</h2>
+                <p>
+                  Cuidamos da parte burocratica para que o MEI consiga vender, atender e crescer com mais seguranca.
+                </p>
+              </div>
+              <img src="./assets/logo.png" alt="Facilita MEI" />
+            </section>
+
+            <section class="about-story about-reveal">
+              <div class="about-text">
+                <span>01</span>
+                <h3>Menos duvida, mais direcao</h3>
+                <p>
+                  Nosso atendimento orienta o empreendedor em abertura, regularizacao, notas fiscais, PGDAS e rotina
+                  mensal. A proposta e explicar o caminho de forma simples, sem empurrar burocracia para o cliente.
+                </p>
+              </div>
+              <div class="about-image">
+                <img src="./assets/mulher.png" alt="Atendimento Facilita MEI" />
+              </div>
+            </section>
+
+            <section class="about-values about-reveal">
+              <article>
+                <span>Atendimento</span>
+                <strong>Humano e direto</strong>
+                <p>Voce fala com uma equipe que entende a rotina do MEI e acompanha as etapas importantes.</p>
+              </article>
+              <article>
+                <span>Seguranca</span>
+                <strong>Processos claros</strong>
+                <p>Os planos, pagamentos e registros ficam organizados para evitar surpresa no caminho.</p>
+              </article>
+              <article>
+                <span>Praticidade</span>
+                <strong>Tudo em um fluxo</strong>
+                <p>Do plano ao atendimento, o cliente segue por um caminho simples e sem area complicada.</p>
+              </article>
+            </section>
+
+            <section class="about-story reverse about-reveal">
+              <div class="about-text">
+                <span>02</span>
+                <h3>Uma estrutura feita para acompanhar o MEI</h3>
+                <p>
+                  A Facilita MEI combina tecnologia, checkout seguro e atendimento orientado para manter o cliente em
+                  dia com suas obrigacoes fiscais e operacionais.
+                </p>
+                <a class="button primary" href="#planos" data-about-close>Conhecer planos</a>
+              </div>
+              <div class="about-image lock-card">
+                <img src="./assets/cadeado.png" alt="" />
+              </div>
+            </section>
+          </div>
+        </section>
+      </div>
 
       <section class="section services reveal" id="servicos">
         <div class="section-heading reveal">
@@ -344,6 +411,6 @@
     </a>
     <script src="https://sdk.mercadopago.com/js/v2"></script>
     <script src="./config.js?v=20260606-railway"></script>
-    <script src="./app.js?v=20260606-railway"></script>
+    <script src="./app.js?v=20260608-about-modal"></script>
   </body>
 </html>
