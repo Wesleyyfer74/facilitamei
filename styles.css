@@ -426,7 +426,7 @@ main { padding-bottom: 0; }
 
 .plans {
   position: relative;
-  overflow: visible;
+  overflow: hidden;
   padding-top: 104px;
   padding-bottom: 128px;
   background:
@@ -483,16 +483,82 @@ main { padding-bottom: 0; }
   background: var(--gold-strong);
   box-shadow: 0 0 22px rgba(255, 217, 120, 0.96), 0 0 54px rgba(240, 191, 90, 0.6);
   transform: translateX(6.4rem);
+  animation: title-spark 2.7s ease-in-out infinite;
+}
+
+.plan-proof-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 22px;
+}
+
+.plan-proof-row span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 34px;
+  padding: 0 14px;
+  color: rgba(255, 248, 232, 0.88);
+  border: 1px solid rgba(255, 215, 118, 0.22);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.045);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  font-size: 0.84rem;
+  font-weight: 800;
+}
+
+.plan-proof-row span::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  margin-right: 8px;
+  border-radius: 999px;
+  background: var(--gold);
+  box-shadow: 0 0 12px rgba(240, 191, 90, 0.72);
+}
+
+@keyframes title-spark {
+  0%,
+  100% {
+    opacity: 0.55;
+    transform: translateX(6.4rem) scale(0.82);
+  }
+
+  50% {
+    opacity: 1;
+    transform: translateX(6.4rem) scale(1.25);
+  }
 }
 
 .plan-grid {
   position: relative;
   z-index: 2;
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(285px, 1fr));
-  gap: 18px;
-  padding-bottom: 28px;
+  grid-template-columns: repeat(5, minmax(252px, 1fr));
+  gap: clamp(14px, 1.1vw, 20px);
+  width: min(100%, 1780px);
+  margin: 0 auto;
+  padding: 18px clamp(14px, 2.2vw, 34px) 38px;
   perspective: 1200px;
+  overflow-x: auto;
+  overflow-y: visible;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(240, 191, 90, 0.45) rgba(255, 255, 255, 0.05);
+}
+
+.plan-grid::-webkit-scrollbar {
+  height: 8px;
+}
+
+.plan-grid::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 999px;
+}
+
+.plan-grid::-webkit-scrollbar-thumb {
+  background: rgba(240, 191, 90, 0.5);
+  border-radius: 999px;
 }
 
 .plan-card {
@@ -516,6 +582,23 @@ main { padding-bottom: 0; }
   transform: translateY(0);
   transition: transform 220ms ease, border-color 220ms ease, box-shadow 220ms ease, background 220ms ease;
   will-change: transform, box-shadow;
+  animation: plan-float 6.5s ease-in-out infinite;
+}
+
+.plan-card:nth-child(2) {
+  animation-delay: 0.18s;
+}
+
+.plan-card:nth-child(3) {
+  animation-delay: 0.34s;
+}
+
+.plan-card:nth-child(4) {
+  animation-delay: 0.52s;
+}
+
+.plan-card:nth-child(5) {
+  animation-delay: 0.7s;
 }
 
 .plan-card::before {
@@ -528,6 +611,18 @@ main { padding-bottom: 0; }
   opacity: 0.8;
 }
 
+.plan-card::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: 20px;
+  background: linear-gradient(115deg, transparent 0%, rgba(255, 236, 176, 0.12) 44%, transparent 58%);
+  opacity: 0;
+  transform: translateX(-35%);
+  transition: opacity 220ms ease, transform 620ms ease;
+}
+
 .plan-card > * {
   position: relative;
   z-index: 1;
@@ -535,13 +630,19 @@ main { padding-bottom: 0; }
 
 .plan-card:hover,
 .plan-card.selected {
-  transform: translateY(-7px);
+  transform: translateY(-9px);
   border-color: rgba(255, 215, 118, 0.58);
   box-shadow: 0 30px 78px rgba(0, 0, 0, 0.46), 0 0 0 1px rgba(240, 191, 90, 0.16);
   background:
     linear-gradient(160deg, rgba(255, 255, 255, 0.09), rgba(255, 255, 255, 0.03)),
     radial-gradient(circle at 50% 105%, rgba(255, 210, 96, 0.16), transparent 44%),
     linear-gradient(180deg, rgba(24, 22, 19, 0.94), rgba(9, 9, 8, 0.94));
+}
+
+.plan-card:hover::after,
+.plan-card.selected::after {
+  opacity: 1;
+  transform: translateX(35%);
 }
 
 .plan-card.featured {
@@ -558,6 +659,7 @@ main { padding-bottom: 0; }
     0 0 34px rgba(255, 209, 91, 0.44),
     0 34px 96px rgba(0, 0, 0, 0.56);
   transform: translateY(-16px);
+  animation: premium-pulse 4.8s ease-in-out infinite;
 }
 
 .plan-card.featured:hover,
@@ -567,6 +669,34 @@ main { padding-bottom: 0; }
     0 0 0 1px rgba(255, 226, 146, 0.38),
     0 0 48px rgba(255, 210, 96, 0.58),
     0 40px 110px rgba(0, 0, 0, 0.58);
+}
+
+@keyframes plan-float {
+  0%,
+  100% {
+    translate: 0 0;
+  }
+
+  50% {
+    translate: 0 -4px;
+  }
+}
+
+@keyframes premium-pulse {
+  0%,
+  100% {
+    box-shadow:
+      0 0 0 1px rgba(255, 210, 96, 0.24),
+      0 0 34px rgba(255, 209, 91, 0.44),
+      0 34px 96px rgba(0, 0, 0, 0.56);
+  }
+
+  50% {
+    box-shadow:
+      0 0 0 1px rgba(255, 226, 146, 0.42),
+      0 0 58px rgba(255, 209, 91, 0.66),
+      0 38px 104px rgba(0, 0, 0, 0.6);
+  }
 }
 
 .plan-card.featured .plan-kicker {
@@ -618,6 +748,14 @@ main { padding-bottom: 0; }
   min-height: 56px;
 }
 
+.featured-subtitle {
+  max-width: 290px;
+  margin: 6px 0 0;
+  color: rgba(255, 248, 232, 0.78);
+  line-height: 1.45;
+  font-size: 0.92rem;
+}
+
 .plan-bonus {
   display: inline-flex;
   align-items: center;
@@ -651,6 +789,7 @@ main { padding-bottom: 0; }
   border-radius: 4px;
   box-shadow: 0 16px 42px rgba(240, 191, 90, 0.34), 0 0 34px rgba(255, 210, 96, 0.44);
   transform: translateX(-50%);
+  animation: ribbon-glow 3.4s ease-in-out infinite;
 }
 
 .featured-ribbon::before,
@@ -684,6 +823,17 @@ main { padding-bottom: 0; }
   font-weight: 900;
 }
 
+@keyframes ribbon-glow {
+  0%,
+  100% {
+    filter: brightness(1);
+  }
+
+  50% {
+    filter: brightness(1.12);
+  }
+}
+
 .plan-features.dark-check-disabled li::before {
   content: "✓";
   color: var(--gold);
@@ -711,6 +861,19 @@ main { padding-bottom: 0; }
   padding: 0;
   color: var(--muted);
   list-style: none;
+}
+
+.plan-footnote {
+  min-height: 38px;
+  margin: 0;
+  color: rgba(255, 248, 232, 0.62);
+  font-size: 0.82rem;
+  font-weight: 700;
+  line-height: 1.45;
+}
+
+.premium-note {
+  color: rgba(255, 224, 148, 0.84);
 }
 
 .plan-card li {
@@ -786,7 +949,7 @@ main { padding-bottom: 0; }
 }
 
 .plan-card .button:hover {
-  transform: translateY(-3px);
+  transform: translateY(-3px) scale(1.015);
   box-shadow: 0 24px 54px rgba(240, 191, 90, 0.36), inset 0 1px 0 rgba(255, 255, 255, 0.66);
 }
 
@@ -1291,7 +1454,9 @@ select option {
   .plan-card,
   .checkout-modal.is-opening .checkout-dialog,
   .plans::before,
-  .plans::after {
+  .plans::after,
+  .featured-ribbon,
+  .plans .section-heading h2::after {
     animation: none !important;
     transition: none !important;
     transform: none !important;
