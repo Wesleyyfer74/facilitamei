@@ -23,6 +23,7 @@ const whatsappAttendance = document.querySelector("[data-whatsapp-attendance]");
 const planButtons = document.querySelectorAll("[data-plan-id]");
 const planCards = document.querySelectorAll(".plan-card");
 const plansSection = document.querySelector(".plans");
+const heroParticlesCanvas = document.querySelector("[data-hero-particles]");
 
 const isLocalFile = window.location.protocol === "file:";
 const isLocalHost = ["localhost", "127.0.0.1"].includes(window.location.hostname);
@@ -76,6 +77,7 @@ let statusPollingId;
 let mercadoPagoInstance;
 let mercadoPagoCardForm;
 let aboutRevealObserver;
+let heroParticlesCleanup;
 
 function syncHeader() {
   header.classList.toggle("is-scrolled", window.scrollY > 24);
@@ -113,6 +115,139 @@ function updatePlansParallax() {
   plansSection.style.setProperty("--plans-glow-x", `${42 + progress * 16}%`);
 }
 
+function initHeroParticles() {
+  if (!heroParticlesCanvas || !window.THREE || prefersReducedMotion) return;
+
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(55, 1, 1, 1000);
+  camera.position.z = 180;
+
+  const renderer = new THREE.WebGLRenderer({
+    canvas: heroParticlesCanvas,
+    alpha: true,
+    antialias: true,
+  });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.8));
+
+  const particleCount = window.innerWidth < 720 ? 520 : 1200;
+  const positions = new Float32Array(particleCount * 3);
+  const colors = new Float32Array(particleCount * 3);
+  const gold = new THREE.Color("#ffd978");
+  const amber = new THREE.Color("#b86d18");
+
+  for (let index = 0; index < particleCount; index += 1) {
+    const i = index * 3;
+    positions[i] = (Math.random() - 0.1) * 460;
+    positions[i + 1] = (Math.random() - 0.5) * 240;
+    positions[i + 2] = (Math.random() - 0.5) * 260;
+
+    const color = gold.clone().lerp(amber, Math.random() * 0.62);
+    colors[i] = color.r;
+    colors[i + 1] = color.g;
+    colors[i + 2] = color.b;
+  }
+
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+  geometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+
+  const material = new THREE.PointsMaterial({
+    size: 1.25,
+    transparent: true,
+    opacity: 0.78,
+    vertexColors: true,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+  });
+
+  const points = new THREE.Points(geometry, material);
+  points.position.x = 72;
+  scene.add(points);
+
+  function resizeParticles() {
+    const rect = heroParticlesCanvas.getBoundingClientRect();
+    renderer.setSize(rect.width, rect.height, false);
+    camera.aspect = rect.width / Math.max(rect.height, 1);
+    camera.updateProjectionMatrix();
+  }
+
+  let frameId;
+  function animateParticles() {
+    points.rotation.y += 0.0009;
+    points.rotation.x = Math.sin(Date.now() * 0.00018) * 0.08;
+    material.opacity = 0.62 + Math.sin(Date.now() * 0.001) * 0.12;
+    renderer.render(scene, camera);
+    frameId = window.requestAnimationFrame(animateParticles);
+  }
+
+  resizeParticles();
+  animateParticles();
+  window.addEventListener("resize", resizeParticles);
+
+  heroParticlesCleanup = () => {
+    window.cancelAnimationFrame(frameId);
+    window.removeEventListener("resize", resizeParticles);
+    geometry.dispose();
+    material.dispose();
+    renderer.dispose();
+  };
+}
+
+function initHeroGsap() {
+  if (!window.gsap || prefersReducedMotion) return;
+
+  gsap.from(".site-header", {
+    y: -26,
+    opacity: 0,
+    duration: 0.7,
+    ease: "power3.out",
+  });
+
+  gsap.from(".hero-content .eyebrow, .hero-content h1, .hero-copy, .hero-actions, .trust-row", {
+    y: 34,
+    opacity: 0,
+    duration: 0.82,
+    stagger: 0.11,
+    ease: "power3.out",
+    delay: 0.12,
+  });
+
+  gsap.from(".hero-showcase", {
+    x: 38,
+    opacity: 0,
+    duration: 0.9,
+    ease: "power3.out",
+    delay: 0.42,
+  });
+
+  gsap.from(".lock-hero", {
+    x: 56,
+    y: 26,
+    rotation: 3,
+    opacity: 0,
+    duration: 1.05,
+    ease: "power3.out",
+    delay: 0.32,
+  });
+
+  gsap.to(".lock-hero", {
+    y: "-=12",
+    duration: 3.4,
+    ease: "sine.inOut",
+    yoyo: true,
+    repeat: -1,
+  });
+
+  document.querySelectorAll(".hero-actions .button").forEach((button) => {
+    button.addEventListener("mouseenter", () => {
+      gsap.to(button, { scale: 1.04, duration: 0.18, ease: "power2.out" });
+    });
+    button.addEventListener("mouseleave", () => {
+      gsap.to(button, { scale: 1, duration: 0.18, ease: "power2.out" });
+    });
+  });
+}
+
 window.addEventListener(
   "scroll",
   () => {
@@ -128,6 +263,9 @@ updateHeroParallax();
 updatePlansParallax();
 
 const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+initHeroParticles();
+initHeroGsap();
 
 if (!prefersReducedMotion) {
   const animateTargets = document.querySelectorAll(".reveal, .service-card, .plan-card, .footer div");

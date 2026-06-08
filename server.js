@@ -54,7 +54,7 @@ app.use((request, response, next) => {
       "base-uri 'self'",
       "object-src 'none'",
       "frame-ancestors 'none'",
-      "script-src 'self' https://sdk.mercadopago.com",
+      "script-src 'self' https://sdk.mercadopago.com https://cdnjs.cloudflare.com",
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
       "font-src 'self' https://fonts.gstatic.com data:",
       "img-src 'self' data: https:",
