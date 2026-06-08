@@ -296,6 +296,14 @@ h3 {
   transform: translateY(0);
 }
 
+.hero .hero-actions,
+.hero .trust-row {
+  position: relative;
+  z-index: 4;
+  opacity: 1;
+  transform: none;
+}
+
 .button {
   appearance: none;
   display: inline-flex;

@@ -278,13 +278,23 @@ function initHeroGsap() {
     ease: "power3.out",
   });
 
-  gsap.from(".hero-content .eyebrow, .hero-content h1, .hero-copy, .hero-actions, .trust-row", {
+  gsap.from(".hero-content .eyebrow, .hero-content h1, .hero-copy", {
     y: 34,
     opacity: 0,
     duration: 0.82,
     stagger: 0.11,
     ease: "power3.out",
     delay: 0.12,
+  });
+
+  gsap.from(".hero-actions .button, .trust-row span", {
+    y: 18,
+    opacity: 0,
+    duration: 0.58,
+    stagger: 0.08,
+    ease: "power3.out",
+    delay: 0.48,
+    clearProps: "opacity,transform",
   });
 
   gsap.from(".hero-showcase", {
