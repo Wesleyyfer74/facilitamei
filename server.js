@@ -784,11 +784,13 @@ app.post("/api/admin/subscriptions/:id/cancel", requireAdminSession, async (requ
 
 registerNfseRoutes(app, { nfseService, requireAdminSession });
 
-app.post("/api/testes/nfse/fluxo-completo", async (request, response) => {
-  if (process.env.NODE_ENV === "production") {
+app.post("/api/testes/nfse/fluxo-completo", requireAdminSession, async (request, response) => {
+  const allowProductionTest = String(process.env.ALLOW_NFSE_TEST_ROUTES || "false").toLowerCase() === "true";
+
+  if (process.env.NODE_ENV === "production" && !allowProductionTest) {
     return response.status(403).json({
       ok: false,
-      error: "Rota de teste NFS-e indisponivel em producao.",
+      error: "Rota de teste NFS-e indisponivel em producao. Configure ALLOW_NFSE_TEST_ROUTES=true apenas durante testes controlados.",
     });
   }
 
