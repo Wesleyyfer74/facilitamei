@@ -35,7 +35,6 @@
             <button class="nav-item" type="button" data-view-button="customers">Clientes</button>
             <button class="nav-item" type="button" data-view-button="plans">Planos</button>
             <button class="nav-item" type="button" data-view-button="payments">Pagamentos</button>
-            <button class="nav-item" type="button" data-view-button="nfse">Notas Fiscais</button>
           </nav>
           <button class="ghost-button" type="button" data-logout>Sair</button>
         </aside>
@@ -137,53 +136,6 @@
             </div>
           </section>
 
-          <section class="view-panel" data-view="nfse">
-            <article class="panel nfse-test-panel">
-              <div>
-                <p class="eyebrow">Ambiente de teste</p>
-                <h3>Emitir nota teste</h3>
-                <p>Gera cliente, pagamento aprovado e NFS-e mock para validar o fluxo antes da emissao real.</p>
-              </div>
-              <form class="nfse-test-form" data-nfse-test-form>
-                <input name="cnpj" placeholder="CNPJ do cliente" value="52643976000186" required />
-                <input name="email" type="email" placeholder="E-mail do cliente" required />
-                <input name="whatsapp" placeholder="WhatsApp" required />
-                <select name="planoId" data-nfse-test-plan required>
-                  <option value="">Selecione um plano</option>
-                </select>
-                <button class="gold-button compact" type="submit">Emitir nota teste</button>
-              </form>
-            </article>
-            <div class="toolbar">
-              <select data-nfse-status>
-                <option value="">Todas as notas</option>
-                <option value="pendente">Pendentes</option>
-                <option value="gerando_xml">Gerando XML</option>
-                <option value="dps_gerada">DPS gerada</option>
-                <option value="mock_gerado">Mock gerado</option>
-                <option value="autorizado">Autorizadas</option>
-                <option value="erro">Com erro</option>
-              </select>
-              <button class="gold-button compact" type="button" data-filter-nfse>Filtrar</button>
-            </div>
-            <div class="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Cliente</th>
-                    <th>CNPJ</th>
-                    <th>Plano</th>
-                    <th>Valor</th>
-                    <th>Status</th>
-                    <th>DPS</th>
-                    <th>NFS-e</th>
-                    <th>Acoes</th>
-                  </tr>
-                </thead>
-                <tbody data-nfse-table></tbody>
-              </table>
-            </div>
-          </section>
         </section>
       </section>
     </main>

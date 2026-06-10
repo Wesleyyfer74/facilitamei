@@ -320,34 +320,6 @@ textarea:focus {
   gap: 10px;
 }
 
-.nfse-test-panel {
-  display: grid;
-  grid-template-columns: minmax(260px, 0.8fr) minmax(320px, 1.2fr);
-  align-items: end;
-  gap: 18px;
-  border-color: rgba(255, 217, 120, 0.34);
-  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.28), 0 0 45px rgba(240, 191, 90, 0.1);
-}
-
-.nfse-test-panel h3 {
-  margin-bottom: 8px;
-}
-
-.nfse-test-panel p:not(.eyebrow) {
-  margin-bottom: 0;
-  color: var(--muted);
-}
-
-.nfse-test-form {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
-}
-
-.nfse-test-form button {
-  grid-column: span 2;
-}
-
 .table-wrap {
   overflow: auto;
 }
@@ -588,14 +560,8 @@ td small {
   .metric-grid,
   .split-grid,
   .toolbar,
-  .nfse-test-panel,
-  .nfse-test-form,
   .two-cols {
     grid-template-columns: 1fr;
-  }
-
-  .nfse-test-form button {
-    grid-column: auto;
   }
 }
 

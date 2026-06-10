@@ -6,15 +6,13 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node --watch server.js",
-    "sync:mp-plans": "node scripts/sync-mercado-pago-plans.js",
-    "db:nfse": "node scripts/apply-nfse-schema.js"
+    "sync:mp-plans": "node scripts/sync-mercado-pago-plans.js"
   },
   "dependencies": {
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
     "express": "^4.18.3",
     "mercadopago": "^2.0.15",
-    "mysql2": "^3.11.5",
-    "nodemailer": "^6.9.16"
+    "mysql2": "^3.11.5"
   }
 }

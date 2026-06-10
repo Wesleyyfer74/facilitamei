@@ -12,13 +12,9 @@ const latestPayments = document.querySelector("[data-latest-payments]");
 const customersTable = document.querySelector("[data-customers-table]");
 const plansTable = document.querySelector("[data-plans-table]");
 const paymentsTable = document.querySelector("[data-payments-table]");
-const nfseTable = document.querySelector("[data-nfse-table]");
 const customerSearch = document.querySelector("[data-customer-search]");
 const customerStatus = document.querySelector("[data-customer-status]");
 const paymentStatus = document.querySelector("[data-payment-status]");
-const nfseStatus = document.querySelector("[data-nfse-status]");
-const nfseTestForm = document.querySelector("[data-nfse-test-form]");
-const nfseTestPlan = document.querySelector("[data-nfse-test-plan]");
 const drawer = document.querySelector("[data-drawer]");
 const drawerContent = document.querySelector("[data-drawer-content]");
 const closeDrawerButtons = document.querySelectorAll("[data-close-drawer]");
@@ -50,16 +46,6 @@ function clearToken() {
 
 function money(value) {
   return Number(value || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
-}
-
-function onlyDigits(value = "") {
-  return String(value || "").replace(/\D/g, "");
-}
-
-function formatCnpj(value = "") {
-  const digits = onlyDigits(value);
-  if (digits.length !== 14) return value || "-";
-  return digits.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, "$1.$2.$3/$4-$5");
 }
 
 function formatDate(value) {
@@ -123,45 +109,6 @@ async function apiRequest(path, options = {}) {
   return data;
 }
 
-async function apiRaw(path) {
-  const token = getToken();
-  const headers = {};
-  if (token) headers.Authorization = `Bearer ${token}`;
-
-  const response = await fetch(`${API_BASE}${path}`, { headers });
-
-  if (response.status === 401) {
-    clearToken();
-    showLogin();
-    throw new Error("Sessao expirada.");
-  }
-
-  if (!response.ok) {
-    let message = "Erro ao baixar arquivo.";
-    try {
-      const data = await response.json();
-      message = data.error || message;
-    } catch {
-      // XML endpoints may return plain responses on failures from proxies.
-    }
-    throw new Error(message);
-  }
-
-  return response.text();
-}
-
-function downloadText(filename, content, mime = "application/xml;charset=utf-8") {
-  const blob = new Blob([content], { type: mime });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = filename;
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  URL.revokeObjectURL(url);
-}
-
 function showLogin() {
   loginView.hidden = false;
   dashboardView.hidden = true;
@@ -179,7 +126,6 @@ function activateView(viewName) {
     customers: "Clientes",
     plans: "Planos",
     payments: "Pagamentos",
-    nfse: "Notas Fiscais",
   };
 
   viewTitle.textContent = titles[viewName] || "Dashboard";
@@ -301,7 +247,6 @@ async function loadCustomers() {
 
 function renderPlans(plans = []) {
   plansCache = plans;
-  renderNfseTestPlans();
   plansTable.innerHTML = plans.length
     ? plans
         .map(
@@ -327,17 +272,6 @@ function renderPlans(plans = []) {
         )
         .join("")
     : `<tr><td colspan="5">Nenhum plano encontrado.</td></tr>`;
-}
-
-function renderNfseTestPlans() {
-  if (!nfseTestPlan) return;
-
-  nfseTestPlan.innerHTML = `
-    <option value="">Selecione um plano</option>
-    ${plansCache
-      .map((plan) => `<option value="${escapeHtml(plan.id)}">${escapeHtml(plan.nome)} - ${money(plan.valor)}</option>`)
-      .join("")}
-  `;
 }
 
 async function loadPlans() {
@@ -377,69 +311,12 @@ async function loadPayments() {
   setStatus("");
 }
 
-function renderNfse(notas = []) {
-  nfseTable.innerHTML = notas.length
-    ? notas
-        .map(
-          (nota) => `
-            <tr>
-              <td>
-                <strong>${escapeHtml(nota.cliente || "-")}</strong>
-                <small>ID ${nota.id} - ${formatDate(nota.created_at)}</small>
-                ${nota.erro_mensagem ? `<small class="error-text">${escapeHtml(nota.erro_mensagem)}</small>` : ""}
-              </td>
-              <td>${escapeHtml(formatCnpj(nota.cliente_cnpj))}</td>
-              <td>${escapeHtml(nota.plano || "Sem plano vinculado")}</td>
-              <td>${money(nota.valor)}</td>
-              <td>${statusPill(nota.status)}</td>
-              <td>${escapeHtml(nota.numero_dps || "-")}</td>
-              <td>${escapeHtml(nota.numero_nfse || "-")}</td>
-              <td>
-                <div class="row-actions">
-                  <button class="mini-button" type="button" data-open-nfse="${nota.id}">Detalhes</button>
-                  <button class="mini-button" type="button" data-download-xml-dps="${nota.id}">XML DPS</button>
-                  <button class="mini-button" type="button" data-open-nfse-pdf="${nota.id}">PDF</button>
-                  ${
-                    nota.numero_nfse
-                      ? `<button class="mini-button" type="button" data-download-xml-nfse="${nota.id}">XML NFS-e</button>`
-                      : ""
-                  }
-                  <button class="mini-button" type="button" data-resend-nfse-email="${nota.id}">E-mail</button>
-                  ${
-                    nota.status !== "emitida"
-                      ? `<button class="mini-button" type="button" data-send-nfse="${nota.id}">Enviar</button>`
-                      : ""
-                  }
-                  ${
-                    nota.status === "erro"
-                      ? `<button class="mini-button" type="button" data-retry-nfse="${nota.id}">Tentar novamente</button>`
-                      : ""
-                  }
-                </div>
-              </td>
-            </tr>
-          `,
-        )
-        .join("")
-    : `<tr><td colspan="8">Nenhuma NFS-e gerada ainda.</td></tr>`;
-}
-
-async function loadNfse() {
-  setStatus("Carregando notas fiscais...");
-  const params = new URLSearchParams();
-  if (nfseStatus.value) params.set("status", nfseStatus.value);
-  const data = await apiRequest(`/api/nfse?${params.toString()}`);
-  renderNfse(data.notas);
-  setStatus("");
-}
-
 async function loadCurrentView() {
   try {
     if (currentView === "overview") await loadOverview();
     if (currentView === "customers") await loadCustomers();
     if (currentView === "plans") await loadPlans();
     if (currentView === "payments") await loadPayments();
-    if (currentView === "nfse") await loadNfse();
   } catch (error) {
     setStatus(error.message, "error");
   }
@@ -607,148 +484,6 @@ function openPlan(planId) {
   `);
 }
 
-async function openNfse(nfseId) {
-  try {
-    setStatus("Abrindo nota fiscal...");
-    const data = await apiRequest(`/api/nfse/${nfseId}`);
-    const nota = data.nota;
-
-    openDrawer(`
-      <div class="drawer-content">
-        <div>
-          <p class="eyebrow">NFS-e #${nota.id}</p>
-          <h2>${escapeHtml(nota.cliente || "Nota fiscal")}</h2>
-          ${statusPill(nota.status)}
-        </div>
-
-        <article class="panel">
-          <h3>Dados do tomador</h3>
-          <div class="detail-grid">
-            <p><strong>Razao social</strong><span>${escapeHtml(nota.cliente_razao_social || nota.cliente || "-")}</span></p>
-            <p><strong>CNPJ</strong><span>${escapeHtml(formatCnpj(nota.cliente_cnpj))}</span></p>
-            <p><strong>E-mail</strong><span>${escapeHtml(nota.cliente_email || "-")}</span></p>
-            <p><strong>WhatsApp</strong><span>${escapeHtml(nota.cliente_whatsapp || "-")}</span></p>
-            <p><strong>Endereco</strong><span>${escapeHtml(
-              [
-                nota.cliente_logradouro,
-                nota.cliente_numero,
-                nota.cliente_bairro,
-                nota.cliente_municipio,
-                nota.cliente_uf,
-                nota.cliente_cep,
-              ]
-                .filter(Boolean)
-                .join(", ") || "-",
-            )}</span></p>
-          </div>
-        </article>
-
-        <article class="panel">
-          <h3>Dados do servico</h3>
-          <div class="detail-grid">
-            <p><strong>Plano</strong><span>${escapeHtml(nota.plano || "Sem plano vinculado")}</span></p>
-            <p><strong>Descricao</strong><span>${escapeHtml(nota.descricao_servico || "-")}</span></p>
-            <p><strong>Valor</strong><span>${money(nota.valor)}</span></p>
-            <p><strong>Competencia</strong><span>${escapeHtml(nota.competencia || "-")}</span></p>
-            <p><strong>DPS</strong><span>${escapeHtml(nota.serie_dps || "-")} / ${escapeHtml(nota.numero_dps || "-")}</span></p>
-            <p><strong>NFS-e</strong><span>${escapeHtml(nota.numero_nfse || "-")}</span></p>
-          </div>
-        </article>
-
-        ${
-          nota.erro_mensagem
-            ? `<article class="panel error-panel"><h3>Erro retornado</h3><p>${escapeHtml(nota.erro_mensagem)}</p></article>`
-            : ""
-        }
-
-        <article class="panel">
-          <h3>XML DPS</h3>
-          <pre class="xml-block">${escapeHtml(nota.xml_dps || "XML DPS ainda nao gerado.")}</pre>
-          <div class="action-bar">
-            <button class="gold-button compact" type="button" data-download-xml-dps="${nota.id}">Baixar XML DPS</button>
-            <button class="mini-button" type="button" data-open-nfse-pdf="${nota.id}">Abrir PDF</button>
-            ${
-              nota.xml_nfse
-                ? `<button class="mini-button" type="button" data-download-xml-nfse="${nota.id}">Baixar XML NFS-e</button>`
-                : ""
-            }
-            <button class="mini-button" type="button" data-resend-nfse-email="${nota.id}">Reenviar e-mail</button>
-            ${
-              nota.status !== "emitida"
-                ? `<button class="mini-button" type="button" data-send-nfse="${nota.id}">Enviar para Sefin</button>`
-                : ""
-            }
-            ${
-              nota.status === "erro"
-                ? `<button class="danger-button" type="button" data-retry-nfse="${nota.id}">Tentar novamente</button>`
-                : ""
-            }
-          </div>
-        </article>
-      </div>
-    `);
-    setStatus("");
-  } catch (error) {
-    setStatus(error.message, "error");
-  }
-}
-
-async function downloadNfseXml(nfseId, type) {
-  const suffix = type === "xml-nfse" ? "nfse" : "dps";
-  const xml = await apiRaw(`/api/nfse/${nfseId}/${type}`);
-  downloadText(`nfse-${nfseId}-${suffix}.xml`, xml);
-  setStatus("XML baixado.");
-}
-
-async function openNfsePdf(nfseId) {
-  const html = await apiRaw(`/api/nfse/${nfseId}/pdf`);
-  const blob = new Blob([html], { type: "text/html;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  window.open(url, "_blank", "noopener,noreferrer");
-  setTimeout(() => URL.revokeObjectURL(url), 30000);
-  setStatus("PDF visual aberto. Use imprimir/salvar PDF no navegador.");
-}
-
-async function runNfseFullTest(form) {
-  if (!window.confirm("Gerar uma nota teste mock agora? Isso cria cliente, assinatura, pagamento e emissao no banco.")) return;
-
-  setStatus("Gerando nota fiscal teste...");
-  const formData = new FormData(form);
-  const payload = Object.fromEntries(formData.entries());
-
-  const result = await apiRequest("/api/testes/nfse/fluxo-completo", {
-    method: "POST",
-    body: JSON.stringify(payload),
-  });
-
-  setStatus(`Nota teste gerada. Emissao #${result.emissao.id}, DPS ${result.emissao.numero_dps}.`);
-  await loadNfse();
-  await openNfse(result.emissao.id);
-}
-
-async function resendNfseEmail(nfseId) {
-  const result = await apiRequest(`/api/nfse/${nfseId}/enviar-email`, { method: "POST" });
-  setStatus(result.message || "Solicitacao de reenvio registrada.");
-}
-
-async function retryNfse(nfseId) {
-  if (!window.confirm("Tentar gerar esta DPS novamente?")) return;
-
-  await apiRequest(`/api/nfse/${nfseId}/tentar-novamente`, { method: "POST" });
-  setStatus("Tentativa de geracao executada.");
-  closeDrawer();
-  await loadNfse();
-}
-
-async function sendNfse(nfseId) {
-  if (!window.confirm("Enviar esta DPS para a Sefin usando a configuracao atual?")) return;
-
-  await apiRequest(`/api/nfse/${nfseId}/enviar`, { method: "POST" });
-  setStatus("Envio NFS-e executado.");
-  closeDrawer();
-  await loadNfse();
-}
-
 async function saveCustomer(form) {
   const formData = new FormData(form);
   const customerId = form.dataset.customerId;
@@ -847,7 +582,6 @@ document.querySelector("[data-logout]").addEventListener("click", async () => {
 document.querySelector("[data-refresh]").addEventListener("click", loadCurrentView);
 document.querySelector("[data-search-customers]").addEventListener("click", loadCustomers);
 document.querySelector("[data-filter-payments]").addEventListener("click", loadPayments);
-document.querySelector("[data-filter-nfse]").addEventListener("click", loadNfse);
 customerSearch.addEventListener("keydown", (event) => {
   if (event.key === "Enter") loadCustomers();
 });
@@ -861,32 +595,17 @@ document.addEventListener("click", (event) => {
   const planButton = event.target.closest("[data-open-plan]");
   const deleteButton = event.target.closest("[data-delete-customer]");
   const cancelButton = event.target.closest("[data-cancel-subscription]");
-  const nfseButton = event.target.closest("[data-open-nfse]");
-  const xmlDpsButton = event.target.closest("[data-download-xml-dps]");
-  const xmlNfseButton = event.target.closest("[data-download-xml-nfse]");
-  const resendNfseButton = event.target.closest("[data-resend-nfse-email]");
-  const retryNfseButton = event.target.closest("[data-retry-nfse]");
-  const sendNfseButton = event.target.closest("[data-send-nfse]");
-  const pdfNfseButton = event.target.closest("[data-open-nfse-pdf]");
 
   if (customerButton) openCustomer(customerButton.dataset.openCustomer);
   if (planButton) openPlan(planButton.dataset.openPlan);
   if (deleteButton) deleteCustomer(deleteButton.dataset.deleteCustomer).catch((error) => setStatus(error.message, "error"));
   if (cancelButton) cancelSubscription(cancelButton.dataset.cancelSubscription).catch((error) => setStatus(error.message, "error"));
-  if (nfseButton) openNfse(nfseButton.dataset.openNfse);
-  if (xmlDpsButton) downloadNfseXml(xmlDpsButton.dataset.downloadXmlDps, "xml-dps").catch((error) => setStatus(error.message, "error"));
-  if (xmlNfseButton) downloadNfseXml(xmlNfseButton.dataset.downloadXmlNfse, "xml-nfse").catch((error) => setStatus(error.message, "error"));
-  if (resendNfseButton) resendNfseEmail(resendNfseButton.dataset.resendNfseEmail).catch((error) => setStatus(error.message, "error"));
-  if (retryNfseButton) retryNfse(retryNfseButton.dataset.retryNfse).catch((error) => setStatus(error.message, "error"));
-  if (sendNfseButton) sendNfse(sendNfseButton.dataset.sendNfse).catch((error) => setStatus(error.message, "error"));
-  if (pdfNfseButton) openNfsePdf(pdfNfseButton.dataset.openNfsePdf).catch((error) => setStatus(error.message, "error"));
 });
 
 document.addEventListener("submit", (event) => {
   const customerForm = event.target.closest("[data-customer-form]");
   const subscriptionForm = event.target.closest("[data-subscription-form]");
   const planForm = event.target.closest("[data-plan-form]");
-  const nfseTest = event.target.closest("[data-nfse-test-form]");
 
   if (customerForm) {
     event.preventDefault();
@@ -901,11 +620,6 @@ document.addEventListener("submit", (event) => {
   if (planForm) {
     event.preventDefault();
     savePlan(planForm).catch((error) => setStatus(error.message, "error"));
-  }
-
-  if (nfseTest) {
-    event.preventDefault();
-    runNfseFullTest(nfseTest).catch((error) => setStatus(error.message, "error"));
   }
 });
 

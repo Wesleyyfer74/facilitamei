@@ -6,8 +6,6 @@ import { fileURLToPath } from "node:url";
 import dotenv from "dotenv";
 import mysql from "mysql2/promise";
 import { MercadoPagoConfig, Preference, Payment } from "mercadopago";
-import { createNfseService, getNfseConfig, registerNfseRoutes } from "./nfse/index.js";
-import { CnpjServiceError, createCnpjService } from "./src/services/cnpj/cnpjService.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -35,9 +33,6 @@ const dbPool = mysql.createPool({
   connectionLimit: 10,
   namedPlaceholders: true,
 });
-const nfseService = createNfseService({ dbPool });
-const cnpjService = createCnpjService({ dbPool });
-
 const allowedOrigins = new Set([
   frontendUrl,
   apiPublicUrl,
@@ -346,41 +341,6 @@ app.get("/api/config", (_request, response) => {
     mercadoPagoPublicKey: safePublicKey,
     publicKey: safePublicKey,
   });
-});
-
-app.post("/api/cnpj/consultar", async (request, response) => {
-  try {
-    const { cnpj, email, whatsapp, nome } = request.body || {};
-    const cliente = await cnpjService.salvarOuAtualizarClientePorCnpj({ cnpj, email, whatsapp, nome });
-
-    response.json({
-      ok: true,
-      cliente,
-    });
-  } catch (error) {
-    if (error instanceof CnpjServiceError) {
-      console.warn("Falha controlada ao consultar CNPJ:", {
-        code: error.code,
-        status: error.status,
-      });
-
-      return response.status(error.status).json({
-        ok: false,
-        error: error.message,
-        code: error.code,
-      });
-    }
-
-    console.error("Erro inesperado ao consultar CNPJ:", {
-      message: error.message,
-      code: error.code,
-    });
-
-    response.status(500).json({
-      ok: false,
-      error: "Erro interno ao consultar CNPJ.",
-    });
-  }
 });
 
 app.post("/api/admin/auth/login", (request, response) => {
@@ -782,252 +742,6 @@ app.post("/api/admin/subscriptions/:id/cancel", requireAdminSession, async (requ
   }
 });
 
-registerNfseRoutes(app, { nfseService, requireAdminSession });
-
-app.post("/api/testes/nfse/fluxo-completo", requireAdminSession, async (request, response) => {
-  const allowProductionTest = String(process.env.ALLOW_NFSE_TEST_ROUTES || "false").toLowerCase() === "true";
-
-  if (process.env.NODE_ENV === "production" && !allowProductionTest) {
-    return response.status(403).json({
-      ok: false,
-      error: "Rota de teste NFS-e indisponivel em producao. Configure ALLOW_NFSE_TEST_ROUTES=true apenas durante testes controlados.",
-    });
-  }
-
-  const nfseConfig = getNfseConfig();
-  if (!nfseConfig.mock) {
-    return response.status(403).json({
-      ok: false,
-      error: "Fluxo de teste exige NFSE_MOCK=true para evitar envio real.",
-    });
-  }
-
-  const connection = await dbPool.getConnection();
-
-  try {
-    const { cnpj, email, whatsapp, planoId } = request.body || {};
-
-    if (!cnpj || !email || !whatsapp || !planoId) {
-      return response.status(400).json({
-        ok: false,
-        error: "Informe cnpj, email, whatsapp e planoId.",
-      });
-    }
-
-    let cliente;
-
-    try {
-      cliente = await cnpjService.salvarOuAtualizarClientePorCnpj({
-        cnpj,
-        email,
-        whatsapp,
-        nome: "Cliente Teste NFS-e",
-      });
-    } catch (error) {
-      if (error.code !== "CNPJ_PROVIDER_ERROR") throw error;
-
-      const cnpjLimpo = String(cnpj || "").replace(/\D/g, "");
-      if (cnpjLimpo.length !== 14) throw error;
-
-      console.warn("BrasilAPI indisponivel no fluxo teste NFS-e. Usando tomador mock.", {
-        code: error.code,
-      });
-
-      await dbPool.execute(
-        `INSERT INTO users
-          (
-            nome, email, telefone, whatsapp, documento, status,
-            cnpj, razao_social, nome_fantasia, cep, logradouro, numero, bairro,
-            municipio, codigo_municipio, uf, cnae_principal_codigo, cnae_principal_descricao
-          )
-         VALUES
-          (
-            'Cliente Teste NFS-e', :email, :whatsapp, :whatsapp, :cnpj, 'active',
-            :cnpj, 'CLIENTE TESTE NFS-E LTDA', 'CLIENTE TESTE', '79940000',
-            'Rua Teste', '100', 'Centro', 'Caarapo', '5002407', 'MS',
-            '6920601', 'Atividades de contabilidade'
-          )
-         ON DUPLICATE KEY UPDATE
-            nome = VALUES(nome),
-            email = VALUES(email),
-            telefone = VALUES(telefone),
-            whatsapp = VALUES(whatsapp),
-            documento = VALUES(documento),
-            status = VALUES(status),
-            razao_social = VALUES(razao_social),
-            nome_fantasia = VALUES(nome_fantasia),
-            cep = VALUES(cep),
-            logradouro = VALUES(logradouro),
-            numero = VALUES(numero),
-            bairro = VALUES(bairro),
-            municipio = VALUES(municipio),
-            codigo_municipio = VALUES(codigo_municipio),
-            uf = VALUES(uf),
-            cnae_principal_codigo = VALUES(cnae_principal_codigo),
-            cnae_principal_descricao = VALUES(cnae_principal_descricao),
-            updated_at = CURRENT_TIMESTAMP`,
-        { cnpj: cnpjLimpo, email, whatsapp },
-      );
-
-      const [clientesMock] = await dbPool.execute(
-        `SELECT
-          id, nome, email, telefone, whatsapp, documento, status, cnpj, razao_social,
-          nome_fantasia, cep, logradouro, numero, bairro, municipio, codigo_municipio,
-          uf, cnae_principal_codigo, cnae_principal_descricao
-         FROM users
-         WHERE cnpj = :cnpj
-         LIMIT 1`,
-        { cnpj: cnpjLimpo },
-      );
-
-      cliente = clientesMock[0];
-    }
-
-    const [planRows] = await dbPool.execute(
-      `SELECT id, nome, valor, descricao_nfse, ativo
-       FROM plans
-       WHERE id = :planoId
-       LIMIT 1`,
-      { planoId },
-    );
-    const plano = planRows[0];
-
-    if (!plano) {
-      return response.status(404).json({
-        ok: false,
-        error: "Plano de teste nao encontrado.",
-      });
-    }
-
-    if (!Number(plano.valor)) {
-      return response.status(400).json({
-        ok: false,
-        error: "Plano precisa ter valor para gerar NFS-e.",
-      });
-    }
-
-    await connection.beginTransaction();
-
-    const testRunId = crypto.randomUUID();
-    const gatewaySubscriptionId = `teste-nfse-sub-${testRunId}`;
-    const gatewayPaymentId = `teste-nfse-pay-${testRunId}`;
-    const now = new Date();
-    const competencia = now.toISOString().slice(0, 7);
-
-    const [subscriptionResult] = await connection.execute(
-      `INSERT INTO subscriptions
-        (
-          user_id, plan_id, mercado_pago_subscription_id, gateway, gateway_subscription_id,
-          status, valor, data_inicio, metodo_pagamento, raw_payload
-        )
-       VALUES
-        (
-          :clienteId, :planoId, :gatewaySubscriptionId, 'teste_nfse', :gatewaySubscriptionId,
-          'active', :valor, :dataInicio, 'teste_nfse', :rawPayload
-        )`,
-      {
-        clienteId: cliente.id,
-        planoId: plano.id,
-        gatewaySubscriptionId,
-        valor: Number(plano.valor),
-        dataInicio: now,
-        rawPayload: JSON.stringify({ testRunId, origem: "api/testes/nfse/fluxo-completo" }),
-      },
-    );
-
-    const [paymentResult] = await connection.execute(
-      `INSERT INTO payments
-        (
-          user_id, subscription_id, mercado_pago_payment_id, gateway, gateway_payment_id,
-          valor, status, data_pagamento, competencia, raw_payload
-        )
-       VALUES
-        (
-          :clienteId, :subscriptionId, :gatewayPaymentId, 'teste_nfse', :gatewayPaymentId,
-          :valor, 'approved', :dataPagamento, :competencia, :rawPayload
-        )`,
-      {
-        clienteId: cliente.id,
-        subscriptionId: subscriptionResult.insertId,
-        gatewayPaymentId,
-        valor: Number(plano.valor),
-        dataPagamento: now,
-        competencia,
-        rawPayload: JSON.stringify({ testRunId, origem: "api/testes/nfse/fluxo-completo" }),
-      },
-    );
-
-    await connection.commit();
-
-    const emissao = await nfseService.criarNfseParaPagamento(paymentResult.insertId);
-    const emissaoDuplicada = await nfseService.criarNfseParaPagamento(paymentResult.insertId);
-    const xmlDps = await nfseService.getFiscalNoteXml(emissao.id, "xml_dps");
-
-    response.json({
-      ok: true,
-      mock: true,
-      checklist: {
-        cnpjClienteValido: Boolean(cliente.cnpj && cliente.cnpj.length === 14),
-        clienteSalvoComRazaoSocial: Boolean(cliente.razao_social),
-        planoSalvoComValor: Boolean(Number(plano.valor)),
-        pagamentoAprovadoSalvo: Boolean(paymentResult.insertId),
-        emissaoCriada: Boolean(emissao.id),
-        xmlDpsGerado: Boolean(xmlDps),
-        emissaoDuplicadaBloqueada: emissao.id === emissaoDuplicada.id,
-      },
-      cliente,
-      plano: {
-        id: plano.id,
-        nome: plano.nome,
-        valor: Number(plano.valor),
-      },
-      assinatura: {
-        id: subscriptionResult.insertId,
-        gatewaySubscriptionId,
-      },
-      pagamento: {
-        id: paymentResult.insertId,
-        gatewayPaymentId,
-        status: "approved",
-        valor: Number(plano.valor),
-        competencia,
-      },
-      emissao: {
-        id: emissao.id,
-        status: emissao.status,
-        numero_dps: emissao.numero_dps,
-        numero_nfse: emissao.numero_nfse,
-        chave_acesso: emissao.chave_acesso,
-        enviada_email: Boolean(emissao.enviada_email),
-      },
-      duplicidade: {
-        primeiraEmissaoId: emissao.id,
-        segundaChamadaEmissaoId: emissaoDuplicada.id,
-        bloqueada: emissao.id === emissaoDuplicada.id,
-      },
-      xml: {
-        dpsLength: xmlDps.length,
-        dpsPreview: xmlDps.slice(0, 800),
-        downloadUrl: `/api/nfse/${emissao.id}/xml-dps`,
-      },
-    });
-  } catch (error) {
-    await connection.rollback().catch(() => {});
-    console.error("Erro no fluxo completo de teste NFS-e:", {
-      code: error.code,
-      status: error.status,
-      message: error.message,
-    });
-    response.status(error.status || 500).json({
-      ok: false,
-      error: error.message || "Erro ao executar fluxo completo NFS-e.",
-      code: error.code,
-    });
-  } finally {
-    connection.release();
-  }
-});
-
 app.post("/api/admin/plans/:planId/mercado-pago-plan", requireAdminKey, async (request, response) => {
   try {
     const { planId } = request.params;
@@ -1161,106 +875,6 @@ function getUserStatusFromSubscriptionStatus(status) {
   return "pending";
 }
 
-function isApprovedPaymentStatus(status) {
-  return ["approved", "paid", "authorized", "accredited"].includes(String(status || "").toLowerCase());
-}
-
-async function getPaymentNfseContext(localPaymentId) {
-  if (!localPaymentId) return null;
-
-  const [rows] = await dbPool.execute(
-    `SELECT
-      p.id,
-      p.status,
-      p.nfse_emitida,
-      p.subscription_id,
-      u.id AS user_id,
-      u.cnpj,
-      u.documento
-     FROM payments p
-     JOIN users u ON u.id = p.user_id
-     WHERE p.id = :localPaymentId
-     LIMIT 1`,
-    { localPaymentId },
-  );
-
-  return rows[0] || null;
-}
-
-async function maybeGenerateNfseForApprovedPayment(paymentData, localPaymentId) {
-  const config = getNfseConfig();
-  const gatewayPaymentId = paymentData?.id ? String(paymentData.id) : "";
-
-  if (!config.autoEmitir) {
-    console.log("NFS-e automatica desativada. Pagamento salvo sem gerar nota.", {
-      gatewayPaymentId,
-      localPaymentId,
-      nfseMock: config.mock,
-      ambiente: config.ambiente,
-    });
-    return { skipped: true, reason: "NFSE_AUTO_EMITIR=false" };
-  }
-
-  if (!isApprovedPaymentStatus(paymentData?.status)) {
-    console.log("NFS-e nao gerada: pagamento ainda nao aprovado.", {
-      gatewayPaymentId,
-      localPaymentId,
-      status: paymentData?.status,
-    });
-    return { skipped: true, reason: "payment_not_approved" };
-  }
-
-  const context = await getPaymentNfseContext(localPaymentId);
-  if (!context) {
-    console.warn("NFS-e nao gerada: pagamento local nao encontrado.", { gatewayPaymentId, localPaymentId });
-    return { skipped: true, reason: "local_payment_not_found" };
-  }
-
-  if (Number(context.nfse_emitida) === 1) {
-    console.log("NFS-e nao gerada: pagamento ja marcado como nota emitida.", { gatewayPaymentId, localPaymentId });
-    return { skipped: true, reason: "already_marked" };
-  }
-
-  if (!context.subscription_id) {
-    console.log("NFS-e nao gerada: pagamento sem assinatura vinculada.", { gatewayPaymentId, localPaymentId });
-    return { skipped: true, reason: "subscription_not_linked" };
-  }
-
-  const cnpj = normalizeDigits(context.cnpj || context.documento);
-  if (cnpj.length !== 14) {
-    console.warn("NFS-e nao gerada: cliente sem CNPJ valido.", {
-      gatewayPaymentId,
-      localPaymentId,
-      userId: context.user_id,
-    });
-    return { skipped: true, reason: "customer_without_valid_cnpj" };
-  }
-
-  try {
-    const emissao = await nfseService.criarNfseParaPagamento(localPaymentId);
-    console.log("NFS-e DPS gerada para pagamento aprovado:", {
-      gatewayPaymentId,
-      localPaymentId,
-      emissaoId: emissao?.id,
-      status: emissao?.status,
-      numeroDps: emissao?.numero_dps,
-      nfseMock: config.mock,
-      ambiente: config.ambiente,
-    });
-    return { created: true, emissao };
-  } catch (error) {
-    console.error("Falha ao gerar NFS-e para pagamento aprovado. Pagamento foi mantido.", {
-      gatewayPaymentId,
-      localPaymentId,
-      code: error.code,
-      status: error.status,
-      emissaoId: error.emissaoId,
-      message: error.message,
-    });
-    return { skipped: true, reason: "nfse_error", error: error.message, emissaoId: error.emissaoId };
-  }
-}
-
 function normalizeSubscriptionStatus(status) {
   const allowedStatuses = ["pending", "authorized", "active", "paused", "cancelled", "expired", "rejected"];
   if (allowedStatuses.includes(status)) return status;
@@ -1355,18 +969,13 @@ async function saveSubscriptionRecord({ customerId, plan, subscriptionData, paym
 
   await updateUserStatusFromSubscription(customerId, normalizeSubscriptionStatus(subscriptionData.status));
 
-  if (result.insertId) {
-    await nfseService.createPendingForSubscriptionSafe(result.insertId);
-    return result.insertId;
-  }
+  if (result.insertId) return result.insertId;
 
   const [rows] = await dbPool.execute(
     "SELECT id FROM subscriptions WHERE mercado_pago_subscription_id = :subscriptionId LIMIT 1",
     { subscriptionId: String(subscriptionData.id) },
   );
-  const subscriptionId = rows[0]?.id;
-  if (subscriptionId) await nfseService.createPendingForSubscriptionSafe(subscriptionId);
-  return subscriptionId;
+  return rows[0]?.id;
 }
 
 async function updatePaymentStatus(paymentData) {
@@ -1471,7 +1080,6 @@ async function updatePaymentStatus(paymentData) {
     { paymentId: String(paymentData.id) },
   );
   await updateUserStatusFromPayment(rows[0]?.user_id, paymentData.status);
-  await maybeGenerateNfseForApprovedPayment(paymentData, rows[0]?.id);
   return rows[0]?.id || null;
 }
 
