@@ -1,0 +1,55 @@
+@baseUrl = http://localhost:3000
+@adminToken = COLE_O_TOKEN_ADMIN_AQUI
+@nfseId = 1
+
+### 1. Consultar CNPJ e criar/atualizar cliente tomador
+POST {{baseUrl}}/api/cnpj/consultar
+Content-Type: application/json
+
+{
+  "cnpj": "52643976000186",
+  "email": "cliente@email.com",
+  "whatsapp": "67999999999",
+  "nome": "Cliente Teste"
+}
+
+### 2. Fluxo completo NFS-e mock
+POST {{baseUrl}}/api/testes/nfse/fluxo-completo
+Content-Type: application/json
+
+{
+  "cnpj": "52643976000186",
+  "email": "cliente@email.com",
+  "whatsapp": "67999999999",
+  "planoId": "contabilidade_basico"
+}
+
+### 3. Listar NFS-e geradas
+GET {{baseUrl}}/api/nfse
+Authorization: Bearer {{adminToken}}
+
+### 4. Ver detalhe da emissao
+GET {{baseUrl}}/api/nfse/{{nfseId}}
+Authorization: Bearer {{adminToken}}
+
+### 5. Baixar XML DPS
+GET {{baseUrl}}/api/nfse/{{nfseId}}/xml-dps
+Authorization: Bearer {{adminToken}}
+
+### 6. Baixar XML NFS-e se existir
+GET {{baseUrl}}/api/nfse/{{nfseId}}/xml-nfse
+Authorization: Bearer {{adminToken}}
+
+### 7. Enviar ou reenviar e-mail da nota se SMTP estiver configurado
+POST {{baseUrl}}/api/nfse/{{nfseId}}/enviar-email
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{}
+
+### 8. Tentar novamente se a emissao estiver com status erro
+POST {{baseUrl}}/api/nfse/{{nfseId}}/tentar-novamente
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{}

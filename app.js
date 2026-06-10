@@ -12,6 +12,15 @@ const aboutModal = document.querySelector("[data-about-modal]");
 const aboutOpenButton = document.querySelector("[data-about-open]");
 const aboutCloseButtons = document.querySelectorAll("[data-about-close]");
 const aboutScroll = document.querySelector("[data-about-scroll]");
+const leadModal = document.querySelector("[data-lead-modal]");
+const leadOpenButtons = document.querySelectorAll("[data-lead-open]");
+const leadCloseButtons = document.querySelectorAll("[data-lead-close]");
+const leadForm = document.querySelector("[data-lead-form]");
+const leadKicker = document.querySelector("[data-lead-kicker]");
+const leadTitle = document.querySelector("[data-lead-title]");
+const leadDescription = document.querySelector("[data-lead-description]");
+const leadInterest = document.querySelector("[data-lead-interest]");
+const leadStatus = document.querySelector("[data-lead-status]");
 const paymentSubmit = document.querySelector("[data-payment-submit]");
 const paymentResult = document.querySelector("[data-payment-result]");
 const resultKicker = document.querySelector("[data-result-kicker]");
@@ -528,6 +537,67 @@ function closeAboutModal() {
   document.body.classList.remove("modal-open");
 }
 
+const leadModalContent = {
+  "sou-mei": {
+    kicker: "Ja tenho MEI",
+    title: "Vamos cuidar do seu MEI",
+    description: "Informe seus dados para receber orientacao sobre regularizacao, notas fiscais, PGDAS e suporte mensal.",
+    interest: "Sou MEI",
+  },
+  "quero-ser-mei": {
+    kicker: "Quero abrir MEI",
+    title: "Vamos abrir seu MEI",
+    description: "Preencha o formulario para iniciarmos seu atendimento de abertura com seguranca e orientacao correta.",
+    interest: "Quero Ser MEI",
+  },
+  "area-cliente": {
+    kicker: "Area do cliente",
+    title: "Acesse pelo atendimento",
+    description: "Informe seus dados para nossa equipe localizar seu cadastro e orientar o proximo passo.",
+    interest: "Area do cliente",
+  },
+};
+
+function openLeadModal(type = "sou-mei") {
+  if (!leadModal) return;
+
+  const content = leadModalContent[type] || leadModalContent["sou-mei"];
+  if (leadKicker) leadKicker.textContent = content.kicker;
+  if (leadTitle) leadTitle.textContent = content.title;
+  if (leadDescription) leadDescription.textContent = content.description;
+  if (leadInterest) leadInterest.value = content.interest;
+  if (leadStatus) leadStatus.textContent = "";
+
+  leadModal.hidden = false;
+  document.body.classList.add("modal-open");
+  window.setTimeout(() => leadForm?.querySelector("input[name='name']")?.focus(), 60);
+}
+
+function closeLeadModal() {
+  if (!leadModal) return;
+
+  leadModal.hidden = true;
+  document.body.classList.remove("modal-open");
+}
+
+function submitLeadForm(event) {
+  event.preventDefault();
+
+  const payload = Object.fromEntries(new FormData(leadForm));
+  const message = [
+    "Ola, gostaria de atendimento pelo site Facilita MEI.",
+    `Interesse: ${payload.interest || "-"}`,
+    `Nome: ${payload.name || "-"}`,
+    `WhatsApp: ${payload.phone || "-"}`,
+    `E-mail: ${payload.email || "-"}`,
+    `CPF/CNPJ: ${payload.document || "-"}`,
+    `Mensagem: ${payload.message || "-"}`,
+  ].join("\n");
+
+  if (leadStatus) leadStatus.textContent = "Abrindo atendimento no WhatsApp...";
+  window.open(`https://wa.me/5567996750853?text=${encodeURIComponent(message)}`, "_blank", "noopener,noreferrer");
+}
+
 function animatePlanToCheckout(card, planId) {
   openCheckout(planId);
 }
@@ -549,7 +619,22 @@ aboutCloseButtons.forEach((button) => {
   button.addEventListener("click", closeAboutModal);
 });
 
+leadOpenButtons.forEach((button) => {
+  button.addEventListener("click", () => openLeadModal(button.dataset.leadType));
+});
+
+leadCloseButtons.forEach((button) => {
+  button.addEventListener("click", closeLeadModal);
+});
+
+leadForm?.addEventListener("submit", submitLeadForm);
+
 window.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && leadModal && !leadModal.hidden) {
+    closeLeadModal();
+    return;
+  }
+
   if (event.key === "Escape" && aboutModal && !aboutModal.hidden) {
     closeAboutModal();
     return;

@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Area Admin | Facilita MEI</title>
+    <meta name="robots" content="noindex, nofollow" />
+    <link rel="stylesheet" href="admin/admin.css?v=20260609-admin-hidden-fix" />
+  </head>
+  <body>
+    <main class="admin-shell">
+      <section class="login-view" data-login-view>
+        <form class="login-card" method="post" action="" data-login-form>
+          <img src="assets/logo.png" alt="Facilita MEI" />
+          <p class="eyebrow">Acesso restrito</p>
+          <h1>Area administrativa</h1>
+          <label>
+            E-mail
+            <input name="email" type="email" autocomplete="username" required />
+          </label>
+          <label>
+            Senha
+            <input name="password" type="password" autocomplete="current-password" required />
+          </label>
+          <button class="gold-button" type="submit">Entrar no painel</button>
+          <p class="status-message" data-login-status></p>
+        </form>
+      </section>
+
+      <section class="dashboard-view" data-dashboard-view hidden>
+        <aside class="sidebar">
+          <img src="assets/logo.png" alt="Facilita MEI" />
+          <nav>
+            <button class="nav-item is-active" type="button" data-view-button="overview">Dashboard</button>
+            <button class="nav-item" type="button" data-view-button="customers">Clientes</button>
+            <button class="nav-item" type="button" data-view-button="plans">Planos</button>
+            <button class="nav-item" type="button" data-view-button="payments">Pagamentos</button>
+            <button class="nav-item" type="button" data-view-button="nfse">Notas Fiscais</button>
+          </nav>
+          <button class="ghost-button" type="button" data-logout>Sair</button>
+        </aside>
+
+        <section class="admin-main">
+          <header class="admin-topbar">
+            <div>
+              <p class="eyebrow">Controle Facilita MEI</p>
+              <h2 data-view-title>Dashboard</h2>
+            </div>
+            <button class="gold-button compact" type="button" data-refresh>Atualizar</button>
+          </header>
+
+          <div class="status-message admin-status" data-admin-status></div>
+
+          <section class="view-panel is-active" data-view="overview">
+            <div class="metric-grid" data-metrics></div>
+            <div class="split-grid">
+              <article class="panel">
+                <h3>Clientes recentes</h3>
+                <div class="compact-list" data-latest-customers></div>
+              </article>
+              <article class="panel">
+                <h3>Pagamentos recentes</h3>
+                <div class="compact-list" data-latest-payments></div>
+              </article>
+            </div>
+          </section>
+
+          <section class="view-panel" data-view="customers">
+            <div class="toolbar">
+              <input data-customer-search placeholder="Buscar por nome, email, telefone ou documento" />
+              <select data-customer-status>
+                <option value="">Todos os status</option>
+                <option value="pending">Pendente</option>
+                <option value="active">Ativo</option>
+                <option value="blocked">Bloqueado</option>
+                <option value="cancelled">Cancelado</option>
+              </select>
+              <button class="gold-button compact" type="button" data-search-customers>Buscar</button>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Cliente</th>
+                    <th>Contato</th>
+                    <th>Plano</th>
+                    <th>Status</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody data-customers-table></tbody>
+              </table>
+            </div>
+          </section>
+
+          <section class="view-panel" data-view="plans">
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Plano</th>
+                    <th>Valor</th>
+                    <th>Cobranca</th>
+                    <th>Mercado Pago</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody data-plans-table></tbody>
+              </table>
+            </div>
+          </section>
+
+          <section class="view-panel" data-view="payments">
+            <div class="toolbar">
+              <select data-payment-status>
+                <option value="">Todos pagamentos</option>
+                <option value="approved">Aprovados</option>
+                <option value="pending">Pendentes</option>
+                <option value="rejected">Recusados</option>
+                <option value="cancelled">Cancelados</option>
+              </select>
+              <button class="gold-button compact" type="button" data-filter-payments>Filtrar</button>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Cliente</th>
+                    <th>Valor</th>
+                    <th>Status</th>
+                    <th>Data</th>
+                    <th>ID Mercado Pago</th>
+                  </tr>
+                </thead>
+                <tbody data-payments-table></tbody>
+              </table>
+            </div>
+          </section>
+
+          <section class="view-panel" data-view="nfse">
+            <div class="toolbar">
+              <select data-nfse-status>
+                <option value="">Todas as notas</option>
+                <option value="pendente">Pendentes</option>
+                <option value="gerando_xml">Gerando XML</option>
+                <option value="dps_gerada">DPS gerada</option>
+                <option value="mock_gerado">Mock gerado</option>
+                <option value="autorizado">Autorizadas</option>
+                <option value="erro">Com erro</option>
+              </select>
+              <button class="gold-button compact" type="button" data-filter-nfse>Filtrar</button>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Cliente</th>
+                    <th>CNPJ</th>
+                    <th>Plano</th>
+                    <th>Valor</th>
+                    <th>Status</th>
+                    <th>DPS</th>
+                    <th>NFS-e</th>
+                    <th>Acoes</th>
+                  </tr>
+                </thead>
+                <tbody data-nfse-table></tbody>
+              </table>
+            </div>
+          </section>
+        </section>
+      </section>
+    </main>
+
+    <div class="drawer" data-drawer hidden>
+      <div class="drawer-backdrop" data-close-drawer></div>
+      <aside class="drawer-panel">
+        <button class="drawer-close" type="button" data-close-drawer>&times;</button>
+        <div data-drawer-content></div>
+      </aside>
+    </div>
+
+    <script src="config.js?v=20260606-railway"></script>
+    <script src="admin/admin.js?v=20260609-admin-login-flow"></script>
+  </body>
+</html>

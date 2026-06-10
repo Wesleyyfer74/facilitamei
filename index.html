@@ -9,7 +9,7 @@
       content="Facilita MEI ajuda empreendedores a abrir, regularizar e cuidar do MEI com atendimento simples e seguro."
     />
     <link rel="preload" href="./assets/fundo.png" as="image" />
-    <link rel="stylesheet" href="./styles.css?v=20260608-hero-buttons-visible" />
+    <link rel="stylesheet" href="./styles.css?v=20260609-hero-buttons-centered" />
   </head>
   <body>
     <header class="site-header" data-header>
@@ -24,9 +24,10 @@
       </button>
 
       <nav class="nav" id="menu" data-menu>
+        <button class="nav-pill" type="button" data-about-open>Quem somos nos</button>
         <a href="#servicos">Servicos</a>
         <a href="#planos">Planos</a>
-        <a class="nav-cta" href="#planos">Comecar agora</a>
+        <button class="nav-cta" type="button" data-lead-open data-lead-type="area-cliente">Area do cliente</button>
       </nav>
     </header>
 
@@ -55,6 +56,10 @@
               Quem somos nos
             </button>
           </div>
+          <div class="hero-mei-actions reveal">
+            <button class="hero-mei-button" type="button" data-lead-open data-lead-type="sou-mei">Sou MEI</button>
+            <button class="hero-mei-button" type="button" data-lead-open data-lead-type="quero-ser-mei">Quero<br />Ser MEI</button>
+          </div>
           <div class="trust-row" aria-label="Destaques">
             <span>Regularizacao completa</span>
             <span>Facilidade e economia</span>
@@ -70,6 +75,45 @@
         </div>
         <img class="hero-person lock-hero reveal" src="./assets/cadeado.png" alt="" />
       </section>
+
+      <div class="lead-modal" data-lead-modal hidden>
+        <div class="lead-backdrop" data-lead-close></div>
+        <section class="lead-dialog" role="dialog" aria-modal="true" aria-labelledby="lead-title">
+          <button class="checkout-close" type="button" aria-label="Fechar formulario" data-lead-close>&times;</button>
+          <div class="lead-copy">
+            <p class="eyebrow" data-lead-kicker>Atendimento Facilita MEI</p>
+            <h2 id="lead-title" data-lead-title>Vamos entender seu MEI</h2>
+            <p data-lead-description>Preencha seus dados para iniciarmos o atendimento com a orientacao correta.</p>
+          </div>
+          <form class="lead-form" data-lead-form>
+            <input type="hidden" name="interest" data-lead-interest />
+            <label>
+              Nome completo
+              <input name="name" autocomplete="name" required />
+            </label>
+            <div class="form-row">
+              <label>
+                WhatsApp
+                <input name="phone" inputmode="tel" autocomplete="tel" required />
+              </label>
+              <label>
+                E-mail
+                <input name="email" type="email" autocomplete="email" required />
+              </label>
+            </div>
+            <label>
+              CPF ou CNPJ
+              <input name="document" inputmode="numeric" autocomplete="off" />
+            </label>
+            <label>
+              Como podemos ajudar?
+              <textarea name="message" rows="4" placeholder="Conte em poucas palavras o que voce precisa"></textarea>
+            </label>
+            <button class="button primary" type="submit">Enviar para atendimento</button>
+            <p class="form-status" data-lead-status></p>
+          </form>
+        </section>
+      </div>
 
       <div class="about-modal" data-about-modal hidden>
         <div class="about-backdrop" data-about-close></div>
@@ -403,7 +447,7 @@
       </div>
       <div>
         <strong>Contato</strong>
-        <a href="mailto:atendimento@facilita-mei.com">atendimento@facilita-mei.com</a>
+        <a href="mailto:atendimento@facilitamei.com">atendimento@facilita-mei.com</a>
         <a
           class="button secondary footer-whatsapp"
           href="https://wa.me/5567996750853?text=Ola%2C%20gostaria%20de%20mais%20informacoes"
@@ -430,6 +474,6 @@
     <script src="./config.js?v=20260606-railway"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
-    <script src="./app.js?v=20260608-hero-buttons-visible"></script>
+    <script src="./app.js?v=20260609-hero-lead-modal"></script>
   </body>
 </html>
