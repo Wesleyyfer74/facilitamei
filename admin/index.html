@@ -138,6 +138,22 @@
           </section>
 
           <section class="view-panel" data-view="nfse">
+            <article class="panel nfse-test-panel">
+              <div>
+                <p class="eyebrow">Ambiente de teste</p>
+                <h3>Emitir nota teste</h3>
+                <p>Gera cliente, pagamento aprovado e NFS-e mock para validar o fluxo antes da emissao real.</p>
+              </div>
+              <form class="nfse-test-form" data-nfse-test-form>
+                <input name="cnpj" placeholder="CNPJ do cliente" value="52643976000186" required />
+                <input name="email" type="email" placeholder="E-mail do cliente" required />
+                <input name="whatsapp" placeholder="WhatsApp" required />
+                <select name="planoId" data-nfse-test-plan required>
+                  <option value="">Selecione um plano</option>
+                </select>
+                <button class="gold-button compact" type="submit">Emitir nota teste</button>
+              </form>
+            </article>
             <div class="toolbar">
               <select data-nfse-status>
                 <option value="">Todas as notas</option>

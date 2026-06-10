@@ -17,6 +17,8 @@ const customerSearch = document.querySelector("[data-customer-search]");
 const customerStatus = document.querySelector("[data-customer-status]");
 const paymentStatus = document.querySelector("[data-payment-status]");
 const nfseStatus = document.querySelector("[data-nfse-status]");
+const nfseTestForm = document.querySelector("[data-nfse-test-form]");
+const nfseTestPlan = document.querySelector("[data-nfse-test-plan]");
 const drawer = document.querySelector("[data-drawer]");
 const drawerContent = document.querySelector("[data-drawer-content]");
 const closeDrawerButtons = document.querySelectorAll("[data-close-drawer]");
@@ -299,6 +301,7 @@ async function loadCustomers() {
 
 function renderPlans(plans = []) {
   plansCache = plans;
+  renderNfseTestPlans();
   plansTable.innerHTML = plans.length
     ? plans
         .map(
@@ -324,6 +327,17 @@ function renderPlans(plans = []) {
         )
         .join("")
     : `<tr><td colspan="5">Nenhum plano encontrado.</td></tr>`;
+}
+
+function renderNfseTestPlans() {
+  if (!nfseTestPlan) return;
+
+  nfseTestPlan.innerHTML = `
+    <option value="">Selecione um plano</option>
+    ${plansCache
+      .map((plan) => `<option value="${escapeHtml(plan.id)}">${escapeHtml(plan.nome)} - ${money(plan.valor)}</option>`)
+      .join("")}
+  `;
 }
 
 async function loadPlans() {
@@ -384,6 +398,7 @@ function renderNfse(notas = []) {
                 <div class="row-actions">
                   <button class="mini-button" type="button" data-open-nfse="${nota.id}">Detalhes</button>
                   <button class="mini-button" type="button" data-download-xml-dps="${nota.id}">XML DPS</button>
+                  <button class="mini-button" type="button" data-open-nfse-pdf="${nota.id}">PDF</button>
                   ${
                     nota.numero_nfse
                       ? `<button class="mini-button" type="button" data-download-xml-nfse="${nota.id}">XML NFS-e</button>`
@@ -651,6 +666,7 @@ async function openNfse(nfseId) {
           <pre class="xml-block">${escapeHtml(nota.xml_dps || "XML DPS ainda nao gerado.")}</pre>
           <div class="action-bar">
             <button class="gold-button compact" type="button" data-download-xml-dps="${nota.id}">Baixar XML DPS</button>
+            <button class="mini-button" type="button" data-open-nfse-pdf="${nota.id}">Abrir PDF</button>
             ${
               nota.xml_nfse
                 ? `<button class="mini-button" type="button" data-download-xml-nfse="${nota.id}">Baixar XML NFS-e</button>`
@@ -682,6 +698,32 @@ async function downloadNfseXml(nfseId, type) {
   const xml = await apiRaw(`/api/nfse/${nfseId}/${type}`);
   downloadText(`nfse-${nfseId}-${suffix}.xml`, xml);
   setStatus("XML baixado.");
+}
+
+async function openNfsePdf(nfseId) {
+  const html = await apiRaw(`/api/nfse/${nfseId}/pdf`);
+  const blob = new Blob([html], { type: "text/html;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  window.open(url, "_blank", "noopener,noreferrer");
+  setTimeout(() => URL.revokeObjectURL(url), 30000);
+  setStatus("PDF visual aberto. Use imprimir/salvar PDF no navegador.");
+}
+
+async function runNfseFullTest(form) {
+  if (!window.confirm("Gerar uma nota teste mock agora? Isso cria cliente, assinatura, pagamento e emissao no banco.")) return;
+
+  setStatus("Gerando nota fiscal teste...");
+  const formData = new FormData(form);
+  const payload = Object.fromEntries(formData.entries());
+
+  const result = await apiRequest("/api/testes/nfse/fluxo-completo", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+
+  setStatus(`Nota teste gerada. Emissao #${result.emissao.id}, DPS ${result.emissao.numero_dps}.`);
+  await loadNfse();
+  await openNfse(result.emissao.id);
 }
 
 async function resendNfseEmail(nfseId) {
@@ -825,6 +867,7 @@ document.addEventListener("click", (event) => {
   const resendNfseButton = event.target.closest("[data-resend-nfse-email]");
   const retryNfseButton = event.target.closest("[data-retry-nfse]");
   const sendNfseButton = event.target.closest("[data-send-nfse]");
+  const pdfNfseButton = event.target.closest("[data-open-nfse-pdf]");
 
   if (customerButton) openCustomer(customerButton.dataset.openCustomer);
   if (planButton) openPlan(planButton.dataset.openPlan);
@@ -836,12 +879,14 @@ document.addEventListener("click", (event) => {
   if (resendNfseButton) resendNfseEmail(resendNfseButton.dataset.resendNfseEmail).catch((error) => setStatus(error.message, "error"));
   if (retryNfseButton) retryNfse(retryNfseButton.dataset.retryNfse).catch((error) => setStatus(error.message, "error"));
   if (sendNfseButton) sendNfse(sendNfseButton.dataset.sendNfse).catch((error) => setStatus(error.message, "error"));
+  if (pdfNfseButton) openNfsePdf(pdfNfseButton.dataset.openNfsePdf).catch((error) => setStatus(error.message, "error"));
 });
 
 document.addEventListener("submit", (event) => {
   const customerForm = event.target.closest("[data-customer-form]");
   const subscriptionForm = event.target.closest("[data-subscription-form]");
   const planForm = event.target.closest("[data-plan-form]");
+  const nfseTest = event.target.closest("[data-nfse-test-form]");
 
   if (customerForm) {
     event.preventDefault();
@@ -856,6 +901,11 @@ document.addEventListener("submit", (event) => {
   if (planForm) {
     event.preventDefault();
     savePlan(planForm).catch((error) => setStatus(error.message, "error"));
+  }
+
+  if (nfseTest) {
+    event.preventDefault();
+    runNfseFullTest(nfseTest).catch((error) => setStatus(error.message, "error"));
   }
 });
 
