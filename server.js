@@ -1,9 +1,9 @@
-import "dotenv/config";
 import express from "express";
 import cors from "cors";
 import path from "node:path";
 import crypto from "node:crypto";
 import { fileURLToPath } from "node:url";
+import dotenv from "dotenv";
 import mysql from "mysql2/promise";
 import { MercadoPagoConfig, Preference, Payment } from "mercadopago";
 import { createNfseService, getNfseConfig, registerNfseRoutes } from "./nfse/index.js";
@@ -11,6 +11,8 @@ import { CnpjServiceError, createCnpjService } from "./src/services/cnpj/cnpjSer
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+dotenv.config({ path: path.join(__dirname, ".env") });
 
 const app = express();
 const port = Number(process.env.PORT || 3000);
@@ -810,12 +812,74 @@ app.post("/api/testes/nfse/fluxo-completo", async (request, response) => {
       });
     }
 
-    const cliente = await cnpjService.salvarOuAtualizarClientePorCnpj({
-      cnpj,
-      email,
-      whatsapp,
-      nome: "Cliente Teste NFS-e",
-    });
+    let cliente;
+
+    try {
+      cliente = await cnpjService.salvarOuAtualizarClientePorCnpj({
+        cnpj,
+        email,
+        whatsapp,
+        nome: "Cliente Teste NFS-e",
+      });
+    } catch (error) {
+      if (error.code !== "CNPJ_PROVIDER_ERROR") throw error;
+
+      const cnpjLimpo = String(cnpj || "").replace(/\D/g, "");
+      if (cnpjLimpo.length !== 14) throw error;
+
+      console.warn("BrasilAPI indisponivel no fluxo teste NFS-e. Usando tomador mock.", {
+        code: error.code,
+      });
+
+      await dbPool.execute(
+        `INSERT INTO users
+          (
+            nome, email, telefone, whatsapp, documento, status,
+            cnpj, razao_social, nome_fantasia, cep, logradouro, numero, bairro,
+            municipio, codigo_municipio, uf, cnae_principal_codigo, cnae_principal_descricao
+          )
+         VALUES
+          (
+            'Cliente Teste NFS-e', :email, :whatsapp, :whatsapp, :cnpj, 'active',
+            :cnpj, 'CLIENTE TESTE NFS-E LTDA', 'CLIENTE TESTE', '79940000',
+            'Rua Teste', '100', 'Centro', 'Caarapo', '5002407', 'MS',
+            '6920601', 'Atividades de contabilidade'
+          )
+         ON DUPLICATE KEY UPDATE
+            nome = VALUES(nome),
+            email = VALUES(email),
+            telefone = VALUES(telefone),
+            whatsapp = VALUES(whatsapp),
+            documento = VALUES(documento),
+            status = VALUES(status),
+            razao_social = VALUES(razao_social),
+            nome_fantasia = VALUES(nome_fantasia),
+            cep = VALUES(cep),
+            logradouro = VALUES(logradouro),
+            numero = VALUES(numero),
+            bairro = VALUES(bairro),
+            municipio = VALUES(municipio),
+            codigo_municipio = VALUES(codigo_municipio),
+            uf = VALUES(uf),
+            cnae_principal_codigo = VALUES(cnae_principal_codigo),
+            cnae_principal_descricao = VALUES(cnae_principal_descricao),
+            updated_at = CURRENT_TIMESTAMP`,
+        { cnpj: cnpjLimpo, email, whatsapp },
+      );
+
+      const [clientesMock] = await dbPool.execute(
+        `SELECT
+          id, nome, email, telefone, whatsapp, documento, status, cnpj, razao_social,
+          nome_fantasia, cep, logradouro, numero, bairro, municipio, codigo_municipio,
+          uf, cnae_principal_codigo, cnae_principal_descricao
+         FROM users
+         WHERE cnpj = :cnpj
+         LIMIT 1`,
+        { cnpj: cnpjLimpo },
+      );
+
+      cliente = clientesMock[0];
+    }
 
     const [planRows] = await dbPool.execute(
       `SELECT id, nome, valor, descricao_nfse, ativo
