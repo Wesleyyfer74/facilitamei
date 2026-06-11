@@ -626,7 +626,14 @@ aboutCloseButtons.forEach((button) => {
 });
 
 leadOpenButtons.forEach((button) => {
-  button.addEventListener("click", () => openLeadModal(button.dataset.leadType));
+  button.addEventListener("click", () => {
+    if (button.dataset.leadType === "sou-mei") {
+      document.querySelector("#planos")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      return;
+    }
+
+    openLeadModal(button.dataset.leadType);
+  });
 });
 
 leadCloseButtons.forEach((button) => {
