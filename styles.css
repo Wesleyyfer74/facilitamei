@@ -2189,66 +2189,79 @@ select option {
 .hero-path-heading,
 .hero-mei-actions,
 .hero-bottom-icons {
-  margin-left: calc(50vw - clamp(24px, 6vw, 92px));
+  left: calc(50vw - clamp(24px, 6vw, 92px));
+  margin-left: 0;
   margin-right: 0;
   justify-self: start;
   transform: translateX(-50%);
 }
 
 .hero-path-heading {
-  width: min(620px, calc(100vw - 48px));
+  width: min(760px, calc(100vw - 48px));
+  justify-items: center;
+  text-align: center;
 }
 
 .hero-mei-actions,
 .hero-mei-actions.is-visible {
-  width: min(1060px, calc(100vw - 48px));
-  margin-left: calc(50vw - clamp(24px, 6vw, 92px));
+  grid-template-columns: repeat(2, minmax(380px, 600px));
+  width: min(1270px, calc(100vw - 48px));
+  left: calc(50vw - clamp(24px, 6vw, 92px));
+  margin-left: 0;
   transform: translateX(-50%);
 }
 
 .hero-bottom-icons {
-  width: min(1120px, calc(100vw - 48px));
-  height: clamp(106px, 9.6vw, 142px);
-  margin-top: clamp(0px, 0.4vw, 6px);
+  width: min(1340px, calc(100vw - 48px));
+  height: clamp(132px, 11vw, 172px);
+  margin-top: clamp(-4px, 0.2vw, 4px);
 }
 
 .hero-bottom-icons img {
-  transform: translateY(-32%);
+  transform: translateY(-29%);
 }
 
 @media (max-width: 940px) {
   .hero-path-heading,
   .hero-mei-actions,
   .hero-bottom-icons {
-    margin-left: calc(50vw - 18px);
+    left: calc(50vw - 18px);
+    margin-left: 0;
     margin-right: 0;
     justify-self: start;
     transform: translateX(-50%);
   }
 
   .hero-mei-actions.is-visible {
-    margin-left: calc(50vw - 18px);
+    left: calc(50vw - 18px);
+    margin-left: 0;
     transform: translateX(-50%);
+  }
+
+  .hero-mei-actions,
+  .hero-mei-actions.is-visible {
+    grid-template-columns: 1fr;
+    width: min(620px, calc(100vw - 36px));
   }
 
   .hero-bottom-icons {
     width: min(96vw, 720px);
-    height: clamp(78px, 14vw, 102px);
+    height: clamp(88px, 15vw, 116px);
   }
 
   .hero-bottom-icons img {
-    transform: translateY(-31%);
+    transform: translateY(-28%);
   }
 }
 
 @media (max-width: 560px) {
   .hero-bottom-icons {
     width: calc(100vw - 20px);
-    height: 68px;
+    height: 78px;
   }
 
   .hero-bottom-icons img {
-    transform: translateY(-30%);
+    transform: translateY(-27%);
   }
 }
 
