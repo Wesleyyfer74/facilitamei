@@ -9,7 +9,7 @@
       content="Facilita MEI ajuda empreendedores a abrir, regularizar e cuidar do MEI com atendimento simples e seguro."
     />
     <link rel="preload" href="./assets/fundo.png" as="image" />
-    <link rel="stylesheet" href="./styles.css?v=20260611-hero-image-cards" />
+    <link rel="stylesheet" href="./styles.css?v=20260611-mei-wizard" />
   </head>
   <body>
     <header class="site-header" data-header>
@@ -81,40 +81,67 @@
 
       <div class="lead-modal" data-lead-modal hidden>
         <div class="lead-backdrop" data-lead-close></div>
-        <section class="lead-dialog" role="dialog" aria-modal="true" aria-labelledby="lead-title">
+        <section class="lead-dialog" role="dialog" aria-modal="true" aria-labelledby="lead-title" data-lead-dialog>
           <button class="checkout-close" type="button" aria-label="Fechar formulario" data-lead-close>&times;</button>
-          <div class="lead-copy">
-            <p class="eyebrow" data-lead-kicker>Atendimento Facilita MEI</p>
-            <h2 id="lead-title" data-lead-title>Vamos entender seu MEI</h2>
-            <p data-lead-description>Preencha seus dados para iniciarmos o atendimento com a orientacao correta.</p>
-          </div>
-          <form class="lead-form" data-lead-form>
-            <input type="hidden" name="interest" data-lead-interest />
-            <label>
-              Nome completo
-              <input name="name" autocomplete="name" required />
-            </label>
-            <div class="form-row">
-              <label>
-                WhatsApp
-                <input name="phone" inputmode="tel" autocomplete="tel" required />
-              </label>
-              <label>
-                E-mail
-                <input name="email" type="email" autocomplete="email" required />
-              </label>
+          <div class="lead-standard" data-lead-standard>
+            <div class="lead-copy">
+              <p class="eyebrow" data-lead-kicker>Atendimento Facilita MEI</p>
+              <h2 id="lead-title" data-lead-title>Vamos entender seu MEI</h2>
+              <p data-lead-description>Preencha seus dados para iniciarmos o atendimento com a orientacao correta.</p>
             </div>
-            <label>
-              CPF ou CNPJ
-              <input name="document" inputmode="numeric" autocomplete="off" />
-            </label>
-            <label>
-              Como podemos ajudar?
-              <textarea name="message" rows="4" placeholder="Conte em poucas palavras o que voce precisa"></textarea>
-            </label>
-            <button class="button primary" type="submit">Enviar para atendimento</button>
-            <p class="form-status" data-lead-status></p>
-          </form>
+            <form class="lead-form" data-lead-form>
+              <input type="hidden" name="interest" data-lead-interest />
+              <label>
+                Nome completo
+                <input name="name" autocomplete="name" required />
+              </label>
+              <div class="form-row">
+                <label>
+                  WhatsApp
+                  <input name="phone" inputmode="tel" autocomplete="tel" required />
+                </label>
+                <label>
+                  E-mail
+                  <input name="email" type="email" autocomplete="email" required />
+                </label>
+              </div>
+              <label>
+                CPF ou CNPJ
+                <input name="document" inputmode="numeric" autocomplete="off" />
+              </label>
+              <label>
+                Como podemos ajudar?
+                <textarea name="message" rows="4" placeholder="Conte em poucas palavras o que voce precisa"></textarea>
+              </label>
+              <button class="button primary" type="submit">Enviar para atendimento</button>
+              <p class="form-status" data-lead-status></p>
+            </form>
+          </div>
+          <div class="mei-wizard" data-mei-wizard hidden>
+            <div class="mei-wizard-top">
+              <strong class="mei-wizard-brand">Facilita</strong>
+              <div class="mei-wizard-progress" data-mei-progress aria-hidden="true"></div>
+              <span data-mei-counter>1 de 7</span>
+            </div>
+            <div class="mei-wizard-content">
+              <div class="mei-wizard-copy" data-mei-copy></div>
+              <div class="mei-wizard-visual" aria-hidden="true">
+                <div class="mei-clipboard">
+                  <span></span>
+                  <span></span>
+                  <span></span>
+                  <span></span>
+                  <i></i>
+                </div>
+              </div>
+            </div>
+            <div class="mei-wizard-field" data-mei-field></div>
+            <div class="mei-wizard-actions">
+              <button class="button secondary" type="button" data-mei-prev>Voltar</button>
+              <button class="button primary" type="button" data-mei-next>Comecar <span aria-hidden="true">&#8594;</span></button>
+            </div>
+            <p class="form-status" data-mei-status></p>
+          </div>
         </section>
       </div>
 
@@ -477,6 +504,6 @@
     <script src="./config.js?v=20260606-railway"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
-    <script src="./app.js?v=20260611-hero-image-cards"></script>
+    <script src="./app.js?v=20260611-mei-wizard"></script>
   </body>
 </html>

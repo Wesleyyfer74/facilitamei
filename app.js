@@ -21,6 +21,16 @@ const leadTitle = document.querySelector("[data-lead-title]");
 const leadDescription = document.querySelector("[data-lead-description]");
 const leadInterest = document.querySelector("[data-lead-interest]");
 const leadStatus = document.querySelector("[data-lead-status]");
+const leadDialog = document.querySelector("[data-lead-dialog]");
+const leadStandard = document.querySelector("[data-lead-standard]");
+const meiWizard = document.querySelector("[data-mei-wizard]");
+const meiCopy = document.querySelector("[data-mei-copy]");
+const meiField = document.querySelector("[data-mei-field]");
+const meiProgress = document.querySelector("[data-mei-progress]");
+const meiCounter = document.querySelector("[data-mei-counter]");
+const meiPrev = document.querySelector("[data-mei-prev]");
+const meiNext = document.querySelector("[data-mei-next]");
+const meiStatus = document.querySelector("[data-mei-status]");
 const paymentSubmit = document.querySelector("[data-payment-submit]");
 const paymentResult = document.querySelector("[data-payment-result]");
 const resultKicker = document.querySelector("[data-result-kicker]");
@@ -564,8 +574,179 @@ const leadModalContent = {
   },
 };
 
+const meiWizardSteps = [
+  {
+    title: "Vamos descobrir o <span>melhor plano para voce</span>",
+    description: "Responda algumas perguntas rapidas para receber a melhor solucao para seu MEI.",
+    field: "",
+    button: "Comecar",
+  },
+  {
+    title: "Qual e o seu nome completo?",
+    description: "Assim nossa equipe ja inicia seu atendimento com seus dados corretos.",
+    name: "nome",
+    label: "Nome completo",
+    type: "text",
+    autocomplete: "name",
+    required: true,
+  },
+  {
+    title: "Como podemos falar com voce?",
+    description: "Use o WhatsApp principal e um e-mail que voce acessa com facilidade.",
+    fields: [
+      { name: "whatsapp", label: "WhatsApp", type: "tel", autocomplete: "tel", required: true },
+      { name: "email", label: "E-mail", type: "email", autocomplete: "email", required: true },
+    ],
+  },
+  {
+    title: "Informe seu CPF",
+    description: "Esse dado ajuda na abertura e conferencia inicial do cadastro.",
+    name: "cpf",
+    label: "CPF",
+    type: "text",
+    inputmode: "numeric",
+    required: true,
+  },
+  {
+    title: "Onde voce quer abrir o MEI?",
+    description: "Cidade e estado ajudam a orientar o processo corretamente.",
+    fields: [
+      { name: "cidade", label: "Cidade", type: "text", required: true },
+      { name: "uf", label: "UF", type: "text", maxlength: "2", required: true },
+    ],
+  },
+  {
+    title: "Qual atividade voce pretende exercer?",
+    description: "Conte resumidamente o que voce vende ou qual servico pretende prestar.",
+    name: "atividade",
+    label: "Atividade principal",
+    type: "textarea",
+    required: true,
+  },
+  {
+    title: "Quando voce quer comecar?",
+    description: "Finalize com a urgencia do atendimento e alguma observacao importante.",
+    fields: [
+      {
+        name: "prazo",
+        label: "Prazo desejado",
+        type: "select",
+        required: true,
+        options: ["O quanto antes", "Ainda esta semana", "Este mes", "Estou pesquisando"],
+      },
+      { name: "observacao", label: "Observacao", type: "textarea" },
+    ],
+    button: "Enviar atendimento",
+  },
+];
+
+let meiWizardStep = 0;
+const meiWizardAnswers = {};
+
+function escapeHtml(value = "") {
+  return String(value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function renderMeiField(field) {
+  const value = escapeHtml(meiWizardAnswers[field.name] || "");
+  const required = field.required ? "required" : "";
+  const autocomplete = field.autocomplete ? `autocomplete="${field.autocomplete}"` : "";
+  const inputmode = field.inputmode ? `inputmode="${field.inputmode}"` : "";
+  const maxlength = field.maxlength ? `maxlength="${field.maxlength}"` : "";
+
+  if (field.type === "textarea") {
+    return `<label>${field.label}<textarea name="${field.name}" ${required}>${value}</textarea></label>`;
+  }
+
+  if (field.type === "select") {
+    const options = field.options
+      .map((option) => `<option value="${escapeHtml(option)}" ${meiWizardAnswers[field.name] === option ? "selected" : ""}>${option}</option>`)
+      .join("");
+    return `<label>${field.label}<select name="${field.name}" ${required}><option value="">Selecione</option>${options}</select></label>`;
+  }
+
+  return `<label>${field.label}<input name="${field.name}" type="${field.type}" value="${value}" ${required} ${autocomplete} ${inputmode} ${maxlength} /></label>`;
+}
+
+function renderMeiWizard() {
+  const step = meiWizardSteps[meiWizardStep];
+  if (!step || !meiWizard || !meiCopy || !meiField) return;
+
+  if (meiCounter) meiCounter.textContent = `${meiWizardStep + 1} de ${meiWizardSteps.length}`;
+  if (meiProgress) {
+    meiProgress.innerHTML = meiWizardSteps
+      .map((_, index) => `<span class="${index <= meiWizardStep ? "is-active" : ""}"></span>`)
+      .join("");
+  }
+
+  meiCopy.innerHTML = `<h2>${step.title}</h2><p>${step.description}</p>`;
+  const fields = step.fields || (step.name ? [step] : []);
+  meiField.hidden = fields.length === 0;
+  meiField.innerHTML = fields.map(renderMeiField).join("");
+
+  if (meiPrev) meiPrev.hidden = meiWizardStep === 0;
+  if (meiNext) meiNext.innerHTML = `${step.button || "Continuar"} <span aria-hidden="true">&#8594;</span>`;
+  if (meiStatus) meiStatus.textContent = "";
+}
+
+function collectCurrentMeiStep() {
+  const fields = meiField?.querySelectorAll("input, textarea, select") || [];
+
+  for (const field of fields) {
+    const value = field.value.trim();
+    if (field.required && !value) {
+      field.focus();
+      if (meiStatus) meiStatus.textContent = "Preencha este campo para continuar.";
+      return false;
+    }
+
+    meiWizardAnswers[field.name] = value;
+  }
+
+  return true;
+}
+
+function sendMeiWizard() {
+  const message = [
+    "Ola, quero abrir meu MEI pelo site Facilita MEI.",
+    `Nome: ${meiWizardAnswers.nome || "-"}`,
+    `WhatsApp: ${meiWizardAnswers.whatsapp || "-"}`,
+    `E-mail: ${meiWizardAnswers.email || "-"}`,
+    `CPF: ${meiWizardAnswers.cpf || "-"}`,
+    `Cidade/UF: ${meiWizardAnswers.cidade || "-"} - ${meiWizardAnswers.uf || "-"}`,
+    `Atividade: ${meiWizardAnswers.atividade || "-"}`,
+    `Prazo: ${meiWizardAnswers.prazo || "-"}`,
+    `Observacao: ${meiWizardAnswers.observacao || "-"}`,
+  ].join("\n");
+
+  if (meiStatus) meiStatus.textContent = "Abrindo atendimento no WhatsApp...";
+  window.open(`https://wa.me/5567996750853?text=${encodeURIComponent(message)}`, "_blank", "noopener,noreferrer");
+}
+
+function startMeiWizard() {
+  Object.keys(meiWizardAnswers).forEach((key) => delete meiWizardAnswers[key]);
+  meiWizardStep = 0;
+  renderMeiWizard();
+}
+
 function openLeadModal(type = "sou-mei") {
   if (!leadModal) return;
+
+  const isMeiWizard = type === "quero-ser-mei";
+  leadDialog?.classList.toggle("is-mei-wizard", isMeiWizard);
+  if (leadStandard) leadStandard.hidden = isMeiWizard;
+  if (meiWizard) meiWizard.hidden = !isMeiWizard;
+
+  if (isMeiWizard) {
+    startMeiWizard();
+    leadModal.hidden = false;
+    document.body.classList.add("modal-open");
+    return;
+  }
 
   const content = leadModalContent[type] || leadModalContent["sou-mei"];
   if (leadKicker) leadKicker.textContent = content.kicker;
@@ -583,6 +764,9 @@ function closeLeadModal() {
   if (!leadModal) return;
 
   leadModal.hidden = true;
+  leadDialog?.classList.remove("is-mei-wizard");
+  if (leadStandard) leadStandard.hidden = false;
+  if (meiWizard) meiWizard.hidden = true;
   document.body.classList.remove("modal-open");
 }
 
@@ -641,6 +825,25 @@ leadCloseButtons.forEach((button) => {
 });
 
 leadForm?.addEventListener("submit", submitLeadForm);
+
+meiPrev?.addEventListener("click", () => {
+  if (meiWizardStep <= 0) return;
+  meiWizardStep -= 1;
+  renderMeiWizard();
+});
+
+meiNext?.addEventListener("click", () => {
+  if (!collectCurrentMeiStep()) return;
+
+  if (meiWizardStep >= meiWizardSteps.length - 1) {
+    sendMeiWizard();
+    return;
+  }
+
+  meiWizardStep += 1;
+  renderMeiWizard();
+  window.setTimeout(() => meiField?.querySelector("input, textarea, select")?.focus(), 40);
+});
 
 window.addEventListener("keydown", (event) => {
   if (event.key === "Escape" && leadModal && !leadModal.hidden) {
