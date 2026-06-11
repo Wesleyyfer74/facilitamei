@@ -2201,30 +2201,31 @@ select option {
 }
 
 .hero-path-heading {
-  width: min(760px, calc(100vw - 48px));
+  width: min(1134px, calc(100vw - 48px));
   justify-items: center;
   text-align: center;
-  margin-top: clamp(10px, 2vw, 24px);
+  margin-top: clamp(8px, 1.7vw, 20px);
 }
 
 .hero-mei-actions,
 .hero-mei-actions.is-visible {
-  grid-template-columns: repeat(2, minmax(380px, 600px));
-  width: min(1260px, calc(100vw - 48px));
+  grid-template-columns: repeat(2, minmax(342px, 540px));
+  width: min(1134px, calc(100vw - 48px));
   left: auto;
-  margin: clamp(8px, 1.4vw, 18px) auto 0;
+  margin: clamp(4px, 0.9vw, 12px) auto 0;
   transform: none;
 }
 
 .hero-bottom-icons {
   width: min(1260px, calc(100vw - 48px));
-  height: clamp(150px, 12vw, 184px);
-  margin-top: clamp(12px, 1.6vw, 24px);
-  overflow: hidden;
+  height: auto;
+  margin-top: clamp(18px, 2vw, 30px);
+  overflow: visible;
 }
 
 .hero-bottom-icons img {
-  transform: translateY(-39%);
+  height: auto;
+  transform: none;
 }
 
 @media (max-width: 940px) {
@@ -2252,22 +2253,22 @@ select option {
 
   .hero-bottom-icons {
     width: min(96vw, 720px);
-    height: clamp(92px, 18vw, 128px);
+    height: auto;
   }
 
   .hero-bottom-icons img {
-    transform: translateY(-39%);
+    transform: none;
   }
 }
 
 @media (max-width: 560px) {
   .hero-bottom-icons {
     width: calc(100vw - 20px);
-    height: 82px;
+    height: auto;
   }
 
   .hero-bottom-icons img {
-    transform: translateY(-39%);
+    transform: none;
   }
 }
 
