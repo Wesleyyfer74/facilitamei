@@ -731,7 +731,7 @@ main { padding-bottom: 0; }
   height: 11px;
   border-radius: 999px;
   background: var(--gold-strong);
-  box-shadow: 0 0 22px rgba(255, 217, 120, 0.96), 0 0 54px rgba(240, 191, 90, 0.6);
+  box-shadow: 0 0 22px rgba(248, 184, 22, 0.96), 0 0 54px rgba(240, 191, 90, 0.6);
   transform: translateX(6.4rem);
 }
 
@@ -799,7 +799,7 @@ main { padding-bottom: 0; }
   padding: 104px 34px 34px;
   text-align: center;
   border-width: 2px;
-  border-color: rgba(255, 221, 85, 1);
+  border-color: rgb(255, 211, 37);
   border-radius: 22px;
   background:
     radial-gradient(circle at 82% 2%, rgba(255, 235, 138, 0.36), transparent 20%),
@@ -808,7 +808,7 @@ main { padding-bottom: 0; }
     linear-gradient(180deg, rgba(19, 18, 15, 0.99), rgba(8, 8, 7, 0.98));
   box-shadow:
     0 0 0 1px rgba(255, 232, 118, 0.52),
-    0 0 26px rgba(255, 221, 76, 0.78),
+    0 0 26px rgba(250, 215, 60, 0.918),
     0 0 82px rgba(240, 191, 90, 0.42),
     0 0 118px rgba(255, 198, 44, 0.18),
     0 34px 96px rgba(0, 0, 0, 0.58);
@@ -827,7 +827,7 @@ main { padding-bottom: 0; }
   opacity: 1;
   background:
     radial-gradient(circle at calc(100% - 4px) 3px, rgba(255, 255, 255, 0.95) 0 2px, rgba(255, 231, 143, 0.88) 3px 7px, transparent 10px),
-    radial-gradient(circle at calc(100% - 4px) 3px, rgba(255, 222, 70, 0.9), transparent 54px),
+    radial-gradient(circle at calc(100% - 4px) 3px, rgba(255, 218, 55, 0.9), transparent 54px),
     linear-gradient(180deg, rgba(255, 220, 83, 0.08), transparent 30%);
   transform: none;
 }
@@ -837,7 +837,7 @@ main { padding-bottom: 0; }
   transform: translateY(-20px);
   box-shadow:
     0 0 0 1px rgba(255, 238, 155, 0.62),
-    0 0 56px rgba(255, 219, 72, 0.82),
+    0 0 56px rgba(252, 213, 57, 0.82),
     0 0 124px rgba(240, 191, 90, 0.38),
     0 40px 110px rgba(0, 0, 0, 0.58);
 }
@@ -926,7 +926,7 @@ main { padding-bottom: 0; }
   text-transform: uppercase;
   background:
     linear-gradient(90deg, rgba(255, 255, 255, 0.2), transparent 22%, transparent 78%, rgba(255, 255, 255, 0.16)),
-    linear-gradient(135deg, #eaa82f, #ffe08c 48%, #f4bd3c);
+    linear-gradient(135deg, #eaa82f, #ffe08c 48%, #f7bb2f);
   border: 1px solid rgba(255, 237, 174, 0.9);
   border-radius: 5px;
   box-shadow: 0 18px 48px rgba(240, 191, 90, 0.46), 0 0 46px rgba(255, 210, 96, 0.62);
@@ -1065,7 +1065,7 @@ main { padding-bottom: 0; }
   border: 0;
   background:
     linear-gradient(90deg, rgba(255, 255, 255, 0.24), transparent 30%, rgba(255, 255, 255, 0.18) 64%, transparent),
-    linear-gradient(135deg, #f0b63c, #ffe28f 52%, #f6c857);
+    linear-gradient(135deg, #f8bc3a, #fcd774 52%, #f5bf35);
   box-shadow: 0 18px 42px rgba(240, 191, 90, 0.26), inset 0 1px 0 rgba(255, 255, 255, 0.58);
   font-size: 0.94rem;
   font-weight: 950;
@@ -2183,6 +2183,72 @@ select option {
     width: 114vw;
     height: 46px;
     margin-top: 4px;
+  }
+}
+
+.hero-path-heading,
+.hero-mei-actions,
+.hero-bottom-icons {
+  margin-left: calc(50vw - clamp(24px, 6vw, 92px));
+  margin-right: 0;
+  justify-self: start;
+  transform: translateX(-50%);
+}
+
+.hero-path-heading {
+  width: min(620px, calc(100vw - 48px));
+}
+
+.hero-mei-actions,
+.hero-mei-actions.is-visible {
+  width: min(1060px, calc(100vw - 48px));
+  margin-left: calc(50vw - clamp(24px, 6vw, 92px));
+  transform: translateX(-50%);
+}
+
+.hero-bottom-icons {
+  width: min(1120px, calc(100vw - 48px));
+  height: clamp(106px, 9.6vw, 142px);
+  margin-top: clamp(0px, 0.4vw, 6px);
+}
+
+.hero-bottom-icons img {
+  transform: translateY(-32%);
+}
+
+@media (max-width: 940px) {
+  .hero-path-heading,
+  .hero-mei-actions,
+  .hero-bottom-icons {
+    margin-left: calc(50vw - 18px);
+    margin-right: 0;
+    justify-self: start;
+    transform: translateX(-50%);
+  }
+
+  .hero-mei-actions.is-visible {
+    margin-left: calc(50vw - 18px);
+    transform: translateX(-50%);
+  }
+
+  .hero-bottom-icons {
+    width: min(96vw, 720px);
+    height: clamp(78px, 14vw, 102px);
+  }
+
+  .hero-bottom-icons img {
+    transform: translateY(-31%);
+  }
+}
+
+@media (max-width: 560px) {
+  .hero-bottom-icons {
+    width: calc(100vw - 20px);
+    height: 68px;
+  }
+
+  .hero-bottom-icons img {
+    transform: translateY(-30%);
   }
 }
 
