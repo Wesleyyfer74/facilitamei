@@ -582,6 +582,22 @@ const meiWizardSteps = [
     button: "Comecar",
   },
   {
+    title: "Qual sera sua atividade?",
+    description: "Selecione a opcao que melhor descreve o seu negocio.",
+    name: "atividade_tipo",
+    type: "options",
+    required: true,
+    button: "Continuar",
+    options: [
+      { label: "Prestacao de servico", icon: "&#128100;" },
+      { label: "Comercio", icon: "&#128722;" },
+      { label: "Ecommerce", icon: "&#128188;" },
+      { label: "Beleza", icon: "&#9986;" },
+      { label: "Transporte", icon: "&#128666;" },
+      { label: "Outro", icon: "&#8943;" },
+    ],
+  },
+  {
     title: "Qual e o seu nome completo?",
     description: "Assim nossa equipe ja inicia seu atendimento com seus dados corretos.",
     name: "nome",
@@ -669,6 +685,23 @@ function renderMeiField(field) {
     return `<label>${field.label}<select name="${field.name}" ${required}><option value="">Selecione</option>${options}</select></label>`;
   }
 
+  if (field.type === "options") {
+    const options = field.options
+      .map((option) => {
+        const checked = meiWizardAnswers[field.name] === option.label ? "checked" : "";
+        return `
+          <label class="mei-option-card">
+            <input type="radio" name="${field.name}" value="${escapeHtml(option.label)}" ${checked} ${required} />
+            <span aria-hidden="true">${option.icon}</span>
+            <strong>${option.label}</strong>
+          </label>
+        `;
+      })
+      .join("");
+
+    return `<div class="mei-option-grid">${options}</div>`;
+  }
+
   return `<label>${field.label}<input name="${field.name}" type="${field.type}" value="${value}" ${required} ${autocomplete} ${inputmode} ${maxlength} /></label>`;
 }
 
@@ -697,8 +730,14 @@ function renderMeiWizard() {
 
 function collectCurrentMeiStep() {
   const fields = meiField?.querySelectorAll("input, textarea, select") || [];
+  const radioGroups = new Set();
 
   for (const field of fields) {
+    if (field.type === "radio") {
+      radioGroups.add(field.name);
+      continue;
+    }
+
     const value = field.value.trim();
     if (field.required && !value) {
       field.focus();
@@ -707,6 +746,15 @@ function collectCurrentMeiStep() {
     }
 
     meiWizardAnswers[field.name] = value;
+  }
+
+  for (const groupName of radioGroups) {
+    const selected = meiField?.querySelector(`input[name="${groupName}"]:checked`);
+    if (!selected) {
+      if (meiStatus) meiStatus.textContent = "Selecione uma opcao para continuar.";
+      return false;
+    }
+    meiWizardAnswers[groupName] = selected.value;
   }
 
   return true;
@@ -720,6 +768,7 @@ function sendMeiWizard() {
     `E-mail: ${meiWizardAnswers.email || "-"}`,
     `CPF: ${meiWizardAnswers.cpf || "-"}`,
     `Cidade/UF: ${meiWizardAnswers.cidade || "-"} - ${meiWizardAnswers.uf || "-"}`,
+    `Tipo de atividade: ${meiWizardAnswers.atividade_tipo || "-"}`,
     `Atividade: ${meiWizardAnswers.atividade || "-"}`,
     `Prazo: ${meiWizardAnswers.prazo || "-"}`,
     `Observacao: ${meiWizardAnswers.observacao || "-"}`,

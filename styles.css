@@ -1633,6 +1633,67 @@ select option {
   resize: vertical;
 }
 
+.mei-option-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.mei-option-card {
+  position: relative;
+  display: grid;
+  grid-template-columns: 28px 1fr;
+  align-items: center;
+  gap: 10px;
+  min-height: 58px;
+  padding: 0 14px;
+  color: var(--text);
+  border: 1px solid rgba(240, 191, 90, 0.18);
+  border-radius: 8px;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.075), rgba(255, 255, 255, 0.025)),
+    rgba(16, 13, 10, 0.82);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  cursor: pointer;
+  transition: border-color 180ms ease, box-shadow 180ms ease, transform 180ms ease, background 180ms ease;
+}
+
+.mei-option-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(240, 191, 90, 0.42);
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.26), 0 0 24px rgba(240, 191, 90, 0.12);
+}
+
+.mei-option-card input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.mei-option-card span {
+  display: inline-grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  color: var(--gold-strong);
+  border-radius: 8px;
+  background: rgba(240, 191, 90, 0.1);
+  font-size: 0.95rem;
+}
+
+.mei-option-card strong {
+  color: rgba(255, 248, 232, 0.92);
+  font-size: 0.92rem;
+}
+
+.mei-option-card:has(input:checked) {
+  border-color: rgba(255, 217, 120, 0.72);
+  background:
+    radial-gradient(circle at 88% 20%, rgba(240, 191, 90, 0.22), transparent 36%),
+    rgba(240, 191, 90, 0.1);
+  box-shadow: 0 0 0 1px rgba(240, 191, 90, 0.18), 0 0 28px rgba(240, 191, 90, 0.18);
+}
+
 .mei-wizard-actions {
   display: grid;
   grid-template-columns: auto 1fr;
