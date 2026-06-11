@@ -1394,10 +1394,11 @@ select option {
 
 .lead-dialog.is-mei-wizard {
   grid-template-columns: 1fr;
-  width: min(560px, calc(100vw - 32px));
-  min-height: 560px;
+  width: min(900px, calc(100vw - 32px));
+  min-height: min(760px, calc(100dvh - 48px));
+  max-height: calc(100dvh - 48px);
   padding: clamp(22px, 4vw, 34px);
-  overflow: hidden;
+  overflow: auto;
 }
 
 .lead-dialog::-webkit-scrollbar {
@@ -1487,10 +1488,10 @@ select option {
 
 .mei-wizard-content {
   display: grid;
-  grid-template-columns: 1fr minmax(150px, 0.75fr);
+  grid-template-columns: minmax(320px, 1fr) minmax(220px, 0.72fr);
   align-items: center;
-  gap: 18px;
-  min-height: 240px;
+  gap: clamp(22px, 4vw, 48px);
+  min-height: 290px;
 }
 
 .mei-wizard-copy h2 {
@@ -1505,7 +1506,7 @@ select option {
 }
 
 .mei-wizard-copy p {
-  max-width: 26rem;
+  max-width: 34rem;
   margin-bottom: 0;
   color: var(--muted);
   line-height: 1.65;
@@ -1594,6 +1595,7 @@ select option {
 .mei-wizard-field {
   display: grid;
   gap: 14px;
+  max-width: 720px;
 }
 
 .mei-wizard-field[hidden] {
