@@ -9,7 +9,7 @@
       content="Facilita MEI ajuda empreendedores a abrir, regularizar e cuidar do MEI com atendimento simples e seguro."
     />
     <link rel="preload" href="./assets/fundo.png" as="image" />
-    <link rel="stylesheet" href="./styles.css?v=20260609-hero-buttons-centered" />
+    <link rel="stylesheet" href="./styles.css?v=20260611-hero-image-cards" />
   </head>
   <body>
     <header class="site-header" data-header>
@@ -24,10 +24,14 @@
       </button>
 
       <nav class="nav" id="menu" data-menu>
-        <button class="nav-pill" type="button" data-about-open>Quem somos nos</button>
+        <button class="nav-link-button" type="button" data-about-open>Quem somos</button>
         <a href="#servicos">Servicos</a>
         <a href="#planos">Planos</a>
-        <button class="nav-cta" type="button" data-lead-open data-lead-type="area-cliente">Area do cliente</button>
+        <button class="nav-link-button" type="button" data-lead-open data-lead-type="area-cliente">Area do cliente</button>
+        <button class="nav-cta specialist-cta" type="button" data-lead-open data-lead-type="especialista">
+          <span aria-hidden="true">&#9742;</span>
+          Fale com especialista
+        </button>
       </nav>
     </header>
 
@@ -36,29 +40,24 @@
         <div class="hero-bg" aria-hidden="true"></div>
         <canvas class="hero-particles" data-hero-particles aria-hidden="true"></canvas>
         <div class="hero-content reveal">
-          <p class="eyebrow">Atendimento para MEI</p>
-          <h1>Proteja seu MEI</h1>
+          <p class="eyebrow hero-eyebrow"><span aria-hidden="true">&#9826;</span> Atendimento especializado para MEI</p>
+          <h1>Proteja e regularize <span>seu MEI</span></h1>
           <p class="hero-copy">
-            Evite multas, dividas e problemas com o governo. Regularize sua empresa com suporte contabil
-            especializado, facilidade e economia.
+            Abertura do MEI, regularizacao, emissao de notas fiscais, DAS e suporte contabil completo para voce focar no
+            que realmente importa: <strong>fazer seu negocio crescer.</strong>
           </p>
-          <div class="hero-actions reveal">
-            <a class="button primary hero-main-cta" href="#planos">
-              <span aria-hidden="true">✓</span>
-              Quero proteger meu MEI
-            </a>
-            <a class="button secondary hero-service-cta" href="#servicos">
-              <span aria-hidden="true">↳</span>
-              Ver servicos
-            </a>
-            <button class="button secondary about-trigger hero-about-cta" type="button" data-about-open>
-              <span aria-hidden="true">★</span>
-              Quem somos nos
-            </button>
+          <div class="hero-path-heading reveal">
+            <span></span>
+            <strong>Escolha seu caminho</strong>
+            <span></span>
           </div>
-          <div class="hero-mei-actions reveal">
-            <button class="hero-mei-button" type="button" data-lead-open data-lead-type="sou-mei">Sou MEI</button>
-            <button class="hero-mei-button" type="button" data-lead-open data-lead-type="quero-ser-mei">Quero<br />Ser MEI</button>
+          <div class="hero-mei-actions hero-path-actions reveal">
+            <button class="hero-mei-button hero-path-card hero-image-card" type="button" data-lead-open data-lead-type="quero-ser-mei">
+              <img src="./assets/queroser.png" alt="Quero abrir meu MEI. Comecar abertura." />
+            </button>
+            <button class="hero-mei-button hero-path-card hero-image-card" type="button" data-lead-open data-lead-type="sou-mei">
+              <img src="./assets/soumei.png" alt="Ja sou MEI. Ver planos e servicos." />
+            </button>
           </div>
           <div class="trust-row" aria-label="Destaques">
             <span>Regularizacao completa</span>
@@ -68,12 +67,16 @@
         </div>
         <div class="hero-showcase reveal" aria-hidden="true">
           <div class="hero-benefit-card">
-            <span>✓ Regularizacao completa</span>
-            <span>✓ Facilidade e economia</span>
-            <span>✓ Suporte contabil especializado</span>
+            <span>&#10003; Regularizacao completa</span>
+            <span>&#10003; Facilidade e economia</span>
+            <span>&#10003; Suporte contabil especializado</span>
+            <span>&#10003; Emissao de notas fiscais</span>
           </div>
         </div>
-        <img class="hero-person lock-hero reveal" src="./assets/cadeado.png" alt="" />
+        <img class="hero-person lock-hero reveal" src="./assets/CADEADO.png" alt="" />
+        <div class="hero-bottom-icons reveal" aria-hidden="true">
+          <img src="./assets/rodape.png" alt="" />
+        </div>
       </section>
 
       <div class="lead-modal" data-lead-modal hidden>
@@ -174,7 +177,7 @@
                 <a class="button primary" href="#planos" data-about-close>Conhecer planos</a>
               </div>
               <div class="about-image lock-card">
-                <img src="./assets/cadeado.png" alt="" />
+                <img src="./assets/CADEADO.png" alt="" />
               </div>
             </section>
           </div>
@@ -474,6 +477,6 @@
     <script src="./config.js?v=20260606-railway"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
-    <script src="./app.js?v=20260609-hero-lead-modal"></script>
+    <script src="./app.js?v=20260611-hero-image-cards"></script>
   </body>
 </html>

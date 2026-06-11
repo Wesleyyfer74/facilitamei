@@ -296,7 +296,7 @@ function initHeroGsap() {
     delay: 0.12,
   });
 
-  gsap.from(".hero-actions .button, .trust-row span", {
+  gsap.from(".hero-path-heading, .hero-path-card, .trust-row span", {
     y: 18,
     opacity: 0,
     duration: 0.58,
@@ -332,7 +332,7 @@ function initHeroGsap() {
     repeat: -1,
   });
 
-  document.querySelectorAll(".hero-actions .button").forEach((button) => {
+  document.querySelectorAll(".hero-actions .button, .hero-path-card").forEach((button) => {
     button.addEventListener("mouseenter", () => {
       gsap.to(button, { scale: 1.04, duration: 0.18, ease: "power2.out" });
     });
@@ -555,6 +555,12 @@ const leadModalContent = {
     title: "Acesse pelo atendimento",
     description: "Informe seus dados para nossa equipe localizar seu cadastro e orientar o proximo passo.",
     interest: "Area do cliente",
+  },
+  especialista: {
+    kicker: "Atendimento especializado",
+    title: "Fale com um especialista",
+    description: "Envie seus dados para nossa equipe entender sua necessidade e chamar voce no WhatsApp.",
+    interest: "Fale com especialista",
   },
 };
 
