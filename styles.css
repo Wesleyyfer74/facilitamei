@@ -1394,11 +1394,16 @@ select option {
 
 .lead-dialog.is-mei-wizard {
   grid-template-columns: 1fr;
-  width: min(900px, calc(100vw - 32px));
-  min-height: min(760px, calc(100dvh - 48px));
+  width: min(680px, calc(100vw - 32px));
+  min-height: 560px;
   max-height: calc(100dvh - 48px);
-  padding: clamp(22px, 4vw, 34px);
+  padding: clamp(24px, 4vw, 36px);
   overflow: auto;
+}
+
+.lead-dialog.is-mei-wizard.is-form-step {
+  width: min(820px, calc(100vw - 32px));
+  min-height: min(680px, calc(100dvh - 48px));
 }
 
 .lead-dialog::-webkit-scrollbar {
@@ -1488,15 +1493,15 @@ select option {
 
 .mei-wizard-content {
   display: grid;
-  grid-template-columns: minmax(320px, 1fr) minmax(220px, 0.72fr);
+  grid-template-columns: minmax(260px, 1fr) minmax(170px, 0.64fr);
   align-items: center;
-  gap: clamp(22px, 4vw, 48px);
-  min-height: 290px;
+  gap: clamp(18px, 3vw, 34px);
+  min-height: 300px;
 }
 
 .mei-wizard-copy h2 {
   margin: 0 0 14px;
-  font-size: clamp(2rem, 5vw, 3.1rem);
+  font-size: clamp(2.1rem, 4vw, 3.2rem);
   line-height: 1.05;
 }
 
@@ -1506,7 +1511,7 @@ select option {
 }
 
 .mei-wizard-copy p {
-  max-width: 34rem;
+  max-width: 28rem;
   margin-bottom: 0;
   color: var(--muted);
   line-height: 1.65;
@@ -1515,12 +1520,12 @@ select option {
 .mei-wizard-visual {
   display: grid;
   place-items: center;
-  min-height: 230px;
+  min-height: 240px;
 }
 
 .mei-clipboard {
   position: relative;
-  width: min(190px, 38vw);
+  width: min(180px, 34vw);
   aspect-ratio: 0.72;
   border: 2px solid rgba(255, 217, 120, 0.74);
   border-radius: 18px;
@@ -1595,7 +1600,7 @@ select option {
 .mei-wizard-field {
   display: grid;
   gap: 14px;
-  max-width: 720px;
+  max-width: 100%;
 }
 
 .mei-wizard-field[hidden] {
@@ -1637,6 +1642,10 @@ select option {
 
 .mei-wizard-actions .button.primary {
   width: 100%;
+}
+
+.mei-wizard-actions .button.secondary[hidden] + .button.primary {
+  grid-column: 1 / -1;
 }
 
 .checkout-modal.is-opening .checkout-dialog {

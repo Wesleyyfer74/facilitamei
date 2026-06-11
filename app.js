@@ -676,6 +676,8 @@ function renderMeiWizard() {
   const step = meiWizardSteps[meiWizardStep];
   if (!step || !meiWizard || !meiCopy || !meiField) return;
 
+  leadDialog?.classList.toggle("is-form-step", meiWizardStep > 0);
+
   if (meiCounter) meiCounter.textContent = `${meiWizardStep + 1} de ${meiWizardSteps.length}`;
   if (meiProgress) {
     meiProgress.innerHTML = meiWizardSteps
