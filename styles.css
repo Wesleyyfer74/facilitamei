@@ -1639,6 +1639,11 @@ select option {
   gap: 12px;
 }
 
+.mei-option-item {
+  display: grid;
+  gap: 10px;
+}
+
 .mei-option-card {
   position: relative;
   display: grid;
@@ -1692,6 +1697,20 @@ select option {
     radial-gradient(circle at 88% 20%, rgba(240, 191, 90, 0.22), transparent 36%),
     rgba(240, 191, 90, 0.1);
   box-shadow: 0 0 0 1px rgba(240, 191, 90, 0.18), 0 0 28px rgba(240, 191, 90, 0.18);
+}
+
+.mei-option-detail {
+  grid-column: 1 / -1;
+}
+
+.mei-option-detail[hidden] {
+  display: none;
+}
+
+.mei-option-detail input {
+  min-height: 48px;
+  border-color: rgba(255, 217, 120, 0.36);
+  background: rgba(240, 191, 90, 0.08);
 }
 
 .mei-wizard-actions {

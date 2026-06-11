@@ -594,7 +594,7 @@ const meiWizardSteps = [
       { label: "Ecommerce", icon: "&#128188;" },
       { label: "Beleza", icon: "&#9986;" },
       { label: "Transporte", icon: "&#128666;" },
-      { label: "Outro", icon: "&#8943;" },
+      { label: "Outro", icon: "&#8943;", detailName: "atividade_tipo_outro", detailLabel: "Descreva sua atividade" },
     ],
   },
   {
@@ -689,12 +689,20 @@ function renderMeiField(field) {
     const options = field.options
       .map((option) => {
         const checked = meiWizardAnswers[field.name] === option.label ? "checked" : "";
+        const detail = option.detailName
+          ? `<div class="mei-option-detail" data-option-detail="${option.label}">
+              <input name="${option.detailName}" type="text" value="${escapeHtml(meiWizardAnswers[option.detailName] || "")}" placeholder="${option.detailLabel}" />
+            </div>`
+          : "";
         return `
-          <label class="mei-option-card">
-            <input type="radio" name="${field.name}" value="${escapeHtml(option.label)}" ${checked} ${required} />
-            <span aria-hidden="true">${option.icon}</span>
-            <strong>${option.label}</strong>
-          </label>
+          <div class="mei-option-item">
+            <label class="mei-option-card">
+              <input type="radio" name="${field.name}" value="${escapeHtml(option.label)}" ${checked} ${required} />
+              <span aria-hidden="true">${option.icon}</span>
+              <strong>${option.label}</strong>
+            </label>
+            ${detail}
+          </div>
         `;
       })
       .join("");
@@ -722,10 +730,23 @@ function renderMeiWizard() {
   const fields = step.fields || (step.name ? [step] : []);
   meiField.hidden = fields.length === 0;
   meiField.innerHTML = fields.map(renderMeiField).join("");
+  syncMeiOptionDetails();
 
   if (meiPrev) meiPrev.hidden = meiWizardStep === 0;
   if (meiNext) meiNext.innerHTML = `${step.button || "Continuar"} <span aria-hidden="true">&#8594;</span>`;
   if (meiStatus) meiStatus.textContent = "";
+}
+
+function syncMeiOptionDetails() {
+  const details = meiField?.querySelectorAll("[data-option-detail]") || [];
+
+  details.forEach((detail) => {
+    const optionValue = detail.dataset.optionDetail;
+    const input = detail.querySelector("input");
+    const selected = Boolean(meiField?.querySelector(`input[type="radio"][value="${optionValue}"]:checked`));
+    detail.hidden = !selected;
+    if (input) input.required = selected;
+  });
 }
 
 function collectCurrentMeiStep() {
@@ -757,6 +778,17 @@ function collectCurrentMeiStep() {
     meiWizardAnswers[groupName] = selected.value;
   }
 
+  const visibleDetails = meiField?.querySelectorAll("[data-option-detail]:not([hidden]) input") || [];
+  for (const field of visibleDetails) {
+    const value = field.value.trim();
+    if (field.required && !value) {
+      field.focus();
+      if (meiStatus) meiStatus.textContent = "Descreva sua atividade para continuar.";
+      return false;
+    }
+    meiWizardAnswers[field.name] = value;
+  }
+
   return true;
 }
 
@@ -769,6 +801,7 @@ function sendMeiWizard() {
     `CPF: ${meiWizardAnswers.cpf || "-"}`,
     `Cidade/UF: ${meiWizardAnswers.cidade || "-"} - ${meiWizardAnswers.uf || "-"}`,
     `Tipo de atividade: ${meiWizardAnswers.atividade_tipo || "-"}`,
+    `Atividade informada em outro: ${meiWizardAnswers.atividade_tipo_outro || "-"}`,
     `Atividade: ${meiWizardAnswers.atividade || "-"}`,
     `Prazo: ${meiWizardAnswers.prazo || "-"}`,
     `Observacao: ${meiWizardAnswers.observacao || "-"}`,
@@ -894,6 +927,12 @@ meiNext?.addEventListener("click", () => {
   meiWizardStep += 1;
   renderMeiWizard();
   window.setTimeout(() => meiField?.querySelector("input, textarea, select")?.focus(), 40);
+});
+
+meiField?.addEventListener("change", (event) => {
+  if (event.target.matches("input[type='radio']")) {
+    syncMeiOptionDetails();
+  }
 });
 
 window.addEventListener("keydown", (event) => {
