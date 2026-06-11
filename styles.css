@@ -1722,8 +1722,9 @@ select option {
 .hero-content {
   display: grid;
   align-content: center;
+  justify-items: start;
   min-height: calc(100vh - 180px);
-  padding-bottom: 108px;
+  padding-bottom: 0;
 }
 
 .hero-content h1 span {
@@ -1777,6 +1778,8 @@ select option {
   gap: clamp(22px, 3.4vw, 52px);
   width: min(1060px, 100%);
   margin: clamp(24px, 3vw, 36px) auto 0;
+  justify-self: center;
+  justify-content: center;
   transform: none;
 }
 
@@ -1842,15 +1845,17 @@ select option {
 }
 
 .hero-bottom-icons {
-  position: absolute;
+  position: relative;
   z-index: 4;
-  left: 50%;
-  bottom: clamp(4px, 1.2vw, 18px);
+  left: auto;
+  bottom: auto;
   width: min(78vw, 1120px);
   height: clamp(70px, 7.2vw, 98px);
+  margin: clamp(8px, 1.2vw, 16px) auto 0;
   overflow: hidden;
   border-radius: 20px;
-  transform: translateX(-50%);
+  transform: none;
+  justify-self: center;
   pointer-events: none;
 }
 
@@ -2104,7 +2109,7 @@ select option {
 
   .hero-content {
     min-height: auto;
-    padding-bottom: 400px;
+    padding-bottom: 360px;
   }
 
   .hero-content h1 span {
@@ -2150,13 +2155,13 @@ select option {
   .hero-bottom-icons {
     width: min(96vw, 720px);
     height: clamp(54px, 12vw, 78px);
-    bottom: 8px;
+    margin-top: 6px;
   }
 }
 
 @media (max-width: 560px) {
   .hero-content {
-    padding-bottom: 330px;
+    padding-bottom: 300px;
   }
 
   .hero-path-card {
@@ -2175,9 +2180,9 @@ select option {
   }
 
   .hero-bottom-icons {
-    width: 122vw;
+    width: 114vw;
     height: 46px;
-    bottom: 2px;
+    margin-top: 4px;
   }
 }
 
