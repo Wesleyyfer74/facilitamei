@@ -2219,7 +2219,7 @@ select option {
 .hero-bottom-icons {
   width: min(1260px, calc(100vw - 48px));
   height: auto;
-  margin-top: clamp(18px, 2vw, 30px);
+  margin-top: clamp(2px, 0.8vw, 12px);
   overflow: visible;
 }
 
