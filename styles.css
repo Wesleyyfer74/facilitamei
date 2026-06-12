@@ -759,13 +759,17 @@ main { padding-bottom: 0; }
   border: 1px solid rgba(255, 224, 146, 0.19);
   border-radius: 20px;
   background:
+    linear-gradient(120deg, rgba(255, 217, 120, 0.12), transparent 18%, transparent 78%, rgba(255, 217, 120, 0.08)),
     linear-gradient(160deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.018)),
     radial-gradient(circle at 50% 105%, rgba(255, 210, 96, 0.12), transparent 44%),
     linear-gradient(180deg, rgba(21, 20, 18, 0.92), rgba(9, 9, 8, 0.94));
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 22px 58px rgba(0, 0, 0, 0.42);
-  transform: translateY(0);
-  transition: transform 220ms ease, border-color 220ms ease, box-shadow 220ms ease, background 220ms ease;
-  will-change: transform, box-shadow;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    0 22px 58px rgba(0, 0, 0, 0.42);
+  transform: translateY(0) rotateX(0deg) rotateY(0deg);
+  transform-style: preserve-3d;
+  transition: transform 320ms cubic-bezier(0.22, 1, 0.36, 1), border-color 220ms ease, box-shadow 220ms ease, background 220ms ease, filter 220ms ease;
+  will-change: transform, box-shadow, filter;
 }
 
 .plan-card::before {
@@ -774,24 +778,58 @@ main { padding-bottom: 0; }
   inset: 1px;
   pointer-events: none;
   border-radius: 19px;
-  background: linear-gradient(145deg, rgba(255, 255, 255, 0.08), transparent 34%, rgba(240, 191, 90, 0.05));
+  background:
+    radial-gradient(circle at var(--card-glow-x, 50%) var(--card-glow-y, 0%), rgba(255, 226, 143, 0.2), transparent 22%),
+    linear-gradient(145deg, rgba(255, 255, 255, 0.1), transparent 34%, rgba(240, 191, 90, 0.08));
   opacity: 0.8;
+  transition: opacity 220ms ease, background 220ms ease;
+}
+
+.plan-card::after {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  z-index: -1;
+  border-radius: 22px;
+  background:
+    linear-gradient(135deg, rgba(240, 191, 90, 0.26), transparent 32%, rgba(255, 217, 120, 0.18) 68%, transparent),
+    radial-gradient(circle at 50% 100%, rgba(240, 191, 90, 0.22), transparent 56%);
+  filter: blur(22px);
+  opacity: 0.18;
+  transition: opacity 220ms ease, filter 220ms ease;
 }
 
 .plan-card > * {
   position: relative;
   z-index: 1;
+  transform: translateZ(22px);
 }
 
 .plan-card:hover,
 .plan-card.selected {
-  transform: translateY(-7px);
+  transform: translateY(-10px) rotateX(4deg) rotateY(-3deg);
   border-color: rgba(255, 215, 118, 0.58);
-  box-shadow: 0 30px 78px rgba(0, 0, 0, 0.46), 0 0 0 1px rgba(240, 191, 90, 0.16);
+  filter: brightness(1.08);
+  box-shadow:
+    0 34px 84px rgba(0, 0, 0, 0.5),
+    0 0 0 1px rgba(240, 191, 90, 0.2),
+    0 0 46px rgba(240, 191, 90, 0.18);
   background:
+    linear-gradient(120deg, rgba(255, 217, 120, 0.18), transparent 18%, transparent 78%, rgba(255, 217, 120, 0.1)),
     linear-gradient(160deg, rgba(255, 255, 255, 0.09), rgba(255, 255, 255, 0.03)),
     radial-gradient(circle at 50% 105%, rgba(255, 210, 96, 0.16), transparent 44%),
     linear-gradient(180deg, rgba(24, 22, 19, 0.94), rgba(9, 9, 8, 0.94));
+}
+
+.plan-card:hover::before,
+.plan-card.selected::before {
+  opacity: 1;
+}
+
+.plan-card:hover::after,
+.plan-card.selected::after {
+  opacity: 0.55;
+  filter: blur(28px);
 }
 
 .plan-card.featured {
@@ -834,7 +872,7 @@ main { padding-bottom: 0; }
 
 .plan-card.featured:hover,
 .plan-card.featured.selected {
-  transform: translateY(-20px);
+  transform: translateY(-22px) rotateX(4deg) rotateY(-3deg);
   box-shadow:
     0 0 0 1px rgba(255, 238, 155, 0.62),
     0 0 56px rgba(252, 213, 57, 0.82),
