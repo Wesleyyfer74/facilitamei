@@ -766,7 +766,7 @@ main { padding-bottom: 0; }
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.08),
     0 22px 58px rgba(0, 0, 0, 0.42);
-  transform: translateY(0) rotateX(0deg) rotateY(0deg);
+  transform: translateY(0) rotateX(var(--plan-tilt-x, 0deg)) rotateY(var(--plan-tilt-y, 0deg));
   transform-style: preserve-3d;
   transition: transform 320ms cubic-bezier(0.22, 1, 0.36, 1), border-color 220ms ease, box-shadow 220ms ease, background 220ms ease, filter 220ms ease;
   will-change: transform, box-shadow, filter;
@@ -806,7 +806,7 @@ main { padding-bottom: 0; }
 }
 
 .plan-card:hover {
-  transform: translateY(-10px) rotateX(4deg) rotateY(-3deg);
+  transform: translateY(-10px) rotateX(var(--plan-tilt-x, 0deg)) rotateY(var(--plan-tilt-y, 0deg));
   border-color: rgba(255, 215, 118, 0.58);
   filter: brightness(1.08);
   box-shadow:
@@ -827,6 +827,10 @@ main { padding-bottom: 0; }
     0 22px 58px rgba(0, 0, 0, 0.42),
     0 0 0 1px rgba(240, 191, 90, 0.08);
   transform: translateY(0) rotateX(0deg) rotateY(0deg);
+}
+
+.plan-card.selected:hover {
+  transform: translateY(-10px) rotateX(var(--plan-tilt-x, 0deg)) rotateY(var(--plan-tilt-y, 0deg));
 }
 
 .plan-card:hover::before {
@@ -877,7 +881,7 @@ main { padding-bottom: 0; }
 }
 
 .plan-card.featured:hover {
-  transform: translateY(-22px) rotateX(4deg) rotateY(-3deg);
+  transform: translateY(-22px) rotateX(var(--plan-tilt-x, 0deg)) rotateY(var(--plan-tilt-y, 0deg));
   box-shadow:
     0 0 0 1px rgba(255, 238, 155, 0.62),
     0 0 56px rgba(252, 213, 57, 0.82),
@@ -887,6 +891,10 @@ main { padding-bottom: 0; }
 
 .plan-card.featured.selected {
   transform: translateY(-16px) rotateX(0deg) rotateY(0deg);
+}
+
+.plan-card.featured.selected:hover {
+  transform: translateY(-22px) rotateX(var(--plan-tilt-x, 0deg)) rotateY(var(--plan-tilt-y, 0deg));
 }
 
 .plan-card.featured .plan-kicker {

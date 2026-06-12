@@ -394,6 +394,28 @@ if (!prefersReducedMotion) {
   document.querySelectorAll(".reveal").forEach((target) => target.classList.add("is-visible"));
 }
 
+if (!prefersReducedMotion) {
+  planCards.forEach((card) => {
+    card.addEventListener("pointermove", (event) => {
+      const rect = card.getBoundingClientRect();
+      const x = Math.max(-1, Math.min(1, ((event.clientX - rect.left) / rect.width - 0.5) * 2));
+      const y = Math.max(-1, Math.min(1, ((event.clientY - rect.top) / rect.height - 0.5) * 2));
+
+      card.style.setProperty("--plan-tilt-x", `${(-y * 14).toFixed(2)}deg`);
+      card.style.setProperty("--plan-tilt-y", `${(x * 10).toFixed(2)}deg`);
+      card.style.setProperty("--card-glow-x", `${50 + x * 28}%`);
+      card.style.setProperty("--card-glow-y", `${18 + y * 24}%`);
+    });
+
+    card.addEventListener("pointerleave", () => {
+      card.style.setProperty("--plan-tilt-x", "0deg");
+      card.style.setProperty("--plan-tilt-y", "0deg");
+      card.style.setProperty("--card-glow-x", "50%");
+      card.style.setProperty("--card-glow-y", "0%");
+    });
+  });
+}
+
 menuToggle.addEventListener("click", () => {
   const isOpen = menu.classList.toggle("is-open");
   menuToggle.setAttribute("aria-expanded", String(isOpen));
