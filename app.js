@@ -598,61 +598,61 @@ const meiWizardSteps = [
     ],
   },
   {
-    title: "Qual e o seu nome completo?",
-    description: "Assim nossa equipe ja inicia seu atendimento com seus dados corretos.",
-    name: "nome",
-    label: "Nome completo",
-    type: "text",
-    autocomplete: "name",
+    title: "Vai emitir nota fiscal?",
+    description: "Essa informacao ajuda a indicar o plano ideal para voce.",
+    name: "emite_nf",
+    type: "options",
+    layout: "list",
     required: true,
-  },
-  {
-    title: "Como podemos falar com voce?",
-    description: "Use o WhatsApp principal e um e-mail que voce acessa com facilidade.",
-    fields: [
-      { name: "whatsapp", label: "WhatsApp", type: "tel", autocomplete: "tel", required: true },
-      { name: "email", label: "E-mail", type: "email", autocomplete: "email", required: true },
+    button: "Continuar",
+    options: [
+      { label: "Sim", icon: "" },
+      { label: "Nao", icon: "" },
+      { label: "Ainda nao sei", icon: "" },
     ],
   },
   {
-    title: "Informe seu CPF",
-    description: "Esse dado ajuda na abertura e conferencia inicial do cadastro.",
-    name: "cpf",
-    label: "CPF",
-    type: "text",
-    inputmode: "numeric",
+    title: "Vai possuir funcionario?",
+    description: "Selecione a opcao que melhor se encaixa no seu momento.",
+    name: "possui_funcionario",
+    type: "options",
+    layout: "list",
     required: true,
-  },
-  {
-    title: "Onde voce quer abrir o MEI?",
-    description: "Cidade e estado ajudam a orientar o processo corretamente.",
-    fields: [
-      { name: "cidade", label: "Cidade", type: "text", required: true },
-      { name: "uf", label: "UF", type: "text", maxlength: "2", required: true },
+    button: "Continuar",
+    options: [
+      { label: "Sim", icon: "" },
+      { label: "Nao", icon: "" },
     ],
   },
   {
-    title: "Qual atividade voce pretende exercer?",
-    description: "Conte resumidamente o que voce vende ou qual servico pretende prestar.",
-    name: "atividade",
-    label: "Atividade principal",
-    type: "textarea",
+    title: "Precisa de suporte mensal?",
+    description: "Nossos especialistas podem te acompanhar todos os meses.",
+    name: "suporte_mensal",
+    type: "options",
+    layout: "list",
     required: true,
+    button: "Continuar",
+    options: [
+      { label: "Sim, quero suporte mensal", icon: "" },
+      { label: "Apenas abertura do MEI", icon: "" },
+    ],
   },
   {
-    title: "Quando voce quer comecar?",
-    description: "Finalize com a urgencia do atendimento e alguma observacao importante.",
+    title: "Agora, seus dados para comecarmos",
+    description: "Preencha seus dados para recebermos seu cadastro e entrarmos em contato.",
     fields: [
-      {
-        name: "prazo",
-        label: "Prazo desejado",
-        type: "select",
-        required: true,
-        options: ["O quanto antes", "Ainda esta semana", "Este mes", "Estou pesquisando"],
-      },
-      { name: "observacao", label: "Observacao", type: "textarea" },
+      { name: "nome", label: "Nome completo", type: "text", autocomplete: "name", required: true, icon: "&#128100;" },
+      { name: "whatsapp", label: "WhatsApp", type: "tel", autocomplete: "tel", required: true, icon: "&#9742;" },
+      { name: "cidade", label: "Cidade", type: "text", required: true, icon: "&#9671;" },
+      { name: "email", label: "Email", type: "email", autocomplete: "email", required: true, icon: "&#9993;" },
     ],
-    button: "Enviar atendimento",
+    button: "Continuar",
+  },
+  {
+    title: "Plano recomendado para voce!",
+    description: "Com base nas suas respostas, este e o plano ideal para o seu momento.",
+    type: "recommendation",
+    button: "Continuar no WhatsApp",
   },
 ];
 
@@ -673,6 +673,7 @@ function renderMeiField(field) {
   const autocomplete = field.autocomplete ? `autocomplete="${field.autocomplete}"` : "";
   const inputmode = field.inputmode ? `inputmode="${field.inputmode}"` : "";
   const maxlength = field.maxlength ? `maxlength="${field.maxlength}"` : "";
+  const icon = field.icon ? `<span class="mei-input-icon" aria-hidden="true">${field.icon}</span>` : "";
 
   if (field.type === "textarea") {
     return `<label>${field.label}<textarea name="${field.name}" ${required}>${value}</textarea></label>`;
@@ -707,10 +708,49 @@ function renderMeiField(field) {
       })
       .join("");
 
-    return `<div class="mei-option-grid">${options}</div>`;
+    return `<div class="mei-option-grid ${field.layout === "list" ? "is-list" : ""}">${options}</div>`;
+  }
+
+  if (field.icon) {
+    return `<label class="has-icon"><span class="mei-input-wrap">${icon}<input name="${field.name}" type="${field.type}" value="${value}" placeholder="${field.label}" ${required} ${autocomplete} ${inputmode} ${maxlength} /></span></label>`;
   }
 
   return `<label>${field.label}<input name="${field.name}" type="${field.type}" value="${value}" ${required} ${autocomplete} ${inputmode} ${maxlength} /></label>`;
+}
+
+function getRecommendedPlan() {
+  const wantsSupport = meiWizardAnswers.suporte_mensal === "Sim, quero suporte mensal";
+  const emitsInvoice = ["Sim", "Ainda nao sei"].includes(meiWizardAnswers.emite_nf);
+  const hasEmployee = meiWizardAnswers.possui_funcionario === "Sim";
+
+  if (wantsSupport || emitsInvoice || hasEmployee) {
+    return {
+      title: "Facilita Premium",
+      badge: "Mais escolhido",
+      items: ["Emissao de notas fiscais", "DAS mensal", "Suporte contabil completo", "Regularizacao e orientacoes", "Ideal para prestadores de servico"],
+    };
+  }
+
+  return {
+    title: "Start MEI",
+    badge: "Abertura simples",
+    items: ["Abertura do MEI", "Orientacao inicial", "Processo 100% online", "Ideal para comecar com seguranca"],
+  };
+}
+
+function renderRecommendedPlan() {
+  const plan = getRecommendedPlan();
+  const items = plan.items.map((item) => `<li><span aria-hidden="true">&#10003;</span>${item}</li>`).join("");
+
+  return `
+    <div class="mei-recommendation-mark" aria-hidden="true">&#10003;</div>
+    <article class="mei-recommendation-card">
+      <small>Plano recomendado:</small>
+      <strong>${plan.title}</strong>
+      <em>${plan.badge}</em>
+      <ul>${items}</ul>
+    </article>
+  `;
 }
 
 function renderMeiWizard() {
@@ -718,6 +758,7 @@ function renderMeiWizard() {
   if (!step || !meiWizard || !meiCopy || !meiField) return;
 
   leadDialog?.classList.toggle("is-form-step", meiWizardStep > 0);
+  leadDialog?.classList.toggle("is-recommendation-step", step.type === "recommendation");
 
   if (meiCounter) meiCounter.textContent = `${meiWizardStep + 1} de ${meiWizardSteps.length}`;
   if (meiProgress) {
@@ -728,8 +769,8 @@ function renderMeiWizard() {
 
   meiCopy.innerHTML = `<h2>${step.title}</h2><p>${step.description}</p>`;
   const fields = step.fields || (step.name ? [step] : []);
-  meiField.hidden = fields.length === 0;
-  meiField.innerHTML = fields.map(renderMeiField).join("");
+  meiField.hidden = fields.length === 0 && step.type !== "recommendation";
+  meiField.innerHTML = step.type === "recommendation" ? renderRecommendedPlan() : fields.map(renderMeiField).join("");
   syncMeiOptionDetails();
 
   if (meiPrev) meiPrev.hidden = meiWizardStep === 0;
@@ -750,6 +791,9 @@ function syncMeiOptionDetails() {
 }
 
 function collectCurrentMeiStep() {
+  const step = meiWizardSteps[meiWizardStep];
+  if (step?.type === "recommendation") return true;
+
   const fields = meiField?.querySelectorAll("input, textarea, select") || [];
   const radioGroups = new Set();
 
@@ -798,13 +842,13 @@ function sendMeiWizard() {
     `Nome: ${meiWizardAnswers.nome || "-"}`,
     `WhatsApp: ${meiWizardAnswers.whatsapp || "-"}`,
     `E-mail: ${meiWizardAnswers.email || "-"}`,
-    `CPF: ${meiWizardAnswers.cpf || "-"}`,
-    `Cidade/UF: ${meiWizardAnswers.cidade || "-"} - ${meiWizardAnswers.uf || "-"}`,
+    `Cidade: ${meiWizardAnswers.cidade || "-"}`,
     `Tipo de atividade: ${meiWizardAnswers.atividade_tipo || "-"}`,
     `Atividade informada em outro: ${meiWizardAnswers.atividade_tipo_outro || "-"}`,
-    `Atividade: ${meiWizardAnswers.atividade || "-"}`,
-    `Prazo: ${meiWizardAnswers.prazo || "-"}`,
-    `Observacao: ${meiWizardAnswers.observacao || "-"}`,
+    `Vai emitir nota fiscal: ${meiWizardAnswers.emite_nf || "-"}`,
+    `Vai possuir funcionario: ${meiWizardAnswers.possui_funcionario || "-"}`,
+    `Suporte mensal: ${meiWizardAnswers.suporte_mensal || "-"}`,
+    `Plano recomendado: ${getRecommendedPlan().title}`,
   ].join("\n");
 
   if (meiStatus) meiStatus.textContent = "Abrindo atendimento no WhatsApp...";
@@ -822,6 +866,9 @@ function openLeadModal(type = "sou-mei") {
 
   const isMeiWizard = type === "quero-ser-mei";
   leadDialog?.classList.toggle("is-mei-wizard", isMeiWizard);
+  if (!isMeiWizard) {
+    leadDialog?.classList.remove("is-form-step", "is-recommendation-step");
+  }
   if (leadStandard) leadStandard.hidden = isMeiWizard;
   if (meiWizard) meiWizard.hidden = !isMeiWizard;
 
@@ -848,7 +895,7 @@ function closeLeadModal() {
   if (!leadModal) return;
 
   leadModal.hidden = true;
-  leadDialog?.classList.remove("is-mei-wizard");
+  leadDialog?.classList.remove("is-mei-wizard", "is-form-step", "is-recommendation-step");
   if (leadStandard) leadStandard.hidden = false;
   if (meiWizard) meiWizard.hidden = true;
   document.body.classList.remove("modal-open");

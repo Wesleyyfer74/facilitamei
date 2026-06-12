@@ -1402,8 +1402,12 @@ select option {
 }
 
 .lead-dialog.is-mei-wizard.is-form-step {
-  width: min(820px, calc(100vw - 32px));
-  min-height: min(680px, calc(100dvh - 48px));
+  width: min(560px, calc(100vw - 32px));
+  min-height: min(640px, calc(100dvh - 48px));
+}
+
+.lead-dialog.is-mei-wizard.is-recommendation-step {
+  width: min(560px, calc(100vw - 32px));
 }
 
 .lead-dialog::-webkit-scrollbar {
@@ -1497,6 +1501,20 @@ select option {
   align-items: center;
   gap: clamp(18px, 3vw, 34px);
   min-height: 300px;
+}
+
+.lead-dialog.is-form-step .mei-wizard-content {
+  grid-template-columns: 1fr;
+  min-height: auto;
+}
+
+.lead-dialog.is-form-step .mei-wizard-visual {
+  display: none;
+}
+
+.lead-dialog.is-recommendation-step .mei-wizard-content {
+  justify-items: center;
+  text-align: center;
 }
 
 .mei-wizard-copy h2 {
@@ -1614,6 +1632,26 @@ select option {
   font-weight: 800;
 }
 
+.mei-wizard-field label.has-icon {
+  gap: 0;
+}
+
+.mei-input-wrap {
+  position: relative;
+  display: block;
+}
+
+.mei-input-icon {
+  position: absolute;
+  top: 50%;
+  left: 14px;
+  z-index: 1;
+  color: var(--gold-strong);
+  font-size: 0.9rem;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
 .mei-wizard-field input,
 .mei-wizard-field textarea,
 .mei-wizard-field select {
@@ -1627,6 +1665,10 @@ select option {
   font: inherit;
 }
 
+.mei-input-wrap input {
+  padding-left: 42px;
+}
+
 .mei-wizard-field textarea {
   min-height: 110px;
   padding-top: 12px;
@@ -1637,6 +1679,11 @@ select option {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
+}
+
+.mei-option-grid.is-list {
+  grid-template-columns: 1fr;
+  gap: 10px;
 }
 
 .mei-option-item {
@@ -1686,6 +1733,44 @@ select option {
   font-size: 0.95rem;
 }
 
+.mei-option-grid.is-list .mei-option-card {
+  grid-template-columns: 26px 1fr;
+  min-height: 54px;
+}
+
+.mei-option-grid.is-list .mei-option-card span {
+  border: 1px solid rgba(255, 217, 120, 0.34);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.02);
+  font-size: 0.78rem;
+}
+
+.mei-option-grid.is-list .mei-option-card span:empty::before {
+  content: "";
+  width: 12px;
+  height: 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 217, 120, 0.42);
+}
+
+.mei-option-grid.is-list .mei-option-card:has(input:checked) span {
+  color: #17110a;
+  border-color: transparent;
+  background: linear-gradient(135deg, var(--gold), var(--gold-strong));
+}
+
+.mei-option-grid.is-list .mei-option-card:has(input:checked) span:empty::before {
+  content: "\2713";
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  color: #17110a;
+  border: 0;
+  font-size: 0.78rem;
+  font-weight: 950;
+}
+
 .mei-option-card strong {
   color: rgba(255, 248, 232, 0.92);
   font-size: 0.92rem;
@@ -1726,6 +1811,95 @@ select option {
 
 .mei-wizard-actions .button.secondary[hidden] + .button.primary {
   grid-column: 1 / -1;
+}
+
+.mei-recommendation-mark {
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 46px;
+  margin: 0 auto -6px;
+  color: var(--gold-strong);
+  border: 1px solid rgba(255, 217, 120, 0.72);
+  border-radius: 999px;
+  background: rgba(240, 191, 90, 0.1);
+  box-shadow: 0 0 28px rgba(240, 191, 90, 0.24);
+  font-weight: 950;
+}
+
+.mei-recommendation-card {
+  width: min(100%, 380px);
+  margin: 0 auto;
+  padding: 22px;
+  text-align: left;
+  border: 1px solid rgba(240, 191, 90, 0.46);
+  border-radius: 12px;
+  background:
+    radial-gradient(circle at 84% 8%, rgba(240, 191, 90, 0.18), transparent 32%),
+    rgba(18, 14, 10, 0.78);
+  box-shadow: 0 20px 58px rgba(0, 0, 0, 0.34);
+}
+
+.mei-recommendation-card small {
+  display: block;
+  color: var(--muted);
+  font-weight: 800;
+}
+
+.mei-recommendation-card strong {
+  display: block;
+  margin-top: 4px;
+  color: var(--gold-strong);
+  font-size: 1.7rem;
+}
+
+.mei-recommendation-card em {
+  display: inline-flex;
+  margin: 10px 0 14px;
+  padding: 5px 10px;
+  color: #17110a;
+  border-radius: 999px;
+  background: linear-gradient(135deg, var(--gold), var(--gold-strong));
+  font-size: 0.72rem;
+  font-style: normal;
+  font-weight: 950;
+  text-transform: uppercase;
+}
+
+.mei-recommendation-card ul {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.mei-recommendation-card li {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.mei-recommendation-card li span {
+  display: inline-grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
+  color: var(--gold-strong);
+  border: 1px solid rgba(240, 191, 90, 0.46);
+  border-radius: 999px;
+  font-size: 0.68rem;
+}
+
+.lead-dialog.is-recommendation-step .mei-wizard-actions {
+  grid-template-columns: 1fr;
+}
+
+.lead-dialog.is-recommendation-step .mei-wizard-actions .button.secondary {
+  display: none;
 }
 
 .checkout-modal.is-opening .checkout-dialog {
