@@ -805,8 +805,7 @@ main { padding-bottom: 0; }
   transform: translateZ(22px);
 }
 
-.plan-card:hover,
-.plan-card.selected {
+.plan-card:hover {
   transform: translateY(-10px) rotateX(4deg) rotateY(-3deg);
   border-color: rgba(255, 215, 118, 0.58);
   filter: brightness(1.08);
@@ -821,13 +820,20 @@ main { padding-bottom: 0; }
     linear-gradient(180deg, rgba(24, 22, 19, 0.94), rgba(9, 9, 8, 0.94));
 }
 
-.plan-card:hover::before,
-.plan-card.selected::before {
+.plan-card.selected {
+  border-color: rgba(255, 215, 118, 0.34);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    0 22px 58px rgba(0, 0, 0, 0.42),
+    0 0 0 1px rgba(240, 191, 90, 0.08);
+  transform: translateY(0) rotateX(0deg) rotateY(0deg);
+}
+
+.plan-card:hover::before {
   opacity: 1;
 }
 
-.plan-card:hover::after,
-.plan-card.selected::after {
+.plan-card:hover::after {
   opacity: 0.55;
   filter: blur(28px);
 }
@@ -870,14 +876,17 @@ main { padding-bottom: 0; }
   transform: none;
 }
 
-.plan-card.featured:hover,
-.plan-card.featured.selected {
+.plan-card.featured:hover {
   transform: translateY(-22px) rotateX(4deg) rotateY(-3deg);
   box-shadow:
     0 0 0 1px rgba(255, 238, 155, 0.62),
     0 0 56px rgba(252, 213, 57, 0.82),
     0 0 124px rgba(240, 191, 90, 0.38),
     0 40px 110px rgba(0, 0, 0, 0.58);
+}
+
+.plan-card.featured.selected {
+  transform: translateY(-16px) rotateX(0deg) rotateY(0deg);
 }
 
 .plan-card.featured .plan-kicker {
