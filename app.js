@@ -560,12 +560,6 @@ const leadModalContent = {
     description: "Preencha o formulario para iniciarmos seu atendimento de abertura com seguranca e orientacao correta.",
     interest: "Quero Ser MEI",
   },
-  "area-cliente": {
-    kicker: "Area do cliente",
-    title: "Acesse pelo atendimento",
-    description: "Informe seus dados para nossa equipe localizar seu cadastro e orientar o proximo passo.",
-    interest: "Area do cliente",
-  },
   especialista: {
     kicker: "Atendimento especializado",
     title: "Fale com um especialista",
