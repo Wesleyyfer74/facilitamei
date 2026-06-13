@@ -855,6 +855,7 @@ function collectCurrentMeiStep() {
 function sendMeiWizard() {
   const recommendedPlan = getRecommendedPlan().title;
   const customerName = meiWizardAnswers.nome || "cliente";
+  const otherActivity = meiWizardAnswers.atividade_tipo_outro?.trim();
   const message = [
     `Ola, meu nome e ${customerName} e quero criar um MEI.`,
     "",
@@ -864,7 +865,7 @@ function sendMeiWizard() {
     `E-mail: ${meiWizardAnswers.email || "-"}`,
     `Cidade: ${meiWizardAnswers.cidade || "-"}`,
     `Tipo de atividade: ${meiWizardAnswers.atividade_tipo || "-"}`,
-    `Atividade informada em outro: ${meiWizardAnswers.atividade_tipo_outro || "-"}`,
+    ...(otherActivity ? [`Atividade informada em outro: ${otherActivity}`] : []),
     `Vai emitir nota fiscal: ${meiWizardAnswers.emite_nf || "-"}`,
     `Vai possuir funcionario: ${meiWizardAnswers.possui_funcionario || "-"}`,
     `Suporte mensal: ${meiWizardAnswers.suporte_mensal || "-"}`,
