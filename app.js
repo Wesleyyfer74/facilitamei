@@ -856,9 +856,9 @@ function sendMeiWizard() {
   const recommendedPlan = getRecommendedPlan().title;
   const customerName = meiWizardAnswers.nome || "cliente";
   const message = [
-    `Ola, ${customerName}! Identificamos que o plano ideal para voce e o ${recommendedPlan}. Nossa equipe ja esta pronta para iniciar sua abertura MEI.`,
+    `Ola, meu nome e ${customerName} e quero criar um MEI.`,
     "",
-    "Resumo das respostas:",
+    "Meus dados e respostas do formulario:",
     `Nome: ${meiWizardAnswers.nome || "-"}`,
     `WhatsApp: ${meiWizardAnswers.whatsapp || "-"}`,
     `E-mail: ${meiWizardAnswers.email || "-"}`,
@@ -868,7 +868,8 @@ function sendMeiWizard() {
     `Vai emitir nota fiscal: ${meiWizardAnswers.emite_nf || "-"}`,
     `Vai possuir funcionario: ${meiWizardAnswers.possui_funcionario || "-"}`,
     `Suporte mensal: ${meiWizardAnswers.suporte_mensal || "-"}`,
-    `Plano recomendado: ${recommendedPlan}`,
+    "",
+    `Plano indicado pelo sistema: ${recommendedPlan}`,
   ].join("\n");
 
   if (meiStatus) meiStatus.textContent = "Abrindo atendimento no WhatsApp...";
