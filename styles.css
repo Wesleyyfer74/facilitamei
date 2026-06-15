@@ -578,6 +578,7 @@ main { padding-bottom: 0; }
   color: var(--muted);
   font-size: 0.88rem;
   line-height: 1.5;
+  white-space: nowrap;
 }
 
 .footer-tagline {
