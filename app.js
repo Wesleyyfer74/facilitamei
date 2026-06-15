@@ -328,7 +328,6 @@ function initHeroGsap() {
     x: 56,
     y: 26,
     rotation: 3,
-    opacity: 0,
     duration: 1.05,
     ease: "power3.out",
     delay: 0.32,

@@ -267,7 +267,10 @@ h3 {
   right: clamp(14px, 7vw, 150px);
   bottom: clamp(70px, 8vw, 120px);
   width: min(35vw, 430px);
-  opacity: 0.94;
+  z-index: 8;
+  opacity: 1 !important;
+  visibility: visible;
+  mix-blend-mode: normal;
 }
 
 .hero-showcase {
@@ -304,7 +307,6 @@ h3 {
 .service-card,
 .plan-card,
 .footer div,
-.hero-person,
 .hero-actions,
 .hero-mei-actions,
 .trust-row {
@@ -318,7 +320,6 @@ h3 {
 .service-card.is-visible,
 .plan-card.is-visible,
 .footer div.is-visible,
-.hero-person.is-visible,
 .hero-actions.is-visible,
 .hero-mei-actions.is-visible,
 .trust-row.is-visible {
@@ -597,13 +598,25 @@ main { padding-bottom: 0; }
 }
 
 .lock-hero {
-  z-index: 2;
+  z-index: 8;
   top: clamp(150px, 15vw, 220px);
   right: clamp(10px, 5vw, 120px);
   bottom: auto;
   width: min(58vw, 780px);
-  opacity: 1;
+  opacity: 1 !important;
   filter: drop-shadow(0 32px 78px rgba(0, 0, 0, 0.58)) drop-shadow(0 0 38px rgba(240, 191, 90, 0.18));
+}
+
+.lock-hero.reveal,
+.lock-hero.is-visible {
+  opacity: 1 !important;
+  visibility: visible;
+}
+
+.hero .lock-hero {
+  z-index: 12;
+  opacity: 1 !important;
+  visibility: visible;
 }
 
 .section {
