@@ -711,16 +711,9 @@ main { padding-bottom: 0; }
   margin-bottom: 16px;
   font-size: clamp(1rem, 1.16vw, 1.14rem);
   font-weight: 900;
-}
-
-.service-card h3 mark {
-  display: inline-block;
-  padding: 5px 9px;
-  color: #5d5750;
-  border-radius: 5px;
-  background: #fff;
   text-transform: uppercase;
-  font-weight: 500;
+  color: var(--text);
+  text-shadow: 0 0 22px rgba(240, 191, 90, 0.14);
 }
 
 .service-card p {
