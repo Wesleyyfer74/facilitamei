@@ -67,7 +67,7 @@ let planDetails = {
     billing: "subscription",
   },
   "servicos": {
-    title: "Facilita MEI Servicos",
+    title: "Facilita MEI Serviços",
     price: "R$ 99,99 /mes",
     amount: 99.99,
     billing: "subscription",
@@ -79,7 +79,7 @@ let planDetails = {
     billing: "subscription",
   },
   "comercio": {
-    title: "Facilita MEI Comercio",
+    title: "Facilita MEI Comércio",
     price: "R$ 110,00 /mes",
     amount: 110,
     billing: "subscription",
