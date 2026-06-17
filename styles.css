@@ -69,7 +69,7 @@ img {
 }
 
 .brand img {
-  width: 144px;
+  width: 188px;
   height: auto;
 }
 
@@ -2864,7 +2864,7 @@ select option {
 
 @media (max-width: 560px) {
   .brand img {
-    width: 118px;
+    width: 142px;
   }
 
   h1 {
@@ -3098,7 +3098,7 @@ select option {
   }
 
   .brand img {
-    width: 126px;
+    width: 164px;
   }
 
   .hero {
