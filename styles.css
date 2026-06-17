@@ -865,8 +865,32 @@ main { padding-bottom: 0; }
   line-height: 1.7;
 }
 
-.location-copy address {
+.location-company {
+  display: grid;
+  gap: 6px;
   margin: 24px 0;
+  color: rgba(255, 248, 232, 0.9);
+}
+
+.location-company strong {
+  color: var(--text);
+  font-size: 0.98rem;
+  line-height: 1.35;
+}
+
+.location-company span {
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.location-label {
+  display: inline-block;
+  margin-bottom: 10px;
+  color: var(--gold-strong);
+}
+
+.location-copy address {
+  margin: 0 0 24px;
   padding-left: 16px;
   color: rgba(255, 248, 232, 0.9);
   border-left: 3px solid var(--gold);
