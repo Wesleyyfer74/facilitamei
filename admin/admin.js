@@ -9,11 +9,19 @@ const viewPanels = document.querySelectorAll("[data-view]");
 const metrics = document.querySelector("[data-metrics]");
 const latestCustomers = document.querySelector("[data-latest-customers]");
 const latestPayments = document.querySelector("[data-latest-payments]");
+const hubMetrics = document.querySelector("[data-hub-metrics]");
+const hubLatestCustomers = document.querySelector("[data-hub-latest-customers]");
+const hubLatestPayments = document.querySelector("[data-hub-latest-payments]");
+const hubCustomers = document.querySelector("[data-hub-customers]");
+const hubPlans = document.querySelector("[data-hub-plans]");
+const hubPayments = document.querySelector("[data-hub-payments]");
 const customersTable = document.querySelector("[data-customers-table]");
+const customerDetail = document.querySelector("[data-customer-detail]");
 const plansTable = document.querySelector("[data-plans-table]");
 const paymentsTable = document.querySelector("[data-payments-table]");
 const customerSearch = document.querySelector("[data-customer-search]");
 const customerStatus = document.querySelector("[data-customer-status]");
+const customerPlan = document.querySelector("[data-customer-plan]");
 const paymentStatus = document.querySelector("[data-payment-status]");
 const drawer = document.querySelector("[data-drawer]");
 const drawerContent = document.querySelector("[data-drawer-content]");
@@ -22,15 +30,25 @@ const closeDrawerButtons = document.querySelectorAll("[data-close-drawer]");
 const configuredApiBase = String(window.FACILITA_API_BASE || "").replace(/\/$/, "");
 const isLocalFile = window.location.protocol === "file:";
 const isLocalHost = ["localhost", "127.0.0.1"].includes(window.location.hostname);
-const API_BASE = configuredApiBase || (isLocalFile || (isLocalHost && window.location.port !== "3000") ? "http://localhost:3000" : "");
+const productionApiBase = "https://facilitamei-production.up.railway.app";
+const isFacilitaDomain = /(^|\.)facilitameibr\.com\.br$/i.test(window.location.hostname);
+const API_BASE =
+  configuredApiBase ||
+  (isLocalFile || (isLocalHost && window.location.port !== "3000")
+    ? "http://localhost:3000"
+    : isFacilitaDomain
+      ? productionApiBase
+      : "");
 const SESSION_KEY = "facilita_admin_session";
 
 if (window.location.search) {
   window.history.replaceState(null, "", window.location.pathname);
 }
 
-let currentView = "overview";
+let currentView = "customers";
 let plansCache = [];
+let customersCache = [];
+let selectedCustomerId = null;
 
 function getToken() {
   return localStorage.getItem(SESSION_KEY) || "";
@@ -51,6 +69,11 @@ function money(value) {
 function formatDate(value) {
   if (!value) return "-";
   return new Date(value).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
+}
+
+function formatDateOnly(value) {
+  if (!value) return "-";
+  return new Date(value).toLocaleDateString("pt-BR");
 }
 
 function escapeHtml(value = "") {
@@ -93,7 +116,8 @@ async function apiRequest(path, options = {}) {
   try {
     data = text ? JSON.parse(text) : {};
   } catch {
-    throw new Error("A API retornou uma resposta invalida. Confira se a URL do backend esta correta.");
+    const target = API_BASE || window.location.origin;
+    throw new Error(`A API retornou uma resposta invalida. Confira se o backend esta em ${target}.`);
   }
 
   if (response.status === 401) {
@@ -120,12 +144,21 @@ function showDashboard() {
 }
 
 function activateView(viewName) {
+  const targetPanel = Array.from(viewPanels).find((panel) => panel.dataset.view === viewName);
+  if (!targetPanel) {
+    setStatus("Esta pagina sera conectada na proxima etapa.");
+    return;
+  }
+
   currentView = viewName;
   const titles = {
     overview: "Dashboard",
     customers: "Clientes",
     plans: "Planos",
     payments: "Pagamentos",
+    contracts: "Contratos",
+    reports: "Relatorios",
+    settings: "Configuracoes",
   };
 
   viewTitle.textContent = titles[viewName] || "Dashboard";
@@ -157,6 +190,86 @@ function renderMetrics(data) {
       `,
     )
     .join("");
+}
+
+function renderHubList(container, rows, emptyMessage) {
+  if (!container) return;
+  container.innerHTML = rows.length
+    ? rows.join("")
+    : `<div class="admin-hub-row"><span>${emptyMessage}</span><small>-</small></div>`;
+}
+
+function renderAdminCommandCenter(data) {
+  if (hubMetrics) {
+    const cards = [
+      ["Clientes ativos", data.users?.active || 0, "Total de clientes ativos"],
+      ["Receita aprovada", money(data.payments?.approvedAmount), "Pagamentos aprovados"],
+      ["Pagamentos pendentes", data.payments?.pending || 0, "Aguardando pagamento"],
+      ["Novos clientes", data.users?.total || 0, "Base cadastrada"],
+    ];
+
+    hubMetrics.innerHTML = cards
+      .map(
+        ([label, value, detail]) => `
+          <article class="admin-kpi-card">
+            <span>${label}</span>
+            <strong>${value}</strong>
+            <small>${detail}</small>
+          </article>
+        `,
+      )
+      .join("");
+  }
+
+  const customerRows = (data.latestCustomers || []).slice(0, 5).map(
+    (customer) => `
+      <button class="admin-hub-row" type="button" data-open-customer="${customer.id}">
+        <span>
+          <strong>${escapeHtml(customer.nome)}</strong>
+          <small>${escapeHtml(customer.email || customer.telefone || "-")}</small>
+        </span>
+        ${statusPill(customer.status)}
+      </button>
+    `,
+  );
+
+  renderHubList(hubLatestCustomers, customerRows.slice(0, 4), "Nenhum cliente recente");
+  renderHubList(hubCustomers, customerRows, "Nenhum cliente cadastrado");
+
+  const paymentRows = (data.latestPayments || []).slice(0, 6).map(
+    (payment) => `
+      <div class="admin-hub-row">
+        <span>
+          <strong>${escapeHtml(payment.user_name || payment.email || "Cliente")}</strong>
+          <small>${formatDate(payment.data_pagamento || payment.created_at)}</small>
+        </span>
+        <span>
+          <strong>${money(payment.valor)}</strong>
+          ${statusPill(payment.status)}
+        </span>
+      </div>
+    `,
+  );
+
+  renderHubList(hubLatestPayments, paymentRows.slice(0, 4), "Nenhum pagamento recente");
+  renderHubList(hubPayments, paymentRows, "Nenhum pagamento encontrado");
+
+  const planRows = plansCache.slice(0, 6).map(
+    (plan) => `
+      <button class="admin-hub-row" type="button" data-open-plan="${escapeHtml(plan.id)}">
+        <span>
+          <strong>${escapeHtml(plan.nome)}</strong>
+          <small>${escapeHtml(plan.tipo_cobranca || "-")}</small>
+        </span>
+        <span>
+          <strong>${money(plan.valor)}</strong>
+          ${statusPill(plan.ativo ? "active" : "blocked")}
+        </span>
+      </button>
+    `,
+  );
+
+  renderHubList(hubPlans, planRows, "Nenhum plano encontrado");
 }
 
 function renderCompactCustomers(rows = []) {
@@ -199,40 +312,224 @@ async function loadOverview() {
   setStatus("Carregando dashboard...");
   const data = await apiRequest("/api/admin/dashboard");
   renderMetrics(data);
+  renderAdminCommandCenter(data);
   renderCompactCustomers(data.latestCustomers);
   renderCompactPayments(data.latestPayments);
   setStatus("");
 }
 
+function getInitials(name = "") {
+  const parts = String(name || "Cliente")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+  return `${parts[0]?.[0] || "C"}${parts[1]?.[0] || ""}`.toUpperCase();
+}
+
+function getWhatsappLink(customer = {}) {
+  const phone = String(customer.telefone || customer.whatsapp || "").replace(/\D/g, "");
+  const message = encodeURIComponent(`Ola, ${customer.nome || "cliente"}. Aqui e da Facilita MEI.`);
+  return phone ? `https://wa.me/55${phone}?text=${message}` : `https://wa.me/5567992230801?text=${message}`;
+}
+
+function renderCustomerDetailSkeleton(message = "Carregando detalhes do cliente...") {
+  if (!customerDetail) return;
+  customerDetail.innerHTML = `<div class="empty-detail"><strong>${escapeHtml(message)}</strong><span>Aguarde um instante.</span></div>`;
+}
+
+function renderCustomerPreview(data) {
+  if (!customerDetail) return;
+
+  const customer = data.customer || {};
+  const subscription = data.subscriptions?.[0] || {};
+  const payments = data.payments || [];
+  const documents = data.documents || [];
+  const paidPayments = payments.filter((payment) => ["approved", "paid", "pago"].includes(String(payment.status).toLowerCase()));
+  const totalPaid = paidPayments.reduce((sum, payment) => sum + Number(payment.valor || 0), 0);
+  const latestPayment = payments[0];
+  const paymentRows = payments.slice(0, 3).map(
+    (payment) => `
+      <tr>
+        <td>${formatDateOnly(payment.data_pagamento || payment.created_at)}</td>
+        <td>${escapeHtml(subscription.plan_name || payment.plan_name || "-")}</td>
+        <td>${money(payment.valor)}</td>
+        <td>${statusPill(payment.status)}</td>
+        <td>${escapeHtml(payment.mercado_pago_payment_id || payment.gateway_payment_id || "-")}</td>
+      </tr>
+    `,
+  );
+  const documentRows = documents.slice(0, 5).map(
+    (document) => `
+      <div class="document-row">
+        <span>
+          <strong>${escapeHtml(document.titulo || "Documento")}</strong>
+          <small>${escapeHtml(document.tipo || "documento")} &bull; ${formatDateOnly(document.created_at)}</small>
+        </span>
+        ${statusPill(document.status || "pendente")}
+        ${
+          document.arquivo_url
+            ? `<a class="icon-mini-button" href="${escapeHtml(document.arquivo_url)}" target="_blank" rel="noopener" aria-label="Abrir documento">↗</a>`
+            : ""
+        }
+      </div>
+    `,
+  );
+
+  customerDetail.innerHTML = `
+    <div class="detail-header">
+      <h3>Detalhes do Cliente</h3>
+      <button class="ghost-button compact" type="button" data-collapse-detail>Fechar ⌃</button>
+    </div>
+    <div class="customer-detail-grid">
+      <aside class="customer-profile-card">
+        <span class="profile-avatar">${escapeHtml(getInitials(customer.nome))}</span>
+        ${statusPill(customer.status)}
+        <h3>${escapeHtml(customer.nome || "Cliente")}</h3>
+        <p>${escapeHtml(customer.email || "-")}</p>
+        <p>${escapeHtml(customer.telefone || "-")}</p>
+        <p>${escapeHtml(customer.documento || "-")}<small>Documento</small></p>
+        <a class="ghost-button compact" href="${getWhatsappLink(customer)}" target="_blank" rel="noopener">Conversar no WhatsApp</a>
+        <a class="ghost-button compact" href="mailto:${escapeHtml(customer.email || "")}">Enviar E-mail</a>
+      </aside>
+
+      <section class="customer-detail-main">
+        <div class="detail-info-grid">
+          <div class="detail-lines">
+            <p><span>Plano</span><strong>${escapeHtml(subscription.plan_name || "Sem plano")}</strong></p>
+            <p><span>Status</span><strong>${escapeHtml(subscription.status || customer.status || "-")}</strong></p>
+            <p><span>Data de Cadastro</span><strong>${formatDateOnly(customer.created_at)}</strong></p>
+            <p><span>Proximo Vencimento</span><strong>${formatDateOnly(subscription.data_proxima_cobranca)}</strong></p>
+            <p><span>Mercado Pago</span><strong>${escapeHtml(subscription.mercado_pago_subscription_id || "-")}</strong></p>
+            <p><span>E-mail</span><strong>${escapeHtml(customer.email || "-")}</strong></p>
+            <p><span>Telefone</span><strong>${escapeHtml(customer.telefone || "-")}</strong></p>
+          </div>
+
+          <div class="quick-actions-card">
+            <h4>Acoes rapidas</h4>
+            <div class="quick-actions-grid">
+              <button class="mini-action" type="button" data-open-customer="${customer.id}"><span>↻</span>Renovar Assinatura</button>
+              <button class="mini-action" type="button" data-open-customer="${customer.id}"><span>⇅</span>Trocar Plano</button>
+              <button class="mini-action danger" type="button" ${subscription.id ? `data-cancel-subscription="${subscription.id}"` : "disabled"}><span>⊗</span>Cancelar Assinatura</button>
+              <button class="mini-action" type="button" data-open-customer="${customer.id}"><span>✎</span>Editar Cliente</button>
+            </div>
+          </div>
+
+          <div class="finance-card">
+            <h4>Resumo Financeiro</h4>
+            <p><span>Total Pago</span><strong>${money(totalPaid)}</strong></p>
+            <p><span>Ultimo Pagamento</span><strong>${formatDateOnly(latestPayment?.data_pagamento || latestPayment?.created_at)}</strong></p>
+            <p><span>Situacao</span>${statusPill(latestPayment?.status || "pending")}</p>
+            <p><span>Forma de Pagamento</span><strong>${escapeHtml(latestPayment?.metodo_pagamento || latestPayment?.payment_method || "Cartao de Credito")}</strong></p>
+          </div>
+        </div>
+
+        <div class="customer-bottom-grid">
+          <article class="panel compact-panel">
+            <div class="panel-title-row">
+              <h4>Historico de Pagamentos</h4>
+              <button class="ghost-button compact" type="button" data-view-button="payments">Ver todos</button>
+            </div>
+            <div class="table-wrap mini-table-wrap">
+              <table>
+                <thead><tr><th>Data</th><th>Plano</th><th>Valor</th><th>Status</th><th>ID Mercado Pago</th></tr></thead>
+                <tbody>${paymentRows.length ? paymentRows.join("") : `<tr><td colspan="5">Nenhum pagamento encontrado.</td></tr>`}</tbody>
+              </table>
+            </div>
+          </article>
+
+          <div class="side-stack">
+            <article class="panel compact-panel">
+              <div class="panel-title-row">
+                <h4>Observacoes</h4>
+                <button class="icon-mini-button" type="button" data-open-customer="${customer.id}">✎</button>
+              </div>
+              <p>Cliente carregado no painel administrativo. Use editar cliente para atualizar observacoes internas.</p>
+            </article>
+            <article class="panel compact-panel">
+              <div class="panel-title-row">
+                <h4>Documentos e Contratos</h4>
+                <button class="ghost-button compact" type="button">Ver todos</button>
+              </div>
+              <div class="document-list">
+                ${
+                  documentRows.length
+                    ? documentRows.join("")
+                    : `<p>Nenhum documento cadastrado para este cliente.</p>`
+                }
+              </div>
+            </article>
+          </div>
+        </div>
+      </section>
+    </div>
+  `;
+}
+
+async function loadCustomerPreview(customerId) {
+  selectedCustomerId = Number(customerId);
+  renderCustomerDetailSkeleton();
+  const data = await apiRequest(`/api/admin/customers/${selectedCustomerId}`);
+  renderCustomerPreview(data);
+}
+
 function renderCustomers(customers = []) {
-  customersTable.innerHTML = customers.length
+  customersCache = customers;
+  const selectedPlan = customerPlan?.value || "";
+  const visibleCustomers = selectedPlan ? customers.filter((customer) => customer.plan_id === selectedPlan) : customers;
+
+  if (visibleCustomers.length && !visibleCustomers.some((customer) => Number(customer.id) === Number(selectedCustomerId))) {
+    selectedCustomerId = visibleCustomers[0].id;
+  }
+
+  if (!visibleCustomers.length) {
+    selectedCustomerId = null;
+  }
+
+  customersTable.innerHTML = visibleCustomers.length
     ? customers
+        .filter((customer) => !selectedPlan || customer.plan_id === selectedPlan)
         .map(
           (customer) => `
-            <tr>
+            <tr class="${Number(customer.id) === Number(selectedCustomerId) ? "is-selected" : ""}">
               <td>
-                <strong>${escapeHtml(customer.nome)}</strong>
-                <small>ID ${customer.id} - Doc: ${escapeHtml(customer.documento || "-")}</small>
-              </td>
-              <td>
-                ${escapeHtml(customer.email)}
-                <small>${escapeHtml(customer.telefone || "-")}</small>
+                <div class="customer-cell">
+                  <span class="avatar">${escapeHtml(getInitials(customer.nome))}</span>
+                  <span>
+                    <strong>${escapeHtml(customer.nome)}</strong>
+                    <small>${escapeHtml(customer.telefone || "-")} &bull; ${escapeHtml(customer.email || "-")}</small>
+                  </span>
+                </div>
               </td>
               <td>
                 ${escapeHtml(customer.plan_name || "Sem plano")}
                 <small>${escapeHtml(customer.subscription_status || "-")} ${customer.subscription_value ? `- ${money(customer.subscription_value)}` : ""}</small>
               </td>
               <td>${statusPill(customer.status)}</td>
+              <td>${formatDateOnly(customer.data_proxima_cobranca)}</td>
+              <td>${formatDateOnly(customer.created_at)}</td>
               <td>
                 <div class="row-actions">
-                  <button class="mini-button" type="button" data-open-customer="${customer.id}">Abrir</button>
+                  <button class="icon-mini-button" type="button" data-preview-customer="${customer.id}" aria-label="Ver detalhes">◉</button>
+                  <button class="icon-mini-button" type="button" data-open-customer="${customer.id}" aria-label="Editar">✎</button>
+                  <a class="icon-mini-button" href="${getWhatsappLink(customer)}" target="_blank" rel="noopener" aria-label="WhatsApp">☏</a>
+                  <button class="icon-mini-button" type="button" data-open-customer="${customer.id}" aria-label="Mais ações">⋮</button>
                 </div>
               </td>
             </tr>
           `,
         )
         .join("")
-    : `<tr><td colspan="5">Nenhum cliente encontrado.</td></tr>`;
+    : `<tr><td colspan="6">Nenhum cliente encontrado.</td></tr>`;
+
+  if (selectedCustomerId) {
+    loadCustomerPreview(selectedCustomerId).catch((error) => {
+      if (customerDetail) {
+        customerDetail.innerHTML = `<div class="empty-detail"><strong>Nao foi possivel carregar o cliente.</strong><span>${escapeHtml(error.message)}</span></div>`;
+      }
+    });
+  } else if (customerDetail) {
+    customerDetail.innerHTML = `<div class="empty-detail"><strong>Nenhum cliente selecionado</strong><span>Cadastre ou localize um cliente para ver os detalhes.</span></div>`;
+  }
 }
 
 async function loadCustomers() {
@@ -247,6 +544,12 @@ async function loadCustomers() {
 
 function renderPlans(plans = []) {
   plansCache = plans;
+  if (customerPlan) {
+    customerPlan.innerHTML = `<option value="">Todos os planos</option>${plans
+      .map((plan) => `<option value="${escapeHtml(plan.id)}">${escapeHtml(plan.nome)}</option>`)
+      .join("")}`;
+  }
+
   plansTable.innerHTML = plans.length
     ? plans
         .map(
@@ -559,10 +862,10 @@ loginForm.addEventListener("submit", async (event) => {
     showDashboard();
     try {
       await loadPlans();
-      activateView("overview");
+      activateView("customers");
     } catch (loadError) {
       setStatus(loadError.message, "error");
-      activateView("overview");
+      activateView("customers");
     }
   } catch (error) {
     loginStatus.textContent = error.message;
@@ -582,6 +885,8 @@ document.querySelector("[data-logout]").addEventListener("click", async () => {
 document.querySelector("[data-refresh]").addEventListener("click", loadCurrentView);
 document.querySelector("[data-search-customers]").addEventListener("click", loadCustomers);
 document.querySelector("[data-filter-payments]").addEventListener("click", loadPayments);
+customerStatus.addEventListener("change", loadCustomers);
+customerPlan?.addEventListener("change", () => renderCustomers(customersCache));
 customerSearch.addEventListener("keydown", (event) => {
   if (event.key === "Enter") loadCustomers();
 });
@@ -592,14 +897,30 @@ viewButtons.forEach((button) => {
 
 document.addEventListener("click", (event) => {
   const customerButton = event.target.closest("[data-open-customer]");
+  const previewButton = event.target.closest("[data-preview-customer]");
   const planButton = event.target.closest("[data-open-plan]");
   const deleteButton = event.target.closest("[data-delete-customer]");
   const cancelButton = event.target.closest("[data-cancel-subscription]");
+  const newCustomerButton = event.target.closest("[data-new-customer]");
+  const dynamicViewButton = event.target.closest("[data-view-button]");
+  const collapseButton = event.target.closest("[data-collapse-detail]");
 
+  if (dynamicViewButton && !Array.from(viewButtons).includes(dynamicViewButton)) {
+    activateView(dynamicViewButton.dataset.viewButton);
+  }
   if (customerButton) openCustomer(customerButton.dataset.openCustomer);
+  if (previewButton) {
+    loadCustomerPreview(previewButton.dataset.previewCustomer)
+      .then(() => renderCustomers(customersCache))
+      .catch((error) => setStatus(error.message, "error"));
+  }
   if (planButton) openPlan(planButton.dataset.openPlan);
   if (deleteButton) deleteCustomer(deleteButton.dataset.deleteCustomer).catch((error) => setStatus(error.message, "error"));
   if (cancelButton) cancelSubscription(cancelButton.dataset.cancelSubscription).catch((error) => setStatus(error.message, "error"));
+  if (newCustomerButton) setStatus("Cadastro manual de cliente sera conectado na proxima etapa.");
+  if (collapseButton && customerDetail) {
+    customerDetail.innerHTML = `<div class="empty-detail"><strong>Painel fechado</strong><span>Escolha outro cliente na tabela para reabrir os detalhes.</span></div>`;
+  }
 });
 
 document.addEventListener("submit", (event) => {
@@ -635,7 +956,7 @@ closeDrawerButtons.forEach((button) => button.addEventListener("click", closeDra
     await apiRequest("/api/admin/auth/me");
     showDashboard();
     await loadPlans();
-    activateView("overview");
+    activateView("customers");
   } catch {
     clearToken();
     showLogin();

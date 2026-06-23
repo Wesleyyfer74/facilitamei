@@ -1,5 +1,6 @@
 import express from "express";
 import cors from "cors";
+import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
 import { fileURLToPath } from "node:url";
@@ -84,6 +85,13 @@ app.use(
   }),
 );
 app.use(express.json());
+app.use((error, _request, response, next) => {
+  if (error instanceof SyntaxError && "body" in error) {
+    return response.status(400).json({ error: "JSON invalido no corpo da requisicao." });
+  }
+
+  return next(error);
+});
 app.use((request, response, next) => {
   const blockedPattern =
     /^\/(?:\.env|package(?:-lock)?\.json|server\.js|backend\.log|DEPLOYMENT\.md)$/i;
@@ -298,6 +306,19 @@ function requireAdminKey(request, response, next) {
   return next();
 }
 
+app.get("/api/admin/env-check", requireAdminKey, (_request, response) => {
+  response.json({
+    adminEmailConfigured: Boolean(process.env.ADMIN_EMAIL),
+    adminPasswordConfigured: Boolean(process.env.ADMIN_PASSWORD),
+    adminPasswordLength: String(process.env.ADMIN_PASSWORD || "").length,
+    adminApiKeyConfigured: Boolean(process.env.ADMIN_API_KEY),
+    nodeEnv: process.env.NODE_ENV || "",
+    railwayPublicDomainConfigured: Boolean(process.env.RAILWAY_PUBLIC_DOMAIN),
+    apiPublicUrl,
+    frontendUrl,
+  });
+});
+
 function requireAdminSession(request, response, next) {
   deleteExpiredAdminSessions();
 
@@ -340,6 +361,18 @@ app.get("/api/config", (_request, response) => {
   response.json({
     mercadoPagoPublicKey: safePublicKey,
     publicKey: safePublicKey,
+  });
+});
+
+app.get("/api/nfse/certificado/arquivo", (_request, response) => {
+  const certificatePath = process.env.NFSE_CERTIFICADO_A1_PATH || "";
+  const resolvedCertificatePath = path.resolve(__dirname, certificatePath);
+  const arquivoExiste = fs.existsSync(resolvedCertificatePath);
+
+  response.json({
+    ok: arquivoExiste,
+    path: certificatePath,
+    arquivoExiste,
   });
 });
 
@@ -512,8 +545,23 @@ app.get("/api/admin/customers/:id", requireAdminSession, async (request, respons
       ),
     ]);
 
+    let documents = [];
+    try {
+      [documents] = await dbPool.execute(
+        `SELECT id, user_id, titulo, tipo, status, arquivo_url, observacao, data_emissao, data_assinatura, created_at, updated_at
+         FROM customer_documents
+         WHERE user_id = :userId
+         ORDER BY created_at DESC
+         LIMIT 80`,
+        { userId },
+      );
+    } catch (documentsError) {
+      if (documentsError.code !== "ER_NO_SUCH_TABLE") throw documentsError;
+      console.warn("Tabela customer_documents ainda nao existe. Retornando documentos vazios.");
+    }
+
     if (!users[0]) return response.status(404).json({ error: "Cliente nao encontrado." });
-    response.json({ customer: users[0], subscriptions, payments });
+    response.json({ customer: users[0], subscriptions, payments, documents });
   } catch (error) {
     console.error(error);
     response.status(500).json({ error: "Erro ao carregar cliente." });
@@ -560,6 +608,7 @@ app.delete("/api/admin/customers/:id", requireAdminSession, async (request, resp
     const userId = Number(request.params.id);
 
     await connection.beginTransaction();
+    await connection.execute("DELETE FROM customer_documents WHERE user_id = :userId", { userId });
     await connection.execute("DELETE FROM payments WHERE user_id = :userId", { userId });
     await connection.execute("DELETE FROM subscriptions WHERE user_id = :userId", { userId });
     await connection.execute("DELETE FROM users WHERE id = :userId", { userId });
@@ -1810,8 +1859,8 @@ app.get("/", (_request, response) => {
   response.sendFile(path.join(__dirname, "index.html"));
 });
 
-app.get("/areaadmin", (_request, response) => {
-  response.sendFile(path.join(__dirname, "admin", "index.html"));
+app.get(["/areaadmin", "/areaadmin/"], (_request, response) => {
+  response.sendFile(path.join(__dirname, "areaadmin", "index.html"));
 });
 
 app.get(["/inicio", "/servicos", "/planos", "/checkout", "/atendimento"], (_request, response) => {

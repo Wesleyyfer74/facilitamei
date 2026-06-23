@@ -43,6 +43,59 @@ const planButtons = document.querySelectorAll("[data-plan-id]");
 const planCards = document.querySelectorAll(".plan-card");
 const plansSection = document.querySelector(".plans");
 const heroParticlesCanvas = document.querySelector("[data-hero-particles]");
+const pageLoader = document.querySelector("[data-page-loader]");
+
+const loaderStartedAt = performance.now();
+
+function preloadImage(src) {
+  return new Promise((resolve) => {
+    const image = new Image();
+    image.onload = resolve;
+    image.onerror = resolve;
+    image.src = src;
+  });
+}
+
+function hidePageLoader() {
+  if (!pageLoader || pageLoader.classList.contains("is-hidden")) return;
+
+  const elapsed = performance.now() - loaderStartedAt;
+  const remaining = Math.max(0, 4000 - elapsed);
+
+  window.setTimeout(() => {
+    document.querySelector("#inicio")?.scrollIntoView({ behavior: "auto", block: "start" });
+    pageLoader.classList.add("is-hidden");
+    document.body.classList.remove("has-page-loader");
+    window.setTimeout(() => pageLoader.remove(), 650);
+  }, remaining);
+}
+
+const loaderAssetsReady = Promise.all([
+  preloadImage("./assets/fundo.png"),
+  preloadImage("./assets/logo.png"),
+  preloadImage("./assets/cadeado.png"),
+  preloadImage("./assets/queroser.png"),
+  preloadImage("./assets/soumei.png"),
+]);
+
+window.addEventListener("load", () => {
+  loaderAssetsReady.finally(hidePageLoader);
+}, { once: true });
+
+window.addEventListener("beforeunload", () => {
+  if (!pageLoader) return;
+  pageLoader.classList.remove("is-hidden");
+  document.body.classList.add("has-page-loader");
+});
+
+window.addEventListener("pageshow", (event) => {
+  if (event.persisted) {
+    document.body.classList.remove("has-page-loader");
+    pageLoader?.classList.add("is-hidden");
+  }
+});
+
+window.setTimeout(hidePageLoader, 6000);
 
 const isLocalFile = window.location.protocol === "file:";
 const isLocalHost = ["localhost", "127.0.0.1"].includes(window.location.hostname);
@@ -653,6 +706,21 @@ const meiWizardSteps = [
     ],
   },
   {
+    title: "Qual faturamento previsto MENSAL?",
+    description: "Essa informacao ajuda a orientar o melhor enquadramento para o seu MEI.",
+    name: "faturamento_mensal",
+    type: "options",
+    layout: "list",
+    required: true,
+    button: "Continuar",
+    options: [
+      { label: "Até R$ 2.000", icon: "" },
+      { label: "Até R$ 5.000", icon: "" },
+      { label: "Até R$ 10.000", icon: "" },
+      { label: "Acima de R$ 10.000", icon: "" },
+    ],
+  },
+  {
     title: "Agora, seus dados para comecarmos",
     description: "Preencha seus dados para recebermos seu cadastro e entrarmos em contato.",
     fields: [
@@ -868,6 +936,7 @@ function sendMeiWizard() {
     `Vai emitir nota fiscal: ${meiWizardAnswers.emite_nf || "-"}`,
     `Vai possuir funcionario: ${meiWizardAnswers.possui_funcionario || "-"}`,
     `Suporte mensal: ${meiWizardAnswers.suporte_mensal || "-"}`,
+    `Faturamento previsto mensal: ${meiWizardAnswers.faturamento_mensal || "-"}`,
     "",
     `Plano indicado pelo sistema: ${recommendedPlan}`,
   ].join("\n");

@@ -1,0 +1,331 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Área Admin | Facilita MEI</title>
+    <meta name="robots" content="noindex, nofollow" />
+    <link rel="icon" type="image/png" href="../assets/logopequeno.png?v=20260615" />
+    <link rel="apple-touch-icon" href="../assets/logopequeno.png?v=20260615" />
+    <link rel="stylesheet" href="../admin/admin.css?v=20260623-clientes-page" />
+  </head>
+  <body>
+    <main class="admin-shell">
+      <section class="login-view" data-login-view>
+        <form class="login-card" method="post" action="" data-login-form>
+          <img src="../assets/logo.png" alt="Facilita MEI" />
+          <p class="eyebrow">Acesso restrito</p>
+          <h1>Área administrativa</h1>
+          <label>
+            E-mail
+            <input name="email" type="email" autocomplete="username" required />
+          </label>
+          <label>
+            Senha
+            <input name="password" type="password" autocomplete="current-password" required />
+          </label>
+          <button class="gold-button" type="submit">Entrar no painel</button>
+          <p class="status-message" data-login-status></p>
+        </form>
+      </section>
+
+      <section class="dashboard-view" data-dashboard-view hidden>
+        <aside class="sidebar">
+          <img src="../assets/logo.png" alt="Facilita MEI" />
+          <nav>
+            <button class="nav-item" type="button" data-view-button="overview"><span>⌂</span>Dashboard</button>
+            <button class="nav-item is-active" type="button" data-view-button="customers"><span>●</span>Clientes</button>
+            <button class="nav-item" type="button" data-view-button="plans"><span>▣</span>Planos</button>
+            <button class="nav-item" type="button" data-view-button="payments"><span>▤</span>Pagamentos</button>
+            <button class="nav-item" type="button" data-view-button="contracts"><span>▧</span>Contratos</button>
+            <button class="nav-item" type="button" data-view-button="reports"><span>▥</span>Relatórios</button>
+            <button class="nav-item" type="button" data-view-button="settings"><span>⚙</span>Configurações</button>
+          </nav>
+          <button class="ghost-button" type="button" data-logout>Sair</button>
+        </aside>
+
+        <section class="admin-main">
+          <header class="admin-topbar">
+            <div class="topbar-left">
+              <button class="icon-button" type="button" aria-label="Abrir menu">☰</button>
+              <div>
+                <p class="eyebrow">Controle Facilita MEI</p>
+                <h2 data-view-title>Clientes</h2>
+              </div>
+            </div>
+            <div class="topbar-actions">
+              <button class="ghost-button compact topbar-refresh" type="button" data-refresh>↻ Atualizar</button>
+              <button class="ghost-button compact" type="button">▣ Este mês</button>
+              <button class="icon-button has-badge" type="button" aria-label="Notificações">⌁<span>3</span></button>
+              <button class="admin-user" type="button">
+                <span>FA</span>
+                <strong>Facilita Adm<small>Administrador</small></strong>
+              </button>
+            </div>
+          </header>
+
+          <div class="status-message admin-status" data-admin-status></div>
+
+          <section class="view-panel" data-view="overview">
+            <div class="admin-command-grid">
+              <section class="admin-screen admin-map-screen">
+                <div class="screen-title">
+                  <span>1/6</span>
+                  <div>
+                    <h3>Mapa Geral</h3>
+                    <p>Estrutura completa do painel administrativo</p>
+                  </div>
+                </div>
+                <div class="admin-map-board">
+                  <div class="admin-map-side">
+                    <button class="admin-map-card" type="button" data-view-button="overview">
+                      <span aria-hidden="true">&#8962;</span>
+                      <strong>Dashboard</strong>
+                      <small>Visão geral do seu negócio</small>
+                    </button>
+                    <button class="admin-map-card" type="button" data-view-button="customers">
+                      <span aria-hidden="true">&#9679;</span>
+                      <strong>Clientes</strong>
+                      <small>Gerencie seus clientes</small>
+                    </button>
+                    <button class="admin-map-card" type="button" data-view-button="plans">
+                      <span aria-hidden="true">&#9648;</span>
+                      <strong>Planos</strong>
+                      <small>Planos e assinaturas</small>
+                    </button>
+                  </div>
+                  <div class="admin-map-center">
+                    <img src="../assets/logopequeno.png" alt="" />
+                    <strong>facilita</strong>
+                    <span>MEI</span>
+                  </div>
+                  <div class="admin-map-side">
+                    <button class="admin-map-card" type="button" data-view-button="payments">
+                      <span aria-hidden="true">$</span>
+                      <strong>Pagamentos</strong>
+                      <small>Histórico de pagamentos</small>
+                    </button>
+                    <button class="admin-map-card is-muted" type="button">
+                      <span aria-hidden="true">&#9635;</span>
+                      <strong>Contratos</strong>
+                      <small>Contratos e assinaturas</small>
+                    </button>
+                    <button class="admin-map-card is-muted" type="button">
+                      <span aria-hidden="true">&#9646;</span>
+                      <strong>Relatórios</strong>
+                      <small>Exportações e relatórios</small>
+                    </button>
+                  </div>
+                  <button class="admin-map-card admin-map-settings is-muted" type="button">
+                    <span aria-hidden="true">&#9881;</span>
+                    <strong>Configurações</strong>
+                    <small>Ajustes e integrações do sistema</small>
+                  </button>
+                </div>
+                <div class="admin-map-footer">Simples • Eficiente • Completo</div>
+              </section>
+
+              <section class="admin-screen">
+                <div class="screen-title">
+                  <span>2/6</span>
+                  <div>
+                    <h3>Dashboard</h3>
+                    <p>Visão geral do negócio</p>
+                  </div>
+                </div>
+                <div class="admin-kpi-grid" data-hub-metrics></div>
+                <div class="admin-mini-columns">
+                  <article>
+                    <h4>Últimos clientes</h4>
+                    <div data-hub-latest-customers></div>
+                  </article>
+                  <article>
+                    <h4>Últimos pagamentos</h4>
+                    <div data-hub-latest-payments></div>
+                  </article>
+                </div>
+              </section>
+
+              <section class="admin-screen">
+                <div class="screen-title">
+                  <span>3/6</span>
+                  <div>
+                    <h3>Clientes</h3>
+                    <p>Gerencie todos os clientes</p>
+                  </div>
+                </div>
+                <div class="admin-data-list" data-hub-customers></div>
+              </section>
+
+              <section class="admin-screen">
+                <div class="screen-title">
+                  <span>4/6</span>
+                  <div>
+                    <h3>Planos</h3>
+                    <p>Gerencie planos e assinaturas</p>
+                  </div>
+                </div>
+                <div class="admin-data-list" data-hub-plans></div>
+              </section>
+
+              <section class="admin-screen">
+                <div class="screen-title">
+                  <span>5/6</span>
+                  <div>
+                    <h3>Pagamentos</h3>
+                    <p>Histórico de pagamentos e assinaturas</p>
+                  </div>
+                </div>
+                <div class="admin-data-list" data-hub-payments></div>
+              </section>
+
+              <section class="admin-screen admin-tools-screen">
+                <div class="screen-title">
+                  <span>6/6</span>
+                  <div>
+                    <h3>Contratos, Relatórios e Configurações</h3>
+                    <p>Controle operacional do sistema</p>
+                  </div>
+                </div>
+                <div class="admin-tools-grid">
+                  <article>
+                    <h4>Contratos</h4>
+                    <p>Contratos e assinaturas conectados aos clientes.</p>
+                    <button class="ghost-button compact" type="button" data-view-button="customers">Ver clientes</button>
+                  </article>
+                  <article>
+                    <h4>Relatórios</h4>
+                    <p>Exportações e relatórios serão conectados nesta área.</p>
+                    <button class="ghost-button compact" type="button" data-view-button="payments">Ver pagamentos</button>
+                  </article>
+                  <article>
+                    <h4>Configurações</h4>
+                    <p>Mercado Pago, WhatsApp, e-mail e dados da empresa.</p>
+                    <button class="ghost-button compact" type="button" data-view-button="plans">Ver planos</button>
+                  </article>
+                </div>
+              </section>
+            </div>
+            <div class="metric-grid admin-legacy-metrics" data-metrics></div>
+            <div class="split-grid admin-legacy-lists">
+              <article class="panel">
+                <h3>Clientes recentes</h3>
+                <div class="compact-list" data-latest-customers></div>
+              </article>
+              <article class="panel">
+                <h3>Pagamentos recentes</h3>
+                <div class="compact-list" data-latest-payments></div>
+              </article>
+            </div>
+          </section>
+
+          <section class="view-panel is-active" data-view="customers">
+            <div class="admin-page-heading">
+              <div>
+                <h1>Clientes</h1>
+                <p>Gerencie todos os clientes da sua empresa</p>
+              </div>
+            </div>
+
+            <div class="customer-controls">
+              <label class="search-field">
+                <span>⌕</span>
+                <input data-customer-search placeholder="Buscar por nome, CPF, CNPJ, e-mail ou telefone..." />
+              </label>
+              <select data-customer-status>
+                <option value="">Todos os status</option>
+                <option value="pending">Pendente</option>
+                <option value="active">Ativo</option>
+                <option value="blocked">Bloqueado</option>
+                <option value="cancelled">Cancelado</option>
+              </select>
+              <select data-customer-plan>
+                <option value="">Todos os planos</option>
+              </select>
+              <button class="gold-button compact" type="button" data-new-customer>+ Novo Cliente</button>
+              <button class="ghost-button compact" type="button" data-search-customers>Buscar</button>
+            </div>
+
+            <div class="table-wrap customers-table-card">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Cliente</th>
+                    <th>Plano</th>
+                    <th>Status</th>
+                    <th>Próximo vencimento</th>
+                    <th>Data cadastro</th>
+                    <th>Ações</th>
+                  </tr>
+                </thead>
+                <tbody data-customers-table></tbody>
+              </table>
+            </div>
+
+            <section class="customer-detail-panel" data-customer-detail>
+              <div class="empty-detail">
+                <strong>Selecione um cliente</strong>
+                <span>Use o olho na tabela para carregar os detalhes administrativos.</span>
+              </div>
+            </section>
+          </section>
+
+          <section class="view-panel" data-view="plans">
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Plano</th>
+                    <th>Valor</th>
+                    <th>Cobrança</th>
+                    <th>Mercado Pago</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody data-plans-table></tbody>
+              </table>
+            </div>
+          </section>
+
+          <section class="view-panel" data-view="payments">
+            <div class="toolbar">
+              <select data-payment-status>
+                <option value="">Todos pagamentos</option>
+                <option value="approved">Aprovados</option>
+                <option value="pending">Pendentes</option>
+                <option value="rejected">Recusados</option>
+                <option value="cancelled">Cancelados</option>
+              </select>
+              <button class="gold-button compact" type="button" data-filter-payments>Filtrar</button>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Cliente</th>
+                    <th>Valor</th>
+                    <th>Status</th>
+                    <th>Data</th>
+                    <th>ID Mercado Pago</th>
+                  </tr>
+                </thead>
+                <tbody data-payments-table></tbody>
+              </table>
+            </div>
+          </section>
+        </section>
+      </section>
+    </main>
+
+    <div class="drawer" data-drawer hidden>
+      <div class="drawer-backdrop" data-close-drawer></div>
+      <aside class="drawer-panel">
+        <button class="drawer-close" type="button" data-close-drawer>&times;</button>
+        <div data-drawer-content></div>
+      </aside>
+    </div>
+
+    <script src="../config.js?v=20260606-railway"></script>
+    <script src="../admin/admin.js?v=20260623-clientes-page"></script>
+  </body>
+</html>
