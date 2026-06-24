@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Area Admin | Facilita MEI</title>
     <meta name="robots" content="noindex, nofollow" />
-    <link rel="stylesheet" href="./admin.css?v=20260623-clientes-page" />
+    <link rel="stylesheet" href="./admin.css?v=20260624-icons-fix" />
   </head>
   <body>
     <main class="admin-shell">
@@ -31,13 +31,13 @@
         <aside class="sidebar">
           <img src="../assets/logo.png" alt="Facilita MEI" />
           <nav>
-            <button class="nav-item" type="button" data-view-button="overview"><span>⌂</span>Dashboard</button>
-            <button class="nav-item is-active" type="button" data-view-button="customers"><span>●</span>Clientes</button>
-            <button class="nav-item" type="button" data-view-button="plans"><span>▣</span>Planos</button>
-            <button class="nav-item" type="button" data-view-button="payments"><span>▤</span>Pagamentos</button>
-            <button class="nav-item" type="button" data-view-button="contracts"><span>▧</span>Contratos</button>
-            <button class="nav-item" type="button" data-view-button="reports"><span>▥</span>Relatórios</button>
-            <button class="nav-item" type="button" data-view-button="settings"><span>⚙</span>Configurações</button>
+            <button class="nav-item" type="button" data-view-button="overview"><span class="admin-line-icon icon-home"></span>Dashboard</button>
+            <button class="nav-item is-active" type="button" data-view-button="customers"><span class="admin-line-icon icon-users"></span>Clientes</button>
+            <button class="nav-item" type="button" data-view-button="plans"><span class="admin-line-icon icon-plan"></span>Planos</button>
+            <button class="nav-item" type="button" data-view-button="payments"><span class="admin-line-icon icon-card"></span>Pagamentos</button>
+            <button class="nav-item" type="button" data-view-button="contracts"><span class="admin-line-icon icon-contract"></span>Contratos</button>
+            <button class="nav-item" type="button" data-view-button="reports"><span class="admin-line-icon icon-chart"></span>Relatorios</button>
+            <button class="nav-item" type="button" data-view-button="settings"><span class="admin-line-icon icon-settings"></span>Configuracoes</button>
           </nav>
           <button class="ghost-button" type="button" data-logout>Sair</button>
         </aside>
@@ -45,16 +45,14 @@
         <section class="admin-main">
           <header class="admin-topbar">
             <div class="topbar-left">
-              <button class="icon-button" type="button" aria-label="Abrir menu">☰</button>
+              <button class="icon-button" type="button" aria-label="Abrir menu"><span class="admin-line-icon icon-menu"></span></button>
               <div>
                 <p class="eyebrow">Controle Facilita MEI</p>
-                <h2 data-view-title>Clientes</h2>
+                <h2 data-view-title>Dashboard</h2>
               </div>
             </div>
             <div class="topbar-actions">
-              <button class="ghost-button compact topbar-refresh" type="button" data-refresh>↻ Atualizar</button>
-              <button class="ghost-button compact" type="button">▣ Este mês</button>
-              <button class="icon-button has-badge" type="button" aria-label="Notificações">⌁<span>3</span></button>
+              <button class="icon-button has-badge" type="button" aria-label="Notificacoes"><span class="admin-line-icon icon-bell"></span><span>3</span></button>
               <button class="admin-user" type="button">
                 <span>FA</span>
                 <strong>Facilita Adm<small>Administrador</small></strong>
@@ -64,7 +62,55 @@
 
           <div class="status-message admin-status" data-admin-status></div>
 
-          <section class="view-panel" data-view="overview">
+          <section class="view-panel is-active" data-view="overview">
+            <div class="admin-page-heading dashboard-heading">
+              <div>
+                <h1>Dashboard</h1>
+                <p>Visao geral do seu negocio</p>
+              </div>
+            </div>
+
+            <div class="dashboard-kpi-grid" data-dashboard-kpis></div>
+
+            <div class="dashboard-table-grid">
+              <article class="dashboard-card">
+                <div class="dashboard-card-header">
+                  <h3>Ultimos Clientes</h3>
+                  <button class="ghost-button compact" type="button" data-view-button="customers">Ver todos</button>
+                </div>
+                <div class="dashboard-table-wrap">
+                  <table class="dashboard-table">
+                    <thead>
+                      <tr><th>Cliente</th><th>Plano</th><th>Cadastro</th></tr>
+                    </thead>
+                    <tbody data-dashboard-customers></tbody>
+                  </table>
+                </div>
+              </article>
+
+              <article class="dashboard-card">
+                <div class="dashboard-card-header">
+                  <h3>Ultimos Pagamentos</h3>
+                  <button class="ghost-button compact" type="button" data-view-button="payments">Ver todos</button>
+                </div>
+                <div class="dashboard-table-wrap">
+                  <table class="dashboard-table">
+                    <thead>
+                      <tr><th>Cliente</th><th>Plano</th><th>Valor</th><th>Status</th></tr>
+                    </thead>
+                    <tbody data-dashboard-payments></tbody>
+                  </table>
+                </div>
+              </article>
+            </div>
+
+            <article class="dashboard-card dashboard-financial-card">
+              <div class="dashboard-card-header">
+                <h3>Resumo Financeiro</h3>
+              </div>
+              <div class="dashboard-financial-grid" data-dashboard-financial></div>
+            </article>
+
             <div class="admin-command-grid">
               <section class="admin-screen admin-map-screen">
                 <div class="screen-title">
@@ -77,17 +123,17 @@
                 <div class="admin-map-board">
                   <div class="admin-map-side">
                     <button class="admin-map-card" type="button" data-view-button="overview">
-                      <span aria-hidden="true">&#8962;</span>
+                      <span class="admin-line-icon icon-home" aria-hidden="true"></span>
                       <strong>Dashboard</strong>
-                      <small>Visão geral do seu negócio</small>
+                      <small>Visao geral do seu negocio</small>
                     </button>
                     <button class="admin-map-card" type="button" data-view-button="customers">
-                      <span aria-hidden="true">&#9679;</span>
+                      <span class="admin-line-icon icon-users" aria-hidden="true"></span>
                       <strong>Clientes</strong>
                       <small>Gerencie seus clientes</small>
                     </button>
                     <button class="admin-map-card" type="button" data-view-button="plans">
-                      <span aria-hidden="true">&#9648;</span>
+                      <span class="admin-line-icon icon-plan" aria-hidden="true"></span>
                       <strong>Planos</strong>
                       <small>Planos e assinaturas</small>
                     </button>
@@ -99,28 +145,28 @@
                   </div>
                   <div class="admin-map-side">
                     <button class="admin-map-card" type="button" data-view-button="payments">
-                      <span aria-hidden="true">$</span>
+                      <span class="admin-line-icon icon-card" aria-hidden="true"></span>
                       <strong>Pagamentos</strong>
-                      <small>Histórico de pagamentos</small>
+                      <small>Historico de pagamentos</small>
                     </button>
                     <button class="admin-map-card is-muted" type="button">
-                      <span aria-hidden="true">&#9635;</span>
+                      <span class="admin-line-icon icon-contract" aria-hidden="true"></span>
                       <strong>Contratos</strong>
                       <small>Contratos e assinaturas</small>
                     </button>
                     <button class="admin-map-card is-muted" type="button">
-                      <span aria-hidden="true">&#9646;</span>
-                      <strong>Relatórios</strong>
-                      <small>Exportações e relatórios</small>
+                      <span class="admin-line-icon icon-chart" aria-hidden="true"></span>
+                      <strong>Relatorios</strong>
+                      <small>Exportacoes e relatorios</small>
                     </button>
                   </div>
                   <button class="admin-map-card admin-map-settings is-muted" type="button">
-                    <span aria-hidden="true">&#9881;</span>
-                    <strong>Configurações</strong>
-                    <small>Ajustes e integrações do sistema</small>
+                    <span class="admin-line-icon icon-settings" aria-hidden="true"></span>
+                    <strong>Configuracoes</strong>
+                    <small>Ajustes e integracoes do sistema</small>
                   </button>
                 </div>
-                <div class="admin-map-footer">Simples • Eficiente • Completo</div>
+                <div class="admin-map-footer">Simples &bull; Eficiente &bull; Completo</div>
               </section>
 
               <section class="admin-screen">
@@ -128,17 +174,17 @@
                   <span>2/6</span>
                   <div>
                     <h3>Dashboard</h3>
-                    <p>Visão geral do negócio</p>
+                    <p>Visao geral do negocio</p>
                   </div>
                 </div>
                 <div class="admin-kpi-grid" data-hub-metrics></div>
                 <div class="admin-mini-columns">
                   <article>
-                    <h4>Últimos clientes</h4>
+                    <h4>Ultimos clientes</h4>
                     <div data-hub-latest-customers></div>
                   </article>
                   <article>
-                    <h4>Últimos pagamentos</h4>
+                    <h4>Ultimos pagamentos</h4>
                     <div data-hub-latest-payments></div>
                   </article>
                 </div>
@@ -171,7 +217,7 @@
                   <span>5/6</span>
                   <div>
                     <h3>Pagamentos</h3>
-                    <p>Histórico de pagamentos e assinaturas</p>
+                    <p>Historico de pagamentos e assinaturas</p>
                   </div>
                 </div>
                 <div class="admin-data-list" data-hub-payments></div>
@@ -181,7 +227,7 @@
                 <div class="screen-title">
                   <span>6/6</span>
                   <div>
-                    <h3>Contratos, Relatórios e Configurações</h3>
+                    <h3>Contratos, Relatorios e Configuracoes</h3>
                     <p>Controle operacional do sistema</p>
                   </div>
                 </div>
@@ -192,12 +238,12 @@
                     <button class="ghost-button compact" type="button" data-view-button="customers">Ver clientes</button>
                   </article>
                   <article>
-                    <h4>Relatórios</h4>
-                    <p>Exportações e relatórios serão conectados nesta área.</p>
+                    <h4>Relatorios</h4>
+                    <p>Exportacoes e relatorios serao conectados nesta area.</p>
                     <button class="ghost-button compact" type="button" data-view-button="payments">Ver pagamentos</button>
                   </article>
                   <article>
-                    <h4>Configurações</h4>
+                    <h4>Configuracoes</h4>
                     <p>Mercado Pago, WhatsApp, e-mail e dados da empresa.</p>
                     <button class="ghost-button compact" type="button" data-view-button="plans">Ver planos</button>
                   </article>
@@ -217,7 +263,7 @@
             </div>
           </section>
 
-          <section class="view-panel is-active" data-view="customers">
+          <section class="view-panel" data-view="customers">
             <div class="admin-page-heading">
               <div>
                 <h1>Clientes</h1>
@@ -227,7 +273,7 @@
 
             <div class="customer-controls">
               <label class="search-field">
-                <span>⌕</span>
+                <span>&#8981;</span>
                 <input data-customer-search placeholder="Buscar por nome, CPF, CNPJ, e-mail ou telefone..." />
               </label>
               <select data-customer-status>
@@ -251,9 +297,9 @@
                     <th>Cliente</th>
                     <th>Plano</th>
                     <th>Status</th>
-                    <th>Próximo vencimento</th>
+                    <th>Proximo vencimento</th>
                     <th>Data cadastro</th>
-                    <th>Ações</th>
+                    <th>Acoes</th>
                   </tr>
                 </thead>
                 <tbody data-customers-table></tbody>
@@ -269,20 +315,35 @@
           </section>
 
           <section class="view-panel" data-view="plans">
-            <div class="table-wrap">
-              <table>
+            <div class="admin-page-heading plans-page-heading">
+              <div>
+                <h1>Planos</h1>
+                <p>Gerencie os planos e assinaturas da sua empresa</p>
+              </div>
+              <button class="gold-button compact" type="button" data-new-plan>+ Novo Plano</button>
+            </div>
+
+            <div class="table-wrap plans-table-card">
+              <table class="plans-table">
                 <thead>
                   <tr>
                     <th>Plano</th>
                     <th>Valor</th>
-                    <th>Cobranca</th>
-                    <th>Mercado Pago</th>
-                    <th></th>
+                    <th>Clientes</th>
+                    <th>Status</th>
+                    <th>Acoes</th>
                   </tr>
                 </thead>
                 <tbody data-plans-table></tbody>
               </table>
             </div>
+
+            <section class="plan-detail-panel" data-plan-detail>
+              <div class="empty-detail">
+                <strong>Selecione um plano</strong>
+                <span>Clique em um plano da tabela para ver configuracoes e resumo.</span>
+              </div>
+            </section>
           </section>
 
           <section class="view-panel" data-view="payments">
@@ -325,6 +386,6 @@
     </div>
 
     <script src="../config.js?v=20260606-railway"></script>
-    <script src="./admin.js?v=20260623-clientes-page"></script>
+    <script src="./admin.js?v=20260624-icons-fix"></script>
   </body>
 </html>

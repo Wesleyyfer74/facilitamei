@@ -9,6 +9,10 @@ const viewPanels = document.querySelectorAll("[data-view]");
 const metrics = document.querySelector("[data-metrics]");
 const latestCustomers = document.querySelector("[data-latest-customers]");
 const latestPayments = document.querySelector("[data-latest-payments]");
+const dashboardKpis = document.querySelector("[data-dashboard-kpis]");
+const dashboardCustomers = document.querySelector("[data-dashboard-customers]");
+const dashboardPayments = document.querySelector("[data-dashboard-payments]");
+const dashboardFinancial = document.querySelector("[data-dashboard-financial]");
 const hubMetrics = document.querySelector("[data-hub-metrics]");
 const hubLatestCustomers = document.querySelector("[data-hub-latest-customers]");
 const hubLatestPayments = document.querySelector("[data-hub-latest-payments]");
@@ -18,6 +22,7 @@ const hubPayments = document.querySelector("[data-hub-payments]");
 const customersTable = document.querySelector("[data-customers-table]");
 const customerDetail = document.querySelector("[data-customer-detail]");
 const plansTable = document.querySelector("[data-plans-table]");
+const planDetail = document.querySelector("[data-plan-detail]");
 const paymentsTable = document.querySelector("[data-payments-table]");
 const customerSearch = document.querySelector("[data-customer-search]");
 const customerStatus = document.querySelector("[data-customer-status]");
@@ -45,10 +50,11 @@ if (window.location.search) {
   window.history.replaceState(null, "", window.location.pathname);
 }
 
-let currentView = "customers";
+let currentView = "overview";
 let plansCache = [];
 let customersCache = [];
 let selectedCustomerId = null;
+let selectedPlanId = null;
 
 function getToken() {
   return localStorage.getItem(SESSION_KEY) || "";
@@ -76,6 +82,16 @@ function formatDateOnly(value) {
   return new Date(value).toLocaleDateString("pt-BR");
 }
 
+function relativeDate(value) {
+  if (!value) return "-";
+  const date = new Date(value);
+  const now = new Date();
+  const diffDays = Math.floor((now - date) / 86400000);
+  if (diffDays <= 0) return "Hoje";
+  if (diffDays === 1) return "Ontem";
+  return `${diffDays} dias atras`;
+}
+
 function escapeHtml(value = "") {
   return String(value)
     .replaceAll("&", "&amp;")
@@ -83,6 +99,32 @@ function escapeHtml(value = "") {
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#039;");
+}
+
+function iconSvg(name, className = "admin-svg-icon") {
+  const paths = {
+    home: '<path d="M4 11.5 12 5l8 6.5v7a1 1 0 0 1-1 1h-5v-5h-4v5H5a1 1 0 0 1-1-1z"/>',
+    users: '<path d="M16 18c0-2.2-1.8-4-4-4s-4 1.8-4 4"/><circle cx="12" cy="9" r="3"/><path d="M19 18c0-1.6-.9-3-2.2-3.7M17 7.2a2.5 2.5 0 0 1 0 4.6"/>',
+    plan: '<rect x="5" y="4" width="14" height="16" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/>',
+    card: '<rect x="3.5" y="6" width="17" height="12" rx="2"/><path d="M3.5 10h17M7 15h3"/>',
+    contract: '<path d="M7 3h8l4 4v14H7z"/><path d="M15 3v5h4M10 12h6M10 16h6"/>',
+    chart: '<path d="M5 19V11M12 19V5M19 19v-9"/>',
+    settings: '<circle cx="12" cy="12" r="3"/><path d="M19 12a7 7 0 0 0-.1-1l2-1.5-2-3.4-2.4 1a7 7 0 0 0-1.7-1L14.5 3h-5l-.4 3.1a7 7 0 0 0-1.7 1l-2.4-1-2 3.4 2 1.5a7 7 0 0 0 0 2l-2 1.5 2 3.4 2.4-1a7 7 0 0 0 1.7 1l.4 3.1h5l.4-3.1a7 7 0 0 0 1.7-1l2.4 1 2-3.4-2-1.5c.1-.3.1-.7.1-1z"/>',
+    money: '<path d="M12 3v18"/><path d="M16 7.5c-.8-1-2-1.5-3.8-1.5-2 0-3.2.9-3.2 2.2 0 3.6 7.2 1.5 7.2 5.5 0 1.7-1.5 3-4.1 3-1.9 0-3.4-.7-4.2-1.8"/>',
+    pending: '<rect x="4" y="5" width="16" height="14" rx="2"/><path d="M8 9h8M8 13h5"/>',
+    newUser: '<path d="M15 18c0-2.2-1.8-4-4-4s-4 1.8-4 4"/><circle cx="11" cy="9" r="3"/><path d="M18 8v6M15 11h6"/>',
+    cube: '<path d="m12 3 8 4.5v9L12 21l-8-4.5v-9z"/><path d="M4 7.5 12 12l8-4.5M12 21v-9"/>',
+    ticket: '<path d="M5 7h14v4a2 2 0 0 0 0 4v4H5v-4a2 2 0 0 0 0-4z"/><path d="M12 8v8"/>',
+    growth: '<path d="M4 17 9 12l4 4 7-8"/><path d="M15 8h5v5"/>',
+    renew: '<path d="M20 7v5h-5"/><path d="M19 12a7 7 0 1 1-2-5"/>',
+    swap: '<path d="M7 7h11l-3-3"/><path d="M18 7l-3 3"/><path d="M17 17H6l3 3"/><path d="M6 17l3-3"/>',
+    cancel: '<circle cx="12" cy="12" r="8"/><path d="m8.5 8.5 7 7M15.5 8.5l-7 7"/>',
+    edit: '<path d="M4 20h4l10.5-10.5a2.1 2.1 0 0 0-3-3L5 17z"/><path d="m13.5 8.5 2 2"/>',
+    eye: '<path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6z"/><circle cx="12" cy="12" r="3"/>',
+    whatsapp: '<path d="M12 4a8 8 0 0 0-6.8 12.2L4 20l4-1.1A8 8 0 1 0 12 4z"/><path d="M9.2 8.8c.2-.5.4-.5.7-.5h.5c.2 0 .4.1.5.4l.7 1.6c.1.2.1.4-.1.6l-.4.5c-.1.2-.2.3 0 .6.4.8 1.4 1.8 2.2 2.2.3.2.5.1.6 0l.6-.5c.2-.1.4-.2.6-.1l1.5.7c.3.1.4.3.4.6 0 .5-.3 1.2-.7 1.5-.5.4-1.7.5-3.5-.4-2.9-1.4-4.8-4.1-5-5.8-.2-1 .3-1.3.8-1.4z"/>',
+    dots: '<circle cx="5" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="19" cy="12" r="1.7"/>',
+  };
+  return `<svg class="${className}" viewBox="0 0 24 24" aria-hidden="true" focusable="false">${paths[name] || paths.plan}</svg>`;
 }
 
 function setStatus(message = "", type = "info") {
@@ -168,7 +210,21 @@ function activateView(viewName) {
 }
 
 function statusPill(status) {
-  return `<span class="status-pill ${escapeHtml(status || "")}">${escapeHtml(status || "-")}</span>`;
+  const labels = {
+    active: "Ativo",
+    authorized: "Ativo",
+    approved: "Pago",
+    inactive: "Inativo",
+    inativo: "Inativo",
+    ativo: "Ativo",
+    associado: "Associado",
+    pendente: "Pendente",
+    pending: "Pendente",
+  };
+  const key = String(status || "")
+    .trim()
+    .toLowerCase();
+  return `<span class="status-pill ${escapeHtml(key)}">${escapeHtml(labels[key] || status || "-")}</span>`;
 }
 
 function renderMetrics(data) {
@@ -187,6 +243,118 @@ function renderMetrics(data) {
           <strong>${value}</strong>
           <small>${detail}</small>
         </article>
+      `,
+    )
+    .join("");
+}
+
+function renderDashboardHome(data) {
+  if (!dashboardKpis) return;
+
+  const monthlyRevenue = Number(data.payments?.monthlyApprovedAmount || 0);
+  const annualRevenue = monthlyRevenue * 12;
+  const approvedPayments = Number(data.payments?.approved || 0);
+  const totalUsers = Number(data.users?.total || 0);
+  const activeUsers = Number(data.users?.active || 0);
+  const conversionRate = totalUsers ? `${((activeUsers / totalUsers) * 100).toFixed(1).replace(".", ",")}%` : "0%";
+
+  const kpis = [
+    {
+      icon: "users",
+      title: "Clientes Ativos",
+      value: data.users?.active || 0,
+      detail: "Total de clientes ativos",
+      action: "Ver clientes ->",
+      view: "customers",
+    },
+    {
+      icon: "money",
+      title: "Receita Mensal",
+      value: money(monthlyRevenue),
+      detail: "Este mes",
+      action: "Ver relatorios ->",
+      view: "payments",
+    },
+    {
+      icon: "pending",
+      title: "Pagamentos Pendentes",
+      value: data.payments?.pending || 0,
+      detail: "Aguardando pagamento",
+      action: "Ver pagamentos ->",
+      view: "payments",
+    },
+    {
+      icon: "newUser",
+      title: "Novos Clientes (30 dias)",
+      value: data.users?.newLast30 || 0,
+      detail: "Novos cadastros",
+      action: "Ver clientes ->",
+      view: "customers",
+    },
+  ];
+
+  dashboardKpis.innerHTML = kpis
+    .map(
+      (card) => `
+        <article class="dashboard-kpi-card">
+          <span class="dashboard-kpi-icon">${iconSvg(card.icon)}</span>
+          <h3>${escapeHtml(card.title)}</h3>
+          <strong>${escapeHtml(card.value)}</strong>
+          <small>${escapeHtml(card.detail)}</small>
+          <button type="button" data-view-button="${card.view}">${escapeHtml(card.action)}</button>
+        </article>
+      `,
+    )
+    .join("");
+
+  dashboardCustomers.innerHTML = (data.latestCustomers || []).length
+    ? data.latestCustomers
+        .slice(0, 5)
+        .map(
+          (customer) => `
+            <tr>
+              <td>
+                <div class="customer-cell">
+                  <span class="avatar">${escapeHtml(getInitials(customer.nome))}</span>
+                  <strong>${escapeHtml(customer.nome || "Cliente")}</strong>
+                </div>
+              </td>
+              <td>${escapeHtml(customer.plan_name || "Sem plano")}</td>
+              <td>${escapeHtml(relativeDate(customer.created_at))}</td>
+            </tr>
+          `,
+        )
+        .join("")
+    : `<tr><td colspan="3">Nenhum cliente encontrado.</td></tr>`;
+
+  dashboardPayments.innerHTML = (data.latestPayments || []).length
+    ? data.latestPayments
+        .slice(0, 5)
+        .map(
+          (payment) => `
+            <tr>
+              <td>${escapeHtml(payment.user_name || payment.email || "Cliente")}</td>
+              <td>${escapeHtml(payment.plan_name || "-")}</td>
+              <td>${money(payment.valor)}</td>
+              <td>${statusPill(payment.status)}</td>
+            </tr>
+          `,
+        )
+        .join("")
+    : `<tr><td colspan="4">Nenhum pagamento encontrado.</td></tr>`;
+
+  dashboardFinancial.innerHTML = [
+    ["cube", "Receita Anual", money(annualRevenue)],
+    ["ticket", "Ticket Medio", money(data.payments?.averageApprovedAmount)],
+    ["growth", "Taxa de Conversao", conversionRate],
+    ["money", "Clientes Cancelados", data.users?.cancelled || 0],
+  ]
+    .map(
+      ([icon, label, value]) => `
+        <div class="dashboard-financial-item">
+          <span>${iconSvg(icon)}</span>
+          <p>${escapeHtml(label)}<strong>${escapeHtml(value)}</strong></p>
+        </div>
       `,
     )
     .join("");
@@ -311,6 +479,7 @@ function renderCompactPayments(rows = []) {
 async function loadOverview() {
   setStatus("Carregando dashboard...");
   const data = await apiRequest("/api/admin/dashboard");
+  renderDashboardHome(data);
   renderMetrics(data);
   renderAdminCommandCenter(data);
   renderCompactCustomers(data.latestCustomers);
@@ -335,6 +504,15 @@ function getWhatsappLink(customer = {}) {
 function renderCustomerDetailSkeleton(message = "Carregando detalhes do cliente...") {
   if (!customerDetail) return;
   customerDetail.innerHTML = `<div class="empty-detail"><strong>${escapeHtml(message)}</strong><span>Aguarde um instante.</span></div>`;
+}
+
+function emptyText(value, fallback = "Nao cadastrado") {
+  if (value === null || value === undefined || value === "") return fallback;
+  return value;
+}
+
+function renderDetailItem(label, value, className = "") {
+  return `<p class="${className}"><span>${escapeHtml(label)}</span><strong>${escapeHtml(emptyText(value))}</strong></p>`;
 }
 
 function renderCustomerPreview(data) {
@@ -368,7 +546,7 @@ function renderCustomerPreview(data) {
         ${statusPill(document.status || "pendente")}
         ${
           document.arquivo_url
-            ? `<a class="icon-mini-button" href="${escapeHtml(document.arquivo_url)}" target="_blank" rel="noopener" aria-label="Abrir documento">↗</a>`
+            ? `<a class="icon-mini-button" href="${escapeHtml(document.arquivo_url)}" target="_blank" rel="noopener" aria-label="Abrir documento">+</a>`
             : ""
         }
       </div>
@@ -378,7 +556,7 @@ function renderCustomerPreview(data) {
   customerDetail.innerHTML = `
     <div class="detail-header">
       <h3>Detalhes do Cliente</h3>
-      <button class="ghost-button compact" type="button" data-collapse-detail>Fechar ⌃</button>
+      <button class="ghost-button compact" type="button" data-collapse-detail>Fechar ^</button>
     </div>
     <div class="customer-detail-grid">
       <aside class="customer-profile-card">
@@ -395,22 +573,42 @@ function renderCustomerPreview(data) {
       <section class="customer-detail-main">
         <div class="detail-info-grid">
           <div class="detail-lines">
-            <p><span>Plano</span><strong>${escapeHtml(subscription.plan_name || "Sem plano")}</strong></p>
-            <p><span>Status</span><strong>${escapeHtml(subscription.status || customer.status || "-")}</strong></p>
-            <p><span>Data de Cadastro</span><strong>${formatDateOnly(customer.created_at)}</strong></p>
-            <p><span>Proximo Vencimento</span><strong>${formatDateOnly(subscription.data_proxima_cobranca)}</strong></p>
-            <p><span>Mercado Pago</span><strong>${escapeHtml(subscription.mercado_pago_subscription_id || "-")}</strong></p>
-            <p><span>E-mail</span><strong>${escapeHtml(customer.email || "-")}</strong></p>
-            <p><span>Telefone</span><strong>${escapeHtml(customer.telefone || "-")}</strong></p>
+            <h4>Dados do cliente</h4>
+            ${renderDetailItem("ID interno", customer.id)}
+            ${renderDetailItem("Nome", customer.nome)}
+            ${renderDetailItem("E-mail", customer.email)}
+            ${renderDetailItem("Telefone", customer.telefone)}
+            ${renderDetailItem("WhatsApp", customer.whatsapp || customer.telefone)}
+            ${renderDetailItem("Documento", customer.documento)}
+            ${customer.cnpj ? renderDetailItem("CNPJ", customer.cnpj) : ""}
+            ${renderDetailItem("Status do cliente", customer.status)}
+            ${renderDetailItem("Login ativo", Number(customer.cliente_login_ativo) === 0 ? "Nao" : "Sim")}
+            ${renderDetailItem("Cadastro", formatDateOnly(customer.created_at))}
+            ${renderDetailItem("Atualizado em", formatDateOnly(customer.updated_at))}
+
+            <h4>Assinatura</h4>
+            ${renderDetailItem("ID assinatura", subscription.id)}
+            ${renderDetailItem("Plano", subscription.plan_name || "Sem plano")}
+            ${renderDetailItem("Plano ID", subscription.plan_id)}
+            ${renderDetailItem("Status assinatura", subscription.status)}
+            ${renderDetailItem("Valor", subscription.valor ? money(subscription.valor) : "")}
+            ${renderDetailItem("Metodo de pagamento", subscription.metodo_pagamento)}
+            ${renderDetailItem("Inicio", formatDateOnly(subscription.data_inicio))}
+            ${renderDetailItem("Proxima cobranca", formatDateOnly(subscription.data_proxima_cobranca))}
+            ${renderDetailItem("Criada em", formatDateOnly(subscription.created_at))}
+
+            <h4>Gateway</h4>
+            ${renderDetailItem("Mercado Pago", subscription.mercado_pago_subscription_id, "long-value")}
+            ${subscription.init_point ? renderDetailItem("Link checkout", subscription.init_point, "long-value") : ""}
           </div>
 
           <div class="quick-actions-card">
             <h4>Acoes rapidas</h4>
             <div class="quick-actions-grid">
-              <button class="mini-action" type="button" data-open-customer="${customer.id}"><span>↻</span>Renovar Assinatura</button>
-              <button class="mini-action" type="button" data-open-customer="${customer.id}"><span>⇅</span>Trocar Plano</button>
-              <button class="mini-action danger" type="button" ${subscription.id ? `data-cancel-subscription="${subscription.id}"` : "disabled"}><span>⊗</span>Cancelar Assinatura</button>
-              <button class="mini-action" type="button" data-open-customer="${customer.id}"><span>✎</span>Editar Cliente</button>
+              <button class="mini-action" type="button" data-open-customer="${customer.id}"><span>${iconSvg("renew")}</span>Renovar Assinatura</button>
+              <button class="mini-action" type="button" data-open-customer="${customer.id}"><span>${iconSvg("swap")}</span>Trocar Plano</button>
+              <button class="mini-action danger" type="button" ${subscription.id ? `data-cancel-subscription="${subscription.id}"` : "disabled"}><span>${iconSvg("cancel")}</span>Cancelar Assinatura</button>
+              <button class="mini-action" type="button" data-open-customer="${customer.id}"><span>${iconSvg("edit")}</span>Editar Cliente</button>
             </div>
           </div>
 
@@ -441,7 +639,7 @@ function renderCustomerPreview(data) {
             <article class="panel compact-panel">
               <div class="panel-title-row">
                 <h4>Observacoes</h4>
-                <button class="icon-mini-button" type="button" data-open-customer="${customer.id}">✎</button>
+                <button class="icon-mini-button" type="button" data-open-customer="${customer.id}">E</button>
               </div>
               <p>Cliente carregado no painel administrativo. Use editar cliente para atualizar observacoes internas.</p>
             </article>
@@ -477,11 +675,7 @@ function renderCustomers(customers = []) {
   const selectedPlan = customerPlan?.value || "";
   const visibleCustomers = selectedPlan ? customers.filter((customer) => customer.plan_id === selectedPlan) : customers;
 
-  if (visibleCustomers.length && !visibleCustomers.some((customer) => Number(customer.id) === Number(selectedCustomerId))) {
-    selectedCustomerId = visibleCustomers[0].id;
-  }
-
-  if (!visibleCustomers.length) {
+  if (!visibleCustomers.length || !visibleCustomers.some((customer) => Number(customer.id) === Number(selectedCustomerId))) {
     selectedCustomerId = null;
   }
 
@@ -509,10 +703,10 @@ function renderCustomers(customers = []) {
               <td>${formatDateOnly(customer.created_at)}</td>
               <td>
                 <div class="row-actions">
-                  <button class="icon-mini-button" type="button" data-preview-customer="${customer.id}" aria-label="Ver detalhes">◉</button>
-                  <button class="icon-mini-button" type="button" data-open-customer="${customer.id}" aria-label="Editar">✎</button>
-                  <a class="icon-mini-button" href="${getWhatsappLink(customer)}" target="_blank" rel="noopener" aria-label="WhatsApp">☏</a>
-                  <button class="icon-mini-button" type="button" data-open-customer="${customer.id}" aria-label="Mais ações">⋮</button>
+                  <button class="icon-mini-button" type="button" data-preview-customer="${customer.id}" aria-label="Ver detalhes">${iconSvg("eye")}</button>
+                  <button class="icon-mini-button" type="button" data-open-customer="${customer.id}" aria-label="Editar">${iconSvg("edit")}</button>
+                  <a class="icon-mini-button" href="${getWhatsappLink(customer)}" target="_blank" rel="noopener" aria-label="WhatsApp">${iconSvg("whatsapp")}</a>
+                  <button class="icon-mini-button" type="button" data-open-customer="${customer.id}" aria-label="Mais acoes">${iconSvg("dots")}</button>
                 </div>
               </td>
             </tr>
@@ -521,14 +715,8 @@ function renderCustomers(customers = []) {
         .join("")
     : `<tr><td colspan="6">Nenhum cliente encontrado.</td></tr>`;
 
-  if (selectedCustomerId) {
-    loadCustomerPreview(selectedCustomerId).catch((error) => {
-      if (customerDetail) {
-        customerDetail.innerHTML = `<div class="empty-detail"><strong>Nao foi possivel carregar o cliente.</strong><span>${escapeHtml(error.message)}</span></div>`;
-      }
-    });
-  } else if (customerDetail) {
-    customerDetail.innerHTML = `<div class="empty-detail"><strong>Nenhum cliente selecionado</strong><span>Cadastre ou localize um cliente para ver os detalhes.</span></div>`;
+  if (!selectedCustomerId && customerDetail) {
+    customerDetail.innerHTML = `<div class="empty-detail"><strong>Detalhes fechados</strong><span>Clique no icone de abrir em um cliente para visualizar os dados.</span></div>`;
   }
 }
 
@@ -542,6 +730,82 @@ async function loadCustomers() {
   setStatus("");
 }
 
+function getPlanIcon(planId = "") {
+  const icons = {
+    "start-mei": "home",
+    servicos: "chart",
+    premium: "cube",
+    comercio: "card",
+    full: "plan",
+  };
+  return icons[planId] || "plan";
+}
+
+function planFeatures(plan) {
+  if (!Array.isArray(plan.features) || !plan.features.length) {
+    return ["Nenhum item incluso cadastrado no banco."];
+  }
+
+  return plan.features
+    .map((feature) => String(feature.descricao || "").trim())
+    .filter(Boolean);
+}
+
+function renderPlanDetail(plan) {
+  if (!planDetail) return;
+
+  if (!plan) {
+    planDetail.innerHTML = `
+      <div class="empty-detail">
+        <strong>Selecione um plano</strong>
+        <span>Clique em um plano da tabela para ver configuracoes e resumo.</span>
+      </div>
+    `;
+    return;
+  }
+
+  const activeClients = Number(plan.active_clients || 0);
+  const monthlyRevenue = Number(plan.monthly_revenue || 0);
+  const mercadoPagoStatus = plan.mercado_pago_plan_id ? "Associado" : "Pendente";
+
+  planDetail.innerHTML = `
+    <div class="plan-detail-title">
+      <h3>Detalhes do plano selecionado</h3>
+    </div>
+    <div class="plan-detail-grid">
+      <article class="selected-plan-card">
+        <span class="selected-plan-icon">${iconSvg(getPlanIcon(plan.id))}</span>
+        <h4>${escapeHtml(plan.nome)}</h4>
+        <strong>${money(plan.valor)} <small>/ mes</small></strong>
+        <p>${activeClients} clientes ativos</p>
+      </article>
+
+      <article class="plan-feature-card">
+        <h4>Inclui:</h4>
+        <ul class="plan-feature-list">
+          ${planFeatures(plan).map((feature) => `<li>${escapeHtml(feature)}</li>`).join("")}
+        </ul>
+      </article>
+
+      <article class="plan-config-card">
+        <h4>Configuracoes</h4>
+        <p><span>Status:</span>${statusPill(plan.ativo ? "Ativo" : "Inativo")}</p>
+        <p><span>Mercado Pago:</span>${statusPill(mercadoPagoStatus)}</p>
+        <button class="ghost-button compact" type="button" data-open-plan="${escapeHtml(plan.id)}">Editar Plano</button>
+      </article>
+
+      <article class="plan-summary-card">
+        <h4>Resumo do Plano</h4>
+        <p><span>Valor Mensal</span><strong>${money(plan.valor)}</strong></p>
+        <p><span>Clientes Ativos</span><strong>${activeClients}</strong></p>
+        <p><span>Receita Mensal</span><strong>${money(monthlyRevenue)}</strong></p>
+        <p><span>Criado em</span><strong>${formatDateOnly(plan.created_at)}</strong></p>
+        <p><span>Mercado Pago</span><strong class="${plan.mercado_pago_plan_id ? "ok-text" : "warn-text"}">${escapeHtml(mercadoPagoStatus)}</strong></p>
+      </article>
+    </div>
+  `;
+}
+
 function renderPlans(plans = []) {
   plansCache = plans;
   if (customerPlan) {
@@ -550,24 +814,31 @@ function renderPlans(plans = []) {
       .join("")}`;
   }
 
+  if (plans.length && !plans.some((plan) => plan.id === selectedPlanId)) {
+    selectedPlanId = plans.find((plan) => plan.id === "premium")?.id || plans[0].id;
+  }
+
   plansTable.innerHTML = plans.length
     ? plans
         .map(
           (plan) => `
-            <tr>
+            <tr class="${plan.id === selectedPlanId ? "is-selected" : ""}" data-select-plan="${escapeHtml(plan.id)}">
               <td>
-                <strong>${escapeHtml(plan.nome)}</strong>
-                <small>${escapeHtml(plan.id)} - ${escapeHtml(plan.servico || "")}</small>
+                <button class="plan-cell" type="button" data-select-plan="${escapeHtml(plan.id)}">
+                  <span class="plan-icon-box">${iconSvg(getPlanIcon(plan.id))}</span>
+                  <span>
+                    <strong>${escapeHtml(plan.nome)}</strong>
+                    <small>${escapeHtml(plan.descricao || plan.servico || plan.id)}</small>
+                  </span>
+                </button>
               </td>
-              <td>${money(plan.valor)}</td>
-              <td>${escapeHtml(plan.tipo_cobranca)} / ${escapeHtml(plan.tipo_frequencia)}</td>
-              <td>
-                ${plan.mercado_pago_plan_id ? "Associado" : "Pendente"}
-                <small>${escapeHtml(plan.mercado_pago_plan_id || "-")}</small>
-              </td>
+              <td>${money(plan.valor)} <small>/ mes</small></td>
+              <td>${Number(plan.active_clients || 0)}</td>
+              <td>${statusPill(plan.ativo ? "Ativo" : "Inativo")}</td>
               <td>
                 <div class="row-actions">
-                  <button class="mini-button" type="button" data-open-plan="${escapeHtml(plan.id)}">Editar</button>
+                  <button class="icon-mini-button" type="button" data-open-plan="${escapeHtml(plan.id)}" aria-label="Editar plano">${iconSvg("edit")}</button>
+                  <button class="icon-mini-button" type="button" data-select-plan="${escapeHtml(plan.id)}" aria-label="Mais detalhes">${iconSvg("dots")}</button>
                 </div>
               </td>
             </tr>
@@ -575,6 +846,8 @@ function renderPlans(plans = []) {
         )
         .join("")
     : `<tr><td colspan="5">Nenhum plano encontrado.</td></tr>`;
+
+  renderPlanDetail(plans.find((plan) => plan.id === selectedPlanId));
 }
 
 async function loadPlans() {
@@ -633,6 +906,47 @@ function openDrawer(html) {
 function closeDrawer() {
   drawer.hidden = true;
   drawerContent.innerHTML = "";
+}
+
+function openNewCustomer() {
+  openDrawer(`
+    <div class="drawer-content">
+      <div>
+        <p class="eyebrow">Cadastro manual</p>
+        <h2>Novo cliente</h2>
+        <p>Crie o cliente no banco com login por e-mail e senha de acesso.</p>
+      </div>
+
+      <form class="form-grid" data-create-customer-form>
+        <label>Nome completo<input name="nome" required autocomplete="name" /></label>
+        <label>E-mail / login<input name="email" type="email" required autocomplete="email" /></label>
+        <div class="form-grid two-cols">
+          <label>Senha de acesso<input name="password" type="password" minlength="8" required autocomplete="new-password" /></label>
+          <label>Telefone / WhatsApp<input name="telefone" inputmode="numeric" autocomplete="tel" /></label>
+        </div>
+        <div class="form-grid two-cols">
+          <label>CPF ou CNPJ<input name="documento" inputmode="numeric" /></label>
+          <label>
+            Status do cliente
+            <select name="status">
+              <option value="pending">Pendente</option>
+              <option value="active">Ativo</option>
+              <option value="blocked">Bloqueado</option>
+              <option value="cancelled">Cancelado</option>
+            </select>
+          </label>
+        </div>
+        <label class="checkbox-line">
+          <input name="cliente_login_ativo" type="checkbox" checked />
+          Login do cliente ativo
+        </label>
+        <div class="action-bar">
+          <button class="gold-button" type="submit">Criar cliente</button>
+          <button class="ghost-button" type="button" data-close-drawer>Cancelar</button>
+        </div>
+      </form>
+    </div>
+  `);
 }
 
 async function openCustomer(customerId) {
@@ -787,6 +1101,60 @@ function openPlan(planId) {
   `);
 }
 
+function openNewPlan() {
+  openDrawer(`
+    <div class="drawer-content">
+      <div>
+        <p class="eyebrow">Plano</p>
+        <h2>Novo plano</h2>
+        <p>Crie o plano no banco local. Depois associe ao Mercado Pago quando o modelo de assinatura estiver pronto.</p>
+      </div>
+      <form class="form-grid" data-create-plan-form>
+        <div class="form-grid two-cols">
+          <label>ID interno<input name="id" placeholder="ex: premium" required /></label>
+          <label>Nome<input name="nome" placeholder="Nome do plano" required /></label>
+        </div>
+        <label>Descricao<textarea name="descricao" placeholder="Resumo do que este plano inclui"></textarea></label>
+        <div class="form-grid two-cols">
+          <label>Valor<input name="valor" type="number" step="0.01" min="0.01" required /></label>
+          <label>Ordem<input name="ordem" type="number" value="0" /></label>
+        </div>
+        <div class="form-grid two-cols">
+          <label>Frequencia<input name="frequencia" type="number" value="1" min="1" /></label>
+          <label>
+            Tipo frequencia
+            <select name="tipo_frequencia">
+              <option value="months">months</option>
+              <option value="days">days</option>
+            </select>
+          </label>
+        </div>
+        <label>Servico<input name="servico" placeholder="ex: bot_whatsapp_premium" /></label>
+        <div class="form-grid two-cols">
+          <label>
+            Tipo cobranca
+            <select name="tipo_cobranca">
+              <option value="subscription">subscription</option>
+              <option value="single">single</option>
+            </select>
+          </label>
+          <label>
+            Ativo
+            <select name="ativo">
+              <option value="1">Sim</option>
+              <option value="0">Nao</option>
+            </select>
+          </label>
+        </div>
+        <div class="action-bar">
+          <button class="gold-button" type="submit">Criar plano</button>
+          <button class="ghost-button" type="button" data-close-drawer>Cancelar</button>
+        </div>
+      </form>
+    </div>
+  `);
+}
+
 async function saveCustomer(form) {
   const formData = new FormData(form);
   const customerId = form.dataset.customerId;
@@ -797,6 +1165,25 @@ async function saveCustomer(form) {
   setStatus("Cliente salvo.");
   closeDrawer();
   await loadCustomers();
+}
+
+async function createCustomer(form) {
+  const formData = new FormData(form);
+  const payload = Object.fromEntries(formData.entries());
+  payload.cliente_login_ativo = form.elements.cliente_login_ativo?.checked || false;
+
+  const data = await apiRequest("/api/admin/customers", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+
+  setStatus("Cliente criado.");
+  closeDrawer();
+  await loadCustomers();
+
+  if (data.customer?.id) {
+    await loadCustomerPreview(data.customer.id);
+  }
 }
 
 async function saveSubscription(form) {
@@ -825,6 +1212,22 @@ async function savePlan(form) {
     body: JSON.stringify(payload),
   });
   setStatus("Plano salvo.");
+  closeDrawer();
+  await loadPlans();
+}
+
+async function createPlan(form) {
+  const formData = new FormData(form);
+  const payload = Object.fromEntries(formData.entries());
+  payload.ativo = payload.ativo === "1";
+
+  const data = await apiRequest("/api/admin/plans", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+
+  selectedPlanId = data.plan?.id || payload.id;
+  setStatus("Plano criado.");
   closeDrawer();
   await loadPlans();
 }
@@ -862,10 +1265,10 @@ loginForm.addEventListener("submit", async (event) => {
     showDashboard();
     try {
       await loadPlans();
-      activateView("customers");
+      activateView("overview");
     } catch (loadError) {
       setStatus(loadError.message, "error");
-      activateView("customers");
+      activateView("overview");
     }
   } catch (error) {
     loginStatus.textContent = error.message;
@@ -882,7 +1285,7 @@ document.querySelector("[data-logout]").addEventListener("click", async () => {
   showLogin();
 });
 
-document.querySelector("[data-refresh]").addEventListener("click", loadCurrentView);
+document.querySelector("[data-refresh]")?.addEventListener("click", loadCurrentView);
 document.querySelector("[data-search-customers]").addEventListener("click", loadCustomers);
 document.querySelector("[data-filter-payments]").addEventListener("click", loadPayments);
 customerStatus.addEventListener("change", loadCustomers);
@@ -899,11 +1302,14 @@ document.addEventListener("click", (event) => {
   const customerButton = event.target.closest("[data-open-customer]");
   const previewButton = event.target.closest("[data-preview-customer]");
   const planButton = event.target.closest("[data-open-plan]");
+  const selectPlanButton = event.target.closest("[data-select-plan]");
   const deleteButton = event.target.closest("[data-delete-customer]");
   const cancelButton = event.target.closest("[data-cancel-subscription]");
   const newCustomerButton = event.target.closest("[data-new-customer]");
+  const newPlanButton = event.target.closest("[data-new-plan]");
   const dynamicViewButton = event.target.closest("[data-view-button]");
   const collapseButton = event.target.closest("[data-collapse-detail]");
+  const closeButton = event.target.closest("[data-close-drawer]");
 
   if (dynamicViewButton && !Array.from(viewButtons).includes(dynamicViewButton)) {
     activateView(dynamicViewButton.dataset.viewButton);
@@ -914,19 +1320,39 @@ document.addEventListener("click", (event) => {
       .then(() => renderCustomers(customersCache))
       .catch((error) => setStatus(error.message, "error"));
   }
+  if (selectPlanButton && !planButton) {
+    selectedPlanId = selectPlanButton.dataset.selectPlan;
+    renderPlans(plansCache);
+  }
   if (planButton) openPlan(planButton.dataset.openPlan);
   if (deleteButton) deleteCustomer(deleteButton.dataset.deleteCustomer).catch((error) => setStatus(error.message, "error"));
   if (cancelButton) cancelSubscription(cancelButton.dataset.cancelSubscription).catch((error) => setStatus(error.message, "error"));
-  if (newCustomerButton) setStatus("Cadastro manual de cliente sera conectado na proxima etapa.");
+  if (newCustomerButton) openNewCustomer();
+  if (newPlanButton) openNewPlan();
+  if (closeButton) closeDrawer();
   if (collapseButton && customerDetail) {
-    customerDetail.innerHTML = `<div class="empty-detail"><strong>Painel fechado</strong><span>Escolha outro cliente na tabela para reabrir os detalhes.</span></div>`;
+    selectedCustomerId = null;
+    renderCustomers(customersCache);
+    customerDetail.innerHTML = `<div class="empty-detail"><strong>Detalhes fechados</strong><span>Clique no icone de abrir em um cliente para visualizar os dados.</span></div>`;
   }
 });
 
 document.addEventListener("submit", (event) => {
+  const createCustomerForm = event.target.closest("[data-create-customer-form]");
+  const createPlanForm = event.target.closest("[data-create-plan-form]");
   const customerForm = event.target.closest("[data-customer-form]");
   const subscriptionForm = event.target.closest("[data-subscription-form]");
   const planForm = event.target.closest("[data-plan-form]");
+
+  if (createCustomerForm) {
+    event.preventDefault();
+    createCustomer(createCustomerForm).catch((error) => setStatus(error.message, "error"));
+  }
+
+  if (createPlanForm) {
+    event.preventDefault();
+    createPlan(createPlanForm).catch((error) => setStatus(error.message, "error"));
+  }
 
   if (customerForm) {
     event.preventDefault();
@@ -956,7 +1382,7 @@ closeDrawerButtons.forEach((button) => button.addEventListener("click", closeDra
     await apiRequest("/api/admin/auth/me");
     showDashboard();
     await loadPlans();
-    activateView("customers");
+    activateView("overview");
   } catch {
     clearToken();
     showLogin();

@@ -189,6 +189,12 @@ function safeCompare(value = "", expected = "") {
   return crypto.timingSafeEqual(valueBuffer, expectedBuffer);
 }
 
+function hashPassword(password = "") {
+  const salt = crypto.randomBytes(16).toString("hex");
+  const hash = crypto.scryptSync(String(password), salt, 64).toString("hex");
+  return { hash, salt };
+}
+
 function getMercadoPagoClient() {
   const accessToken = process.env.MERCADO_PAGO_ACCESS_TOKEN;
 
@@ -428,7 +434,8 @@ app.get("/api/admin/dashboard", requireAdminSession, async (_request, response) 
           SUM(status = 'active') AS active,
           SUM(status = 'pending') AS pending,
           SUM(status = 'blocked') AS blocked,
-          SUM(status = 'cancelled') AS cancelled
+          SUM(status = 'cancelled') AS cancelled,
+          SUM(created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)) AS newLast30
          FROM users`,
       ),
       dbPool.execute(
@@ -444,21 +451,38 @@ app.get("/api/admin/dashboard", requireAdminSession, async (_request, response) 
         `SELECT
           COUNT(*) AS total,
           COALESCE(SUM(CASE WHEN status = 'approved' THEN valor ELSE 0 END), 0) AS approvedAmount,
+          COALESCE(SUM(CASE WHEN status = 'approved' AND COALESCE(data_pagamento, created_at) >= DATE_FORMAT(CURDATE(), '%Y-%m-01') THEN valor ELSE 0 END), 0) AS monthlyApprovedAmount,
+          COALESCE(AVG(CASE WHEN status = 'approved' THEN valor ELSE NULL END), 0) AS averageApprovedAmount,
           SUM(status = 'approved') AS approved,
           SUM(status IN ('pending', 'in_process')) AS pending,
           SUM(status IN ('rejected', 'cancelled', 'refunded', 'charged_back')) AS failed
          FROM payments`,
       ),
       dbPool.execute(
-        `SELECT id, nome, email, telefone, status, created_at
-         FROM users
-         ORDER BY created_at DESC
+        `SELECT
+           u.id, u.nome, u.email, u.telefone, u.status, u.created_at,
+           pl.nome AS plan_name
+         FROM users u
+         LEFT JOIN subscriptions s ON s.id = (
+           SELECT s2.id
+           FROM subscriptions s2
+           WHERE s2.user_id = u.id
+           ORDER BY s2.created_at DESC
+           LIMIT 1
+         )
+         LEFT JOIN plans pl ON pl.id = s.plan_id
+         ORDER BY u.created_at DESC
          LIMIT 8`,
       ),
       dbPool.execute(
-        `SELECT p.id, p.valor, p.status, p.data_pagamento, p.created_at, u.nome AS user_name, u.email
+        `SELECT
+           p.id, p.valor, p.status, p.data_pagamento, p.created_at,
+           u.nome AS user_name, u.email,
+           pl.nome AS plan_name
          FROM payments p
          JOIN users u ON u.id = p.user_id
+         LEFT JOIN subscriptions s ON s.id = p.subscription_id
+         LEFT JOIN plans pl ON pl.id = s.plan_id
          ORDER BY p.created_at DESC
          LIMIT 8`,
       ),
@@ -568,6 +592,63 @@ app.get("/api/admin/customers/:id", requireAdminSession, async (request, respons
   }
 });
 
+app.post("/api/admin/customers", requireAdminSession, async (request, response) => {
+  try {
+    const body = request.body || {};
+    const nome = String(body.nome || "").trim();
+    const email = String(body.email || "").trim().toLowerCase();
+    const telefone = normalizeDigits(body.telefone || body.whatsapp || "");
+    const documento = normalizeDigits(body.documento || "");
+    const password = String(body.password || "");
+    const allowedStatuses = ["pending", "active", "blocked", "cancelled"];
+    const status = allowedStatuses.includes(body.status) ? body.status : "pending";
+    const loginAtivo = body.cliente_login_ativo === false || body.cliente_login_ativo === "0" ? 0 : 1;
+
+    if (!nome) return response.status(400).json({ error: "Informe o nome do cliente." });
+    if (!email || !email.includes("@")) return response.status(400).json({ error: "Informe um e-mail valido para login." });
+    if (password.length < 8) return response.status(400).json({ error: "A senha do cliente precisa ter pelo menos 8 caracteres." });
+
+    const { hash, salt } = hashPassword(password);
+
+    const [result] = await dbPool.execute(
+      `INSERT INTO users
+        (nome, email, telefone, whatsapp, documento, cnpj, senha_hash, senha_salt, cliente_login_ativo, status)
+       VALUES
+        (:nome, :email, :telefone, :telefone, :documento, :cnpj, :senhaHash, :senhaSalt, :loginAtivo, :status)`,
+      {
+        nome,
+        email,
+        telefone,
+        documento,
+        cnpj: documento.length === 14 ? documento : null,
+        senhaHash: hash,
+        senhaSalt: salt,
+        loginAtivo,
+        status,
+      },
+    );
+
+    const [rows] = await dbPool.execute("SELECT id, nome, email, telefone, documento, status, created_at FROM users WHERE id = :id", {
+      id: result.insertId,
+    });
+
+    response.status(201).json({ ok: true, customer: rows[0] });
+  } catch (error) {
+    if (error.code === "ER_DUP_ENTRY") {
+      return response.status(409).json({ error: "Ja existe um cliente cadastrado com este e-mail." });
+    }
+
+    if (error.code === "ER_BAD_FIELD_ERROR") {
+      return response.status(500).json({
+        error: "Campos de login do cliente ainda nao existem no banco. Rode database/add-customer-login-fields.sql.",
+      });
+    }
+
+    console.error(error);
+    response.status(500).json({ error: "Erro ao criar cliente." });
+  }
+});
+
 app.patch("/api/admin/customers/:id", requireAdminSession, async (request, response) => {
   try {
     const userId = Number(request.params.id);
@@ -627,15 +708,120 @@ app.delete("/api/admin/customers/:id", requireAdminSession, async (request, resp
 app.get("/api/admin/plans", requireAdminSession, async (_request, response) => {
   try {
     const [plans] = await dbPool.execute(
-      `SELECT id, nome, descricao, valor, frequencia, tipo_frequencia, servico, mercado_pago_plan_id, tipo_cobranca, ativo, ordem
-       FROM plans
-       ORDER BY ordem ASC, nome ASC`,
+      `SELECT
+         p.id,
+         p.nome,
+         p.descricao,
+         p.valor,
+         p.frequencia,
+         p.tipo_frequencia,
+         p.servico,
+         p.mercado_pago_plan_id,
+         p.tipo_cobranca,
+         p.ativo,
+         p.ordem,
+         p.created_at,
+         p.updated_at,
+         COUNT(DISTINCT CASE WHEN s.status IN ('active', 'authorized') THEN s.user_id END) AS active_clients,
+         COUNT(DISTINCT s.user_id) AS total_clients,
+         COALESCE(SUM(CASE WHEN s.status IN ('active', 'authorized') THEN s.valor ELSE 0 END), 0) AS monthly_revenue
+       FROM plans p
+       LEFT JOIN subscriptions s ON s.plan_id = p.id
+       GROUP BY
+         p.id,
+         p.nome,
+         p.descricao,
+         p.valor,
+         p.frequencia,
+         p.tipo_frequencia,
+         p.servico,
+         p.mercado_pago_plan_id,
+         p.tipo_cobranca,
+         p.ativo,
+         p.ordem,
+         p.created_at,
+         p.updated_at
+       ORDER BY p.ordem ASC, p.nome ASC`,
     );
+
+    let featureRows = [];
+
+    try {
+      const [rows] = await dbPool.execute(
+        `SELECT plan_id, descricao, ordem, ativo
+         FROM plan_features
+         WHERE ativo = 1
+         ORDER BY plan_id ASC, ordem ASC, id ASC`,
+      );
+      featureRows = rows;
+    } catch (featuresError) {
+      if (featuresError.code !== "ER_NO_SUCH_TABLE") throw featuresError;
+      console.warn("Tabela plan_features ainda nao existe. Retornando planos sem itens inclusos.");
+    }
+
+    const featuresByPlan = featureRows.reduce((acc, feature) => {
+      if (!acc[feature.plan_id]) acc[feature.plan_id] = [];
+      acc[feature.plan_id].push({
+        descricao: feature.descricao,
+        ordem: feature.ordem,
+      });
+      return acc;
+    }, {});
+
+    plans.forEach((plan) => {
+      plan.features = featuresByPlan[plan.id] || [];
+    });
 
     response.json({ plans });
   } catch (error) {
     console.error(error);
     response.status(500).json({ error: "Erro ao listar planos." });
+  }
+});
+
+app.post("/api/admin/plans", requireAdminSession, async (request, response) => {
+  try {
+    const body = request.body || {};
+    const planId = String(body.id || "")
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9_-]/g, "-")
+      .replace(/-+/g, "-")
+      .replace(/^-|-$/g, "");
+    const nome = String(body.nome || "").trim();
+    const valor = Number(body.valor || 0);
+
+    if (!planId || !nome || !Number.isFinite(valor) || valor <= 0) {
+      return response.status(400).json({ error: "Informe ID, nome e valor valido para criar o plano." });
+    }
+
+    await dbPool.execute(
+      `INSERT INTO plans
+        (id, nome, descricao, valor, frequencia, tipo_frequencia, servico, mercado_pago_plan_id, tipo_cobranca, ativo, ordem)
+       VALUES
+        (:planId, :nome, :descricao, :valor, :frequencia, :tipoFrequencia, :servico, :mercadoPagoPlanId, :tipoCobranca, :ativo, :ordem)`,
+      {
+        planId,
+        nome,
+        descricao: String(body.descricao || "").trim(),
+        valor,
+        frequencia: Number(body.frequencia || 1),
+        tipoFrequencia: body.tipo_frequencia === "days" ? "days" : "months",
+        servico: String(body.servico || planId).trim(),
+        mercadoPagoPlanId: String(body.mercado_pago_plan_id || "").trim() || null,
+        tipoCobranca: body.tipo_cobranca === "single" ? "single" : "subscription",
+        ativo: body.ativo === false || body.ativo === "0" ? 0 : 1,
+        ordem: Number(body.ordem || 0),
+      },
+    );
+
+    response.status(201).json({ ok: true, plan: { id: planId, nome, valor } });
+  } catch (error) {
+    console.error(error);
+    if (error.code === "ER_DUP_ENTRY") {
+      return response.status(409).json({ error: "Ja existe um plano com esse ID." });
+    }
+    response.status(500).json({ error: "Erro ao criar plano." });
   }
 });
 
