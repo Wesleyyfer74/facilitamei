@@ -10,6 +10,7 @@ import { MercadoPagoConfig, Preference, Payment } from "mercadopago";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+const packageJson = JSON.parse(fs.readFileSync(path.join(__dirname, "package.json"), "utf8"));
 
 dotenv.config({ path: path.join(__dirname, ".env") });
 
@@ -929,6 +930,32 @@ app.get("/api/admin/reports", requireAdminSession, async (_request, response) =>
   } catch (error) {
     console.error(error);
     response.status(500).json({ error: "Erro ao carregar relatorios." });
+  }
+});
+
+app.get("/api/admin/settings", requireAdminSession, async (_request, response) => {
+  try {
+    await dbPool.query("SELECT 1");
+    const hasValue = (value) => Boolean(String(value || "").trim());
+
+    response.json({
+      system: {
+        version: packageJson.version || "0.1.0",
+        environment: process.env.NODE_ENV || "development",
+        database: "Conectado",
+        apiPublicUrl,
+        frontendUrl,
+      },
+      integrations: {
+        mercadoPago: hasValue(process.env.MERCADO_PAGO_ACCESS_TOKEN) && hasValue(process.env.MERCADO_PAGO_PUBLIC_KEY),
+        whatsapp: hasValue(process.env.WHATSAPP_PHONE) || hasValue(process.env.WHATSAPP_URL),
+        email: hasValue(process.env.EMAIL_HOST) && hasValue(process.env.EMAIL_USER),
+        webhooks: hasValue(process.env.MERCADO_PAGO_WEBHOOK_SECRET),
+      },
+    });
+  } catch (error) {
+    console.error(error);
+    response.status(500).json({ error: "Erro ao carregar configuracoes." });
   }
 });
 

@@ -36,6 +36,10 @@ const reportCustomersChart = document.querySelector("[data-report-customers-char
 const reportPlans = document.querySelector("[data-report-plans]");
 const reportActivities = document.querySelector("[data-report-activities]");
 const reportQuick = document.querySelector("[data-report-quick]");
+const settingsIntegrations = document.querySelector("[data-settings-integrations]");
+const settingsOptions = document.querySelector("[data-settings-options]");
+const settingsInfo = document.querySelector("[data-settings-info]");
+const settingsQuick = document.querySelector("[data-settings-quick]");
 const customerSearch = document.querySelector("[data-customer-search]");
 const customerStatus = document.querySelector("[data-customer-status]");
 const customerPlan = document.querySelector("[data-customer-plan]");
@@ -147,6 +151,14 @@ function iconSvg(name, className = "admin-svg-icon") {
     dots: '<circle cx="5" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="19" cy="12" r="1.7"/>',
     send: '<path d="M21 3 10 14"/><path d="m21 3-7 18-4-7-7-4z"/>',
     download: '<path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/>',
+    email: '<rect x="4" y="6" width="16" height="12" rx="2"/><path d="m4 8 8 5 8-5"/>',
+    webhook: '<path d="M8 17a4 4 0 0 1-3.6-5.8l2.1-3.8a4 4 0 0 1 7 3.8l-.6 1"/><path d="M16 7a4 4 0 0 1 3.6 5.8l-2.1 3.8a4 4 0 0 1-7-3.8l.6-1"/>',
+    lock: '<rect x="5" y="10" width="14" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/>',
+    palette: '<path d="M12 4a8 8 0 0 0 0 16h1.5a1.7 1.7 0 0 0 1.2-2.9 1.7 1.7 0 0 1 1.2-2.9H18a6 6 0 0 0-6-10.2z"/><circle cx="8.5" cy="10" r=".8"/><circle cx="11" cy="8" r=".8"/><circle cx="13.5" cy="10" r=".8"/>',
+    bell: '<path d="M18 16H6l1.5-2v-4.2a4.5 4.5 0 0 1 9 0V14z"/><path d="M10 19a2 2 0 0 0 4 0"/>',
+    cloud: '<path d="M17 18a4 4 0 0 0 0-8 5 5 0 0 0-9.5-1.5A4.5 4.5 0 0 0 8 18z"/><path d="M12 13v7M9 16l3-3 3 3"/>',
+    help: '<circle cx="12" cy="12" r="9"/><path d="M9.8 9a2.4 2.4 0 0 1 4.5 1.2c0 1.8-2.3 2-2.3 3.8"/><path d="M12 17h.01"/>',
+    key: '<circle cx="8" cy="15" r="3"/><path d="m10.2 12.8 7-7M15 6h3v3"/>',
   };
   return `<svg class="${className}" viewBox="0 0 24 24" aria-hidden="true" focusable="false">${paths[name] || paths.plan}</svg>`;
 }
@@ -1353,6 +1365,96 @@ function exportReportsCsv() {
   URL.revokeObjectURL(url);
 }
 
+function settingsStatusPill(isConnected) {
+  return `<span class="settings-status ${isConnected ? "connected" : "warning"}">${isConnected ? "Conectado" : "Configurar"}</span>`;
+}
+
+function renderSettings(data = {}) {
+  const integrations = data.integrations || {};
+  const system = data.system || {};
+
+  if (settingsIntegrations) {
+    settingsIntegrations.innerHTML = [
+      ["webhook", "Mercado Pago", "Gerencie suas credenciais e configuracoes do Mercado Pago.", integrations.mercadoPago],
+      ["whatsapp", "WhatsApp", "Configure a integracao para envio de mensagens via WhatsApp.", integrations.whatsapp],
+      ["email", "E-mail (SMTP)", "Configure o servidor SMTP para envio de e-mails do sistema.", integrations.email],
+      ["webhook", "Webhooks", "Configure webhooks para receber eventos de integracoes.", integrations.webhooks],
+    ]
+      .map(
+        ([icon, title, detail, connected]) => `
+          <button class="settings-row" type="button" data-settings-action="${escapeHtml(title)}">
+            <span class="settings-row-icon">${iconSvg(icon)}</span>
+            <p><strong>${escapeHtml(title)}</strong><small>${escapeHtml(detail)}</small></p>
+            ${settingsStatusPill(Boolean(connected))}
+            <b>›</b>
+          </button>
+        `,
+      )
+      .join("");
+  }
+
+  if (settingsOptions) {
+    settingsOptions.innerHTML = [
+      ["plan", "Dados da Empresa", "Gerencie os dados cadastrais da sua empresa, logo e informacoes de contato."],
+      ["users", "Usuarios e Permissoes", "Gerencie os usuarios do sistema e suas permissoes de acesso."],
+      ["lock", "Seguranca", "Configure politicas de seguranca, autenticacao em duas etapas e sessoes."],
+      ["palette", "Personalizacao", "Personalize o sistema com sua identidade visual, cores e preferencias."],
+      ["bell", "Notificacoes", "Configure notificacoes do sistema, alertas e preferencias de comunicacao."],
+      ["cloud", "Backup e Dados", "Gerencie backups, exportacao de dados e recuperacao do sistema."],
+      ["contract", "Logs do Sistema", "Visualize logs de atividades, auditorias e eventos do sistema."],
+    ]
+      .map(
+        ([icon, title, detail]) => `
+          <button class="settings-option-row" type="button" data-settings-action="${escapeHtml(title)}">
+            <span>${iconSvg(icon)}</span>
+            <p><strong>${escapeHtml(title)}</strong><small>${escapeHtml(detail)}</small></p>
+            <b>›</b>
+          </button>
+        `,
+      )
+      .join("");
+  }
+
+  if (settingsInfo) {
+    const storagePercent = 24;
+    settingsInfo.innerHTML = `
+      <p><span>${iconSvg("settings")}Versao do Sistema:</span><strong>${escapeHtml(system.version || "0.1.0")}</strong></p>
+      <p><span>${iconSvg("cube")}Ambiente:</span>${statusPill(system.environment === "production" ? "Ativo" : "Pendente")}</p>
+      <p><span>${iconSvg("card")}Banco de Dados:</span><strong>${escapeHtml(system.database || "Verificando")}</strong></p>
+      <p><span>${iconSvg("growth")}Status dos Servicos:</span>${statusPill("Ativo")}</p>
+      <p class="storage-line"><span>${iconSvg("cloud")}Armazenamento Utilizado:</span><strong>2.4 GB / 10 GB (${storagePercent}%)</strong></p>
+      <div class="storage-bar"><i style="width:${storagePercent}%"></i></div>
+    `;
+  }
+
+  if (settingsQuick) {
+    settingsQuick.innerHTML = [
+      ["download", "Exportar Dados", "Baixar dados do sistema", "reports"],
+      ["cloud", "Fazer Backup", "Backup completo do sistema", ""],
+      ["renew", "Limpar Cache", "Limpar cache e dados temporarios", ""],
+      ["key", "Alterar Senha", "Alterar senha de acesso", ""],
+      ["help", "Central de Ajuda", "Acessar documentacao e tutoriais", ""],
+    ]
+      .map(
+        ([icon, title, detail, view]) => `
+          <button type="button" ${view ? `data-view-button="${view}"` : `data-settings-action="${escapeHtml(title)}"`}>
+            <span>${iconSvg(icon)}</span>
+            <strong>${escapeHtml(title)}</strong>
+            <small>${escapeHtml(detail)}</small>
+          </button>
+        `,
+      )
+      .join("");
+  }
+}
+
+async function loadSettings() {
+  setStatus("Carregando configuracoes...");
+  const data = await apiRequest("/api/admin/settings");
+  renderSettings(data);
+  setStatus("");
+}
+
 async function loadCurrentView() {
   try {
     if (currentView === "overview") await loadOverview();
@@ -1361,6 +1463,7 @@ async function loadCurrentView() {
     if (currentView === "payments") await loadPayments();
     if (currentView === "contracts") await loadContracts();
     if (currentView === "reports") await loadReports();
+    if (currentView === "settings") await loadSettings();
   } catch (error) {
     setStatus(error.message, "error");
   }
@@ -1795,6 +1898,7 @@ document.addEventListener("click", (event) => {
   const contractBulkButton = event.target.closest("[data-contract-bulk]");
   const sendContractButton = event.target.closest("[data-send-contract]");
   const dynamicExportReportButton = event.target.closest("[data-export-report]");
+  const settingsActionButton = event.target.closest("[data-settings-action]");
   const dynamicViewButton = event.target.closest("[data-view-button]");
   const collapseButton = event.target.closest("[data-collapse-detail]");
   const closeButton = event.target.closest("[data-close-drawer]");
@@ -1820,6 +1924,7 @@ document.addEventListener("click", (event) => {
   if (contractBulkButton) generateBulkContracts().catch((error) => setStatus(error.message, "error"));
   if (sendContractButton) sendContract(sendContractButton.dataset.sendContract).catch((error) => setStatus(error.message, "error"));
   if (dynamicExportReportButton && dynamicExportReportButton !== exportReportButton) exportReportsCsv();
+  if (settingsActionButton) setStatus(`${settingsActionButton.dataset.settingsAction}: configuracao detalhada sera conectada na proxima etapa.`);
   if (closeButton) closeDrawer();
   if (collapseButton && customerDetail) {
     selectedCustomerId = null;

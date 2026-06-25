@@ -7,7 +7,7 @@
     <meta name="robots" content="noindex, nofollow" />
     <link rel="icon" type="image/png" href="../assets/logopequeno.png?v=20260615" />
     <link rel="apple-touch-icon" href="../assets/logopequeno.png?v=20260615" />
-    <link rel="stylesheet" href="../admin/admin.css?v=20260625-reports-page" />
+    <link rel="stylesheet" href="../admin/admin.css?v=20260625-settings-page" />
   </head>
   <body>
     <main class="admin-shell">
@@ -563,6 +563,55 @@
               </section>
             </div>
           </section>
+
+          <section class="view-panel" data-view="settings">
+            <div class="admin-page-heading settings-page-heading">
+              <div>
+                <h1>Configuracoes</h1>
+                <p>Gerencie as configuracoes do sistema e integracoes</p>
+              </div>
+            </div>
+
+            <div class="settings-layout">
+              <section class="settings-card integrations-card">
+                <div class="dashboard-card-header">
+                  <div>
+                    <h3>Integracoes</h3>
+                    <p>Configure as integracoes do sistema</p>
+                  </div>
+                </div>
+                <div data-settings-integrations></div>
+              </section>
+
+              <section class="settings-logo-card">
+                <img src="../assets/logopequeno.png" alt="Facilita MEI" />
+              </section>
+
+              <section class="settings-card system-config-card">
+                <div class="dashboard-card-header">
+                  <div>
+                    <h3>Configuracoes do Sistema</h3>
+                    <p>Ajustes gerais e preferencias do sistema</p>
+                  </div>
+                </div>
+                <div data-settings-options></div>
+              </section>
+
+              <section class="settings-card system-info-card">
+                <div class="dashboard-card-header">
+                  <h3>Informacoes do Sistema</h3>
+                </div>
+                <div data-settings-info></div>
+              </section>
+
+              <section class="settings-card quick-settings-card">
+                <div class="dashboard-card-header">
+                  <h3>Acao Rapida</h3>
+                </div>
+                <div class="settings-quick-grid" data-settings-quick></div>
+              </section>
+            </div>
+          </section>
         </section>
       </section>
     </main>
@@ -576,6 +625,6 @@
     </div>
 
     <script src="../config.js?v=20260606-railway"></script>
-    <script src="../admin/admin.js?v=20260625-reports-page"></script>
+    <script src="../admin/admin.js?v=20260625-settings-page"></script>
   </body>
 </html>

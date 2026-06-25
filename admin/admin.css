@@ -2149,6 +2149,268 @@ button.admin-hub-row:hover {
   color: var(--muted);
 }
 
+.settings-page-heading {
+  margin-bottom: 18px;
+}
+
+.settings-layout {
+  display: grid;
+  grid-template-columns: minmax(360px, 1fr) 170px minmax(420px, 1.35fr);
+  grid-template-areas:
+    "integrations logo options"
+    "info quick quick";
+  gap: 18px;
+  align-items: start;
+}
+
+.settings-card {
+  border: 1px solid rgba(240, 191, 90, 0.22);
+  border-radius: 10px;
+  background:
+    radial-gradient(circle at 50% 0%, rgba(240, 191, 90, 0.12), transparent 46%),
+    linear-gradient(180deg, rgba(29, 23, 16, 0.74), rgba(10, 9, 7, 0.91));
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.28);
+  overflow: hidden;
+}
+
+.settings-card .dashboard-card-header p {
+  margin: 5px 0 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+  text-transform: none;
+}
+
+.integrations-card {
+  grid-area: integrations;
+}
+
+.system-config-card {
+  grid-area: options;
+}
+
+.system-info-card {
+  grid-area: info;
+}
+
+.quick-settings-card {
+  grid-area: quick;
+}
+
+.settings-logo-card {
+  grid-area: logo;
+  width: 150px;
+  height: 150px;
+  display: grid;
+  place-items: center;
+  margin: 0 auto;
+  border: 2px solid rgba(240, 191, 90, 0.35);
+  border-radius: 50%;
+  background:
+    radial-gradient(circle, rgba(240, 191, 90, 0.25), rgba(0, 0, 0, 0.24) 58%, rgba(0, 0, 0, 0.72)),
+    rgba(255, 255, 255, 0.025);
+  box-shadow: 0 0 42px rgba(240, 191, 90, 0.18);
+}
+
+.settings-logo-card img {
+  width: 88px;
+  height: auto;
+  filter: drop-shadow(0 0 14px rgba(240, 191, 90, 0.25));
+}
+
+.settings-row,
+.settings-option-row {
+  width: calc(100% - 32px);
+  display: grid;
+  align-items: center;
+  gap: 16px;
+  min-width: 0;
+  margin: 0 16px 12px;
+  padding: 18px;
+  color: var(--text);
+  text-align: left;
+  border: 1px solid rgba(240, 191, 90, 0.14);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.settings-row {
+  grid-template-columns: 58px minmax(0, 1fr) auto auto;
+}
+
+.settings-option-row {
+  grid-template-columns: 42px minmax(0, 1fr) auto;
+  margin-bottom: 0;
+  border-width: 0 0 1px;
+  border-radius: 0;
+}
+
+.settings-row:first-of-type {
+  margin-top: 0;
+}
+
+.settings-row-icon,
+.settings-option-row > span {
+  display: grid;
+  place-items: center;
+  color: var(--gold-strong);
+  border: 1px solid rgba(240, 191, 90, 0.28);
+  background: rgba(240, 191, 90, 0.06);
+}
+
+.settings-row-icon {
+  width: 58px;
+  height: 58px;
+  border-radius: 999px;
+  font-size: 1.85rem;
+}
+
+.settings-option-row > span {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  font-size: 1.2rem;
+}
+
+.settings-row p,
+.settings-option-row p {
+  min-width: 0;
+  margin: 0;
+}
+
+.settings-row strong,
+.settings-option-row strong,
+.settings-row small,
+.settings-option-row small {
+  display: block;
+  min-width: 0;
+}
+
+.settings-row strong,
+.settings-option-row strong {
+  color: var(--text);
+  font-size: 1rem;
+}
+
+.settings-row small,
+.settings-option-row small {
+  margin-top: 5px;
+  color: var(--muted);
+  line-height: 1.4;
+}
+
+.settings-row b,
+.settings-option-row b {
+  color: var(--text);
+  font-size: 1.7rem;
+  font-weight: 500;
+}
+
+.settings-status {
+  min-width: 92px;
+  min-height: 28px;
+  display: inline-grid;
+  place-items: center;
+  padding: 0 10px;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 900;
+}
+
+.settings-status.connected {
+  color: var(--ok);
+  border: 1px solid rgba(105, 224, 155, 0.24);
+  background: rgba(105, 224, 155, 0.12);
+}
+
+.settings-status.warning {
+  color: var(--gold-strong);
+  border: 1px solid rgba(240, 191, 90, 0.24);
+  background: rgba(240, 191, 90, 0.12);
+}
+
+.system-info-card > div:last-child {
+  display: grid;
+  gap: 12px;
+  padding: 18px 24px 24px;
+}
+
+.system-info-card p {
+  display: grid;
+  grid-template-columns: minmax(160px, 1fr) auto;
+  align-items: center;
+  gap: 16px;
+  margin: 0;
+  color: var(--text);
+}
+
+.system-info-card p span {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--text);
+}
+
+.system-info-card p span svg {
+  color: var(--gold-strong);
+}
+
+.system-info-card p strong {
+  color: var(--text);
+}
+
+.storage-line {
+  align-items: start;
+}
+
+.storage-bar {
+  height: 10px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.storage-bar i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--gold), var(--gold-strong));
+}
+
+.settings-quick-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 12px;
+  padding: 18px;
+}
+
+.settings-quick-grid button {
+  min-height: 148px;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 8px;
+  padding: 14px;
+  color: var(--text);
+  text-align: center;
+  border: 1px solid rgba(240, 191, 90, 0.18);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.settings-quick-grid button span {
+  color: var(--gold-strong);
+  font-size: 1.85rem;
+}
+
+.settings-quick-grid button strong {
+  font-size: 0.98rem;
+}
+
+.settings-quick-grid button small {
+  color: var(--muted);
+  line-height: 1.35;
+}
+
 .ok-text {
   color: var(--ok);
 }
@@ -2895,8 +3157,19 @@ td small {
   .contracts-bottom-grid,
   .reports-kpi-grid,
   .reports-chart-grid,
-  .reports-bottom-grid {
+  .reports-bottom-grid,
+  .settings-layout,
+  .settings-quick-grid {
     grid-template-columns: 1fr;
+  }
+
+  .settings-layout {
+    grid-template-areas:
+      "logo"
+      "integrations"
+      "options"
+      "info"
+      "quick";
   }
 
   .dashboard-financial-item {
@@ -2920,6 +3193,11 @@ td small {
   .report-donut-wrap {
     grid-template-columns: 1fr;
     justify-items: center;
+  }
+
+  .settings-logo-card {
+    width: 130px;
+    height: 130px;
   }
 
   .contract-action-grid {
@@ -3028,6 +3306,22 @@ td small {
 
   .report-activity-row time {
     grid-column: 2;
+  }
+
+  .settings-row,
+  .settings-option-row {
+    grid-template-columns: 44px minmax(0, 1fr);
+  }
+
+  .settings-status,
+  .settings-row b,
+  .settings-option-row b {
+    grid-column: 2;
+    justify-self: start;
+  }
+
+  .system-info-card p {
+    grid-template-columns: 1fr;
   }
 
   .detail-lines,
