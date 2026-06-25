@@ -7,7 +7,7 @@
     <meta name="robots" content="noindex, nofollow" />
     <link rel="icon" type="image/png" href="../assets/logopequeno.png?v=20260615" />
     <link rel="apple-touch-icon" href="../assets/logopequeno.png?v=20260615" />
-    <link rel="stylesheet" href="../admin/admin.css?v=20260624-icons-fix" />
+    <link rel="stylesheet" href="../admin/admin.css?v=20260624-contracts-page" />
   </head>
   <body>
     <main class="admin-shell">
@@ -349,29 +349,159 @@
           </section>
 
           <section class="view-panel" data-view="payments">
-            <div class="toolbar">
-              <select data-payment-status>
-                <option value="">Todos pagamentos</option>
-                <option value="approved">Aprovados</option>
-                <option value="pending">Pendentes</option>
-                <option value="rejected">Recusados</option>
-                <option value="cancelled">Cancelados</option>
-              </select>
-              <button class="gold-button compact" type="button" data-filter-payments>Filtrar</button>
+            <div class="admin-page-heading payments-page-heading">
+              <div>
+                <h1>Pagamentos</h1>
+                <p>Historico de pagamentos e assinaturas</p>
+              </div>
             </div>
-            <div class="table-wrap">
-              <table>
+
+            <div class="payments-toolbar">
+              <div class="payment-tabs" data-payment-tabs>
+                <button class="payment-tab is-active" type="button" data-payment-filter="">Todos</button>
+                <button class="payment-tab" type="button" data-payment-filter="paid">Pagos</button>
+                <button class="payment-tab" type="button" data-payment-filter="pending">Pendentes</button>
+                <button class="payment-tab" type="button" data-payment-filter="cancelled">Cancelados</button>
+              </div>
+              <select class="payment-period" data-payment-period>
+                <option value="month">Este mes</option>
+              </select>
+            </div>
+
+            <div class="table-wrap payments-table-card">
+              <table class="payments-table">
                 <thead>
                   <tr>
                     <th>Cliente</th>
+                    <th>Plano</th>
                     <th>Valor</th>
                     <th>Status</th>
                     <th>Data</th>
                     <th>ID Mercado Pago</th>
+                    <th>Acoes</th>
                   </tr>
                 </thead>
                 <tbody data-payments-table></tbody>
               </table>
+              <div class="payments-table-footer">
+                <span data-payments-count>Mostrando 0 pagamentos</span>
+                <div class="pagination-lite">
+                  <button type="button" disabled>&lt;</button>
+                  <button class="is-active" type="button">1</button>
+                  <button type="button" disabled>&gt;</button>
+                </div>
+              </div>
+            </div>
+
+            <section class="payments-summary-card">
+              <div class="dashboard-card-header">
+                <h3>Resumo Financeiro</h3>
+              </div>
+              <div class="payments-summary-grid" data-payments-summary></div>
+            </section>
+          </section>
+
+          <section class="view-panel" data-view="contracts">
+            <div class="admin-page-heading contracts-page-heading">
+              <div>
+                <h1>Contratos</h1>
+                <p>Relatorios e configuracoes de contratos</p>
+              </div>
+              <button class="gold-button" type="button" data-contract-bulk>
+                <span class="admin-line-icon icon-contract"></span>
+                Enviar contratos em massa
+              </button>
+            </div>
+
+            <div class="contracts-summary-grid" data-contracts-summary></div>
+
+            <div class="contracts-toolbar">
+              <label class="contract-search">
+                <span class="admin-line-icon icon-search"></span>
+                <input data-contract-search placeholder="Buscar por cliente, plano ou e-mail..." />
+              </label>
+              <select class="contract-select" data-contract-status>
+                <option value="">Todos os status</option>
+                <option value="assinado">Assinados</option>
+                <option value="pendente">Pendentes</option>
+                <option value="enviado">Enviados</option>
+                <option value="expirado">Expirados</option>
+                <option value="cancelado">Cancelados</option>
+              </select>
+              <select class="contract-select" data-contract-plan>
+                <option value="">Todos os planos</option>
+              </select>
+              <select class="contract-select compact" data-contract-period>
+                <option value="month">Este mes</option>
+                <option value="">Todo periodo</option>
+              </select>
+              <button class="ghost-button compact" type="button" data-export-contracts>Exportar</button>
+            </div>
+
+            <div class="table-wrap contracts-table-card">
+              <table class="contracts-table">
+                <thead>
+                  <tr>
+                    <th>Cliente</th>
+                    <th>Plano</th>
+                    <th>Data envio</th>
+                    <th>Status</th>
+                    <th>Data assinatura</th>
+                    <th>Acoes</th>
+                  </tr>
+                </thead>
+                <tbody data-contracts-table></tbody>
+              </table>
+              <div class="contracts-table-footer">
+                <span data-contracts-count>Mostrando 0 contratos</span>
+                <div class="pagination-lite">
+                  <button type="button" disabled>&lt;</button>
+                  <button class="is-active" type="button">1</button>
+                  <button type="button" disabled>&gt;</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="contracts-bottom-grid">
+              <section class="contract-quick-panel">
+                <div class="dashboard-card-header">
+                  <h3>Acoes Rapidas</h3>
+                </div>
+                <div class="contract-action-grid">
+                  <button type="button" data-contract-bulk>
+                    <span class="admin-line-icon icon-contract"></span>
+                    <strong>Enviar em massa</strong>
+                    <small>Envie contratos para varios clientes.</small>
+                  </button>
+                  <button type="button">
+                    <span class="admin-line-icon icon-plan"></span>
+                    <strong>Modelo de Contrato</strong>
+                    <small>Gerencie o modelo utilizado.</small>
+                  </button>
+                  <button type="button">
+                    <span class="admin-line-icon icon-settings"></span>
+                    <strong>Lembretes Automaticos</strong>
+                    <small>Configure lembretes de assinatura.</small>
+                  </button>
+                  <button type="button">
+                    <span class="admin-line-icon icon-card"></span>
+                    <strong>Historico de Envio</strong>
+                    <small>Veja o historico de envios realizados.</small>
+                  </button>
+                </div>
+              </section>
+
+              <section class="contract-info-panel">
+                <div class="dashboard-card-header">
+                  <h3>Informacoes Importantes</h3>
+                </div>
+                <ul>
+                  <li>O contrato e enviado automaticamente apos a confirmacao do pagamento.</li>
+                  <li>O cliente recebe o contrato por e-mail e WhatsApp.</li>
+                  <li>Voce pode reenviar ou cancelar o envio a qualquer momento.</li>
+                  <li>Os contratos assinados ficam armazenados por tempo indeterminado.</li>
+                </ul>
+              </section>
             </div>
           </section>
         </section>
@@ -387,6 +517,6 @@
     </div>
 
     <script src="../config.js?v=20260606-railway"></script>
-    <script src="../admin/admin.js?v=20260624-icons-fix"></script>
+    <script src="../admin/admin.js?v=20260624-contracts-page"></script>
   </body>
 </html>

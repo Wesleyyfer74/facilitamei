@@ -108,6 +108,33 @@ CREATE TABLE IF NOT EXISTS customer_documents (
   CONSTRAINT customer_documents_user_fk FOREIGN KEY (user_id) REFERENCES users(id)
 );
 
+CREATE TABLE IF NOT EXISTS customer_contracts (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  user_id BIGINT UNSIGNED NOT NULL,
+  subscription_id BIGINT UNSIGNED NULL,
+  plan_id VARCHAR(60) NULL,
+  titulo VARCHAR(160) NOT NULL DEFAULT 'Contrato de Prestacao de Servicos',
+  status ENUM('pendente', 'enviado', 'assinado', 'expirado', 'cancelado') NOT NULL DEFAULT 'pendente',
+  arquivo_url TEXT NULL,
+  assinatura_url TEXT NULL,
+  provedor VARCHAR(60) NULL,
+  provider_contract_id VARCHAR(160) NULL,
+  data_envio DATETIME NULL,
+  data_assinatura DATETIME NULL,
+  data_expiracao DATETIME NULL,
+  observacao TEXT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  KEY customer_contracts_user_idx (user_id),
+  KEY customer_contracts_subscription_idx (subscription_id),
+  UNIQUE KEY customer_contracts_subscription_unique (subscription_id),
+  KEY customer_contracts_plan_idx (plan_id),
+  KEY customer_contracts_status_idx (status),
+  CONSTRAINT customer_contracts_user_fk FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  CONSTRAINT customer_contracts_subscription_fk FOREIGN KEY (subscription_id) REFERENCES subscriptions(id) ON DELETE SET NULL,
+  CONSTRAINT customer_contracts_plan_fk FOREIGN KEY (plan_id) REFERENCES plans(id) ON DELETE SET NULL
+);
+
 INSERT INTO plans
   (id, nome, descricao, valor, frequencia, tipo_frequencia, servico, mercado_pago_plan_id, tipo_cobranca, ativo, ordem)
 VALUES

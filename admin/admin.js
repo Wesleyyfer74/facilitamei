@@ -24,10 +24,21 @@ const customerDetail = document.querySelector("[data-customer-detail]");
 const plansTable = document.querySelector("[data-plans-table]");
 const planDetail = document.querySelector("[data-plan-detail]");
 const paymentsTable = document.querySelector("[data-payments-table]");
+const paymentsSummary = document.querySelector("[data-payments-summary]");
+const paymentsCount = document.querySelector("[data-payments-count]");
+const contractsTable = document.querySelector("[data-contracts-table]");
+const contractsSummary = document.querySelector("[data-contracts-summary]");
+const contractsCount = document.querySelector("[data-contracts-count]");
 const customerSearch = document.querySelector("[data-customer-search]");
 const customerStatus = document.querySelector("[data-customer-status]");
 const customerPlan = document.querySelector("[data-customer-plan]");
 const paymentStatus = document.querySelector("[data-payment-status]");
+const paymentFilterButtons = document.querySelectorAll("[data-payment-filter]");
+const contractSearch = document.querySelector("[data-contract-search]");
+const contractStatus = document.querySelector("[data-contract-status]");
+const contractPlan = document.querySelector("[data-contract-plan]");
+const contractPeriod = document.querySelector("[data-contract-period]");
+const exportContractsButton = document.querySelector("[data-export-contracts]");
 const drawer = document.querySelector("[data-drawer]");
 const drawerContent = document.querySelector("[data-drawer-content]");
 const closeDrawerButtons = document.querySelectorAll("[data-close-drawer]");
@@ -53,8 +64,10 @@ if (window.location.search) {
 let currentView = "overview";
 let plansCache = [];
 let customersCache = [];
+let contractsCache = [];
 let selectedCustomerId = null;
 let selectedPlanId = null;
+let currentPaymentFilter = "";
 
 function getToken() {
   return localStorage.getItem(SESSION_KEY) || "";
@@ -123,6 +136,8 @@ function iconSvg(name, className = "admin-svg-icon") {
     eye: '<path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6z"/><circle cx="12" cy="12" r="3"/>',
     whatsapp: '<path d="M12 4a8 8 0 0 0-6.8 12.2L4 20l4-1.1A8 8 0 1 0 12 4z"/><path d="M9.2 8.8c.2-.5.4-.5.7-.5h.5c.2 0 .4.1.5.4l.7 1.6c.1.2.1.4-.1.6l-.4.5c-.1.2-.2.3 0 .6.4.8 1.4 1.8 2.2 2.2.3.2.5.1.6 0l.6-.5c.2-.1.4-.2.6-.1l1.5.7c.3.1.4.3.4.6 0 .5-.3 1.2-.7 1.5-.5.4-1.7.5-3.5-.4-2.9-1.4-4.8-4.1-5-5.8-.2-1 .3-1.3.8-1.4z"/>',
     dots: '<circle cx="5" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="19" cy="12" r="1.7"/>',
+    send: '<path d="M21 3 10 14"/><path d="m21 3-7 18-4-7-7-4z"/>',
+    download: '<path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/>',
   };
   return `<svg class="${className}" viewBox="0 0 24 24" aria-hidden="true" focusable="false">${paths[name] || paths.plan}</svg>`;
 }
@@ -214,12 +229,22 @@ function statusPill(status) {
     active: "Ativo",
     authorized: "Ativo",
     approved: "Pago",
+    paid: "Pago",
+    pago: "Pago",
     inactive: "Inativo",
     inativo: "Inativo",
     ativo: "Ativo",
     associado: "Associado",
     pendente: "Pendente",
     pending: "Pendente",
+    in_process: "Pendente",
+    cancelled: "Cancelado",
+    canceled: "Cancelado",
+    rejected: "Recusado",
+    assinado: "Assinado",
+    enviado: "Enviado",
+    expirado: "Expirado",
+    cancelado: "Cancelado",
   };
   const key = String(status || "")
     .trim()
@@ -814,6 +839,14 @@ function renderPlans(plans = []) {
       .join("")}`;
   }
 
+  if (contractPlan) {
+    const selectedValue = contractPlan.value;
+    contractPlan.innerHTML = `<option value="">Todos os planos</option>${plans
+      .map((plan) => `<option value="${escapeHtml(plan.id)}">${escapeHtml(plan.nome)}</option>`)
+      .join("")}`;
+    contractPlan.value = plans.some((plan) => plan.id === selectedValue) ? selectedValue : "";
+  }
+
   if (plans.length && !plans.some((plan) => plan.id === selectedPlanId)) {
     selectedPlanId = plans.find((plan) => plan.id === "premium")?.id || plans[0].id;
   }
@@ -857,34 +890,219 @@ async function loadPlans() {
   setStatus("");
 }
 
-function renderPayments(payments = []) {
+function renderPayments(payments = [], summary = {}) {
   paymentsTable.innerHTML = payments.length
     ? payments
         .map(
           (payment) => `
             <tr>
               <td>
-                <strong>${escapeHtml(payment.user_name || "-")}</strong>
-                <small>${escapeHtml(payment.email || "")}</small>
+                <div class="customer-cell">
+                  <span class="avatar">${escapeHtml(getInitials(payment.user_name || payment.email || "Cliente"))}</span>
+                  <span>
+                    <strong>${escapeHtml(payment.user_name || payment.email || "Cliente")}</strong>
+                    <small>${escapeHtml(payment.email || "")}</small>
+                  </span>
+                </div>
               </td>
+              <td>${escapeHtml(payment.plan_name || "Sem plano")}</td>
               <td>${money(payment.valor)}</td>
               <td>${statusPill(payment.status)}</td>
-              <td>${formatDate(payment.data_pagamento || payment.created_at)}</td>
+              <td>${formatDateOnly(payment.data_pagamento || payment.created_at)}</td>
               <td>${escapeHtml(payment.mercado_pago_payment_id)}</td>
+              <td>
+                <div class="row-actions">
+                  <button class="icon-mini-button" type="button" data-preview-customer="${payment.user_id}" aria-label="Ver cliente">${iconSvg("eye")}</button>
+                </div>
+              </td>
             </tr>
           `,
         )
         .join("")
-    : `<tr><td colspan="5">Nenhum pagamento encontrado.</td></tr>`;
+    : `<tr><td colspan="7">Nenhum pagamento encontrado.</td></tr>`;
+
+  if (paymentsCount) {
+    paymentsCount.textContent = `Mostrando ${payments.length} de ${Number(summary.total || payments.length)} pagamentos`;
+  }
+
+  if (paymentsSummary) {
+    const monthlyRevenue = Number(summary.monthlyApprovedAmount || 0);
+    const annualRevenue = Number(summary.approvedAmount || 0) || monthlyRevenue * 12;
+    const pendingAmount = Number(summary.pendingAmount || 0);
+    const approved = Number(summary.approved || 0);
+    const total = Number(summary.total || 0);
+    const approvalRate = total ? `${((approved / total) * 100).toFixed(0)}%` : "0%";
+
+    paymentsSummary.innerHTML = [
+      ["money", "Receita (Este mes)", money(monthlyRevenue)],
+      ["chart", "Receita (Ano)", money(annualRevenue)],
+      ["card", "Pagamentos Pendentes", money(pendingAmount)],
+      ["growth", "Taxa de Aprovacao", approvalRate],
+    ]
+      .map(
+        ([icon, label, value]) => `
+          <article class="payment-summary-item">
+            <span>${iconSvg(icon)}</span>
+            <p>${escapeHtml(label)}<strong>${escapeHtml(value)}</strong></p>
+          </article>
+        `,
+      )
+      .join("");
+  }
 }
 
 async function loadPayments() {
   setStatus("Carregando pagamentos...");
   const params = new URLSearchParams();
-  if (paymentStatus.value) params.set("status", paymentStatus.value);
+  const status = paymentStatus?.value || currentPaymentFilter;
+  if (status) params.set("status", status);
   const data = await apiRequest(`/api/admin/payments?${params.toString()}`);
-  renderPayments(data.payments);
+  renderPayments(data.payments, data.summary);
   setStatus("");
+}
+
+function renderContracts(contracts = [], summary = {}) {
+  contractsCache = contracts;
+
+  if (contractsSummary) {
+    const total = Number(summary.total || 0);
+    const signed = Number(summary.signed || 0);
+    const pending = Number(summary.pending || 0);
+    const expired = Number(summary.expired || 0);
+    const signedRate = total ? `${((signed / total) * 100).toFixed(2)}% do total` : "0% do total";
+    const pendingRate = total ? `${((pending / total) * 100).toFixed(2)}% do total` : "0% do total";
+    const expiredRate = total ? `${((expired / total) * 100).toFixed(2)}% do total` : "0% do total";
+
+    contractsSummary.innerHTML = [
+      ["Total de Contratos", total, "Todos os contratos", ""],
+      ["Assinados", signed, signedRate, "ok-value"],
+      ["Pendentes", pending, pendingRate, "warn-value"],
+      ["Expirados", expired, expiredRate, "danger-value"],
+    ]
+      .map(
+        ([label, value, detail, className]) => `
+          <article class="contract-stat-card">
+            <span>${escapeHtml(label)}</span>
+            <strong class="${escapeHtml(className)}">${escapeHtml(value)}</strong>
+            <small>${escapeHtml(detail)}</small>
+          </article>
+        `,
+      )
+      .join("");
+  }
+
+  if (contractsTable) {
+    contractsTable.innerHTML = contracts.length
+      ? contracts
+          .map((contract) => {
+            const statusKey = String(contract.status || "").toLowerCase();
+            const isSigned = statusKey === "assinado";
+            const fileUrl = contract.arquivo_url || contract.assinatura_url || "";
+            const actionButton = isSigned && fileUrl
+              ? `<a class="icon-mini-button" href="${escapeHtml(fileUrl)}" target="_blank" rel="noreferrer" aria-label="Baixar contrato">${iconSvg("download")}</a>`
+              : `<button class="icon-mini-button ${isSigned ? "is-disabled" : ""}" type="button" data-send-contract="${contract.id}" aria-label="Enviar contrato">${iconSvg("send")}</button>`;
+
+            return `
+              <tr>
+                <td>
+                  <div class="customer-cell">
+                    <span class="avatar">${escapeHtml(getInitials(contract.user_name || contract.email || "Cliente"))}</span>
+                    <span>
+                      <strong>${escapeHtml(contract.user_name || contract.email || "Cliente")}</strong>
+                      <small>${escapeHtml(contract.email || "")}</small>
+                    </span>
+                  </div>
+                </td>
+                <td>
+                  <strong>${escapeHtml(contract.plan_name || "Sem plano")}</strong>
+                  <small>${money(contract.plan_value)} / mes</small>
+                </td>
+                <td>${formatDate(contract.data_envio || contract.created_at)}</td>
+                <td>
+                  ${statusPill(contract.status)}
+                  <small>${isSigned ? "Assinado digitalmente" : statusKey === "expirado" ? "Prazo expirado" : "Aguardando assinatura"}</small>
+                </td>
+                <td>${formatDate(contract.data_assinatura)}</td>
+                <td>
+                  <div class="row-actions">
+                    <button class="icon-mini-button" type="button" data-preview-customer="${contract.user_id}" aria-label="Ver cliente">${iconSvg("eye")}</button>
+                    ${actionButton}
+                    <button class="icon-mini-button" type="button" aria-label="Mais opcoes">${iconSvg("dots")}</button>
+                  </div>
+                </td>
+              </tr>
+            `;
+          })
+          .join("")
+      : `<tr><td colspan="6">Nenhum contrato encontrado.</td></tr>`;
+  }
+
+  if (contractsCount) {
+    contractsCount.textContent = `Mostrando ${contracts.length} de ${Number(summary.total || contracts.length)} contratos`;
+  }
+}
+
+async function loadContracts() {
+  setStatus("Carregando contratos...");
+  if (contractPlan && !plansCache.length) {
+    const plansData = await apiRequest("/api/admin/plans");
+    renderPlans(plansData.plans || []);
+  }
+  const params = new URLSearchParams();
+  const search = contractSearch?.value?.trim() || "";
+  if (search) params.set("search", search);
+  if (contractStatus?.value) params.set("status", contractStatus.value);
+  if (contractPlan?.value) params.set("planId", contractPlan.value);
+  if (contractPeriod?.value) params.set("period", contractPeriod.value);
+  const data = await apiRequest(`/api/admin/contracts?${params.toString()}`);
+  renderContracts(data.contracts, data.summary);
+  if (data.warning) setStatus(data.warning, "error");
+  else setStatus("");
+}
+
+async function generateBulkContracts() {
+  setStatus("Gerando contratos em massa...");
+  const data = await apiRequest("/api/admin/contracts/generate-bulk", { method: "POST" });
+  setStatus(data.message || "Contratos atualizados.");
+  await loadContracts();
+}
+
+async function sendContract(contractId) {
+  setStatus("Atualizando envio do contrato...");
+  const data = await apiRequest(`/api/admin/contracts/${contractId}/send`, { method: "POST" });
+  setStatus(data.message || "Contrato atualizado.");
+  await loadContracts();
+}
+
+function exportContractsCsv() {
+  if (!contractsCache.length) {
+    setStatus("Nao ha contratos carregados para exportar.", "error");
+    return;
+  }
+
+  const rows = [
+    ["Cliente", "Email", "Plano", "Valor", "Status", "Data envio", "Data assinatura", "Contrato"],
+    ...contractsCache.map((contract) => [
+      contract.user_name || "",
+      contract.email || "",
+      contract.plan_name || "",
+      Number(contract.plan_value || 0).toFixed(2),
+      contract.status || "",
+      contract.data_envio || contract.created_at || "",
+      contract.data_assinatura || "",
+      contract.arquivo_url || contract.assinatura_url || "",
+    ]),
+  ];
+  const csv = rows
+    .map((row) => row.map((cell) => `"${String(cell).replaceAll('"', '""')}"`).join(";"))
+    .join("\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `contratos-facilita-${new Date().toISOString().slice(0, 10)}.csv`;
+  link.click();
+  URL.revokeObjectURL(url);
 }
 
 async function loadCurrentView() {
@@ -893,6 +1111,7 @@ async function loadCurrentView() {
     if (currentView === "customers") await loadCustomers();
     if (currentView === "plans") await loadPlans();
     if (currentView === "payments") await loadPayments();
+    if (currentView === "contracts") await loadContracts();
   } catch (error) {
     setStatus(error.message, "error");
   }
@@ -1287,12 +1506,28 @@ document.querySelector("[data-logout]").addEventListener("click", async () => {
 
 document.querySelector("[data-refresh]")?.addEventListener("click", loadCurrentView);
 document.querySelector("[data-search-customers]").addEventListener("click", loadCustomers);
-document.querySelector("[data-filter-payments]").addEventListener("click", loadPayments);
+document.querySelector("[data-filter-payments]")?.addEventListener("click", loadPayments);
 customerStatus.addEventListener("change", loadCustomers);
 customerPlan?.addEventListener("change", () => renderCustomers(customersCache));
 customerSearch.addEventListener("keydown", (event) => {
   if (event.key === "Enter") loadCustomers();
 });
+
+paymentFilterButtons.forEach((button) => {
+  button.addEventListener("click", () => {
+    currentPaymentFilter = button.dataset.paymentFilter || "";
+    paymentFilterButtons.forEach((item) => item.classList.toggle("is-active", item === button));
+    loadPayments().catch((error) => setStatus(error.message, "error"));
+  });
+});
+
+contractStatus?.addEventListener("change", () => loadContracts().catch((error) => setStatus(error.message, "error")));
+contractPlan?.addEventListener("change", () => loadContracts().catch((error) => setStatus(error.message, "error")));
+contractPeriod?.addEventListener("change", () => loadContracts().catch((error) => setStatus(error.message, "error")));
+contractSearch?.addEventListener("keydown", (event) => {
+  if (event.key === "Enter") loadContracts().catch((error) => setStatus(error.message, "error"));
+});
+exportContractsButton?.addEventListener("click", exportContractsCsv);
 
 viewButtons.forEach((button) => {
   button.addEventListener("click", () => activateView(button.dataset.viewButton));
@@ -1307,6 +1542,8 @@ document.addEventListener("click", (event) => {
   const cancelButton = event.target.closest("[data-cancel-subscription]");
   const newCustomerButton = event.target.closest("[data-new-customer]");
   const newPlanButton = event.target.closest("[data-new-plan]");
+  const contractBulkButton = event.target.closest("[data-contract-bulk]");
+  const sendContractButton = event.target.closest("[data-send-contract]");
   const dynamicViewButton = event.target.closest("[data-view-button]");
   const collapseButton = event.target.closest("[data-collapse-detail]");
   const closeButton = event.target.closest("[data-close-drawer]");
@@ -1329,6 +1566,8 @@ document.addEventListener("click", (event) => {
   if (cancelButton) cancelSubscription(cancelButton.dataset.cancelSubscription).catch((error) => setStatus(error.message, "error"));
   if (newCustomerButton) openNewCustomer();
   if (newPlanButton) openNewPlan();
+  if (contractBulkButton) generateBulkContracts().catch((error) => setStatus(error.message, "error"));
+  if (sendContractButton) sendContract(sendContractButton.dataset.sendContract).catch((error) => setStatus(error.message, "error"));
   if (closeButton) closeDrawer();
   if (collapseButton && customerDetail) {
     selectedCustomerId = null;

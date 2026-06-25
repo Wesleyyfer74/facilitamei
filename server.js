@@ -689,6 +689,7 @@ app.delete("/api/admin/customers/:id", requireAdminSession, async (request, resp
     const userId = Number(request.params.id);
 
     await connection.beginTransaction();
+    await connection.execute("DELETE FROM customer_contracts WHERE user_id = :userId", { userId });
     await connection.execute("DELETE FROM customer_documents WHERE user_id = :userId", { userId });
     await connection.execute("DELETE FROM payments WHERE user_id = :userId", { userId });
     await connection.execute("DELETE FROM subscriptions WHERE user_id = :userId", { userId });
@@ -702,6 +703,158 @@ app.delete("/api/admin/customers/:id", requireAdminSession, async (request, resp
     response.status(500).json({ error: "Erro ao excluir cliente." });
   } finally {
     connection.release();
+  }
+});
+
+app.get("/api/admin/contracts", requireAdminSession, async (request, response) => {
+  try {
+    const searchTerm = String(request.query.search || "").trim();
+    const status = String(request.query.status || "").trim();
+    const planId = String(request.query.planId || "").trim();
+    const period = String(request.query.period || "").trim();
+    const params = { search: `%${searchTerm}%` };
+    const filters = [
+      "(u.nome LIKE :search OR u.email LIKE :search OR u.telefone LIKE :search OR c.titulo LIKE :search)",
+    ];
+
+    if (status) {
+      filters.push("c.status = :status");
+      params.status = status;
+    }
+
+    if (planId) {
+      filters.push("COALESCE(c.plan_id, s.plan_id) = :planId");
+      params.planId = planId;
+    }
+
+    if (period === "month") {
+      filters.push("COALESCE(c.data_envio, c.created_at) >= DATE_FORMAT(CURDATE(), '%Y-%m-01')");
+    }
+
+    const whereClause = filters.length ? `WHERE ${filters.join(" AND ")}` : "";
+
+    const [contracts] = await dbPool.execute(
+      `SELECT
+         c.id,
+         c.user_id,
+         c.subscription_id,
+         c.plan_id,
+         c.titulo,
+         c.status,
+         c.arquivo_url,
+         c.assinatura_url,
+         c.provedor,
+         c.provider_contract_id,
+         c.data_envio,
+         c.data_assinatura,
+         c.data_expiracao,
+         c.observacao,
+         c.created_at,
+         c.updated_at,
+         u.nome AS user_name,
+         u.email,
+         u.telefone,
+         pl.nome AS plan_name,
+         COALESCE(s.valor, pl.valor, 0) AS plan_value
+       FROM customer_contracts c
+       JOIN users u ON u.id = c.user_id
+       LEFT JOIN subscriptions s ON s.id = c.subscription_id
+       LEFT JOIN plans pl ON pl.id = COALESCE(c.plan_id, s.plan_id)
+       ${whereClause}
+       ORDER BY COALESCE(c.data_envio, c.created_at) DESC
+       LIMIT 160`,
+      params,
+    );
+
+    const [summaryRows] = await dbPool.execute(
+      `SELECT
+         COUNT(*) AS total,
+         COALESCE(SUM(status = 'assinado'), 0) AS signed,
+         COALESCE(SUM(status IN ('pendente', 'enviado')), 0) AS pending,
+         COALESCE(SUM(status = 'expirado'), 0) AS expired
+       FROM customer_contracts`,
+    );
+
+    response.json({ contracts, summary: summaryRows[0] || {} });
+  } catch (error) {
+    if (error.code === "ER_NO_SUCH_TABLE") {
+      return response.json({
+        contracts: [],
+        summary: { total: 0, signed: 0, pending: 0, expired: 0 },
+        warning: "Tabela customer_contracts ainda nao existe. Rode database/add-customer-contracts.sql.",
+      });
+    }
+
+    console.error(error);
+    response.status(500).json({ error: "Erro ao listar contratos." });
+  }
+});
+
+app.post("/api/admin/contracts/generate-bulk", requireAdminSession, async (_request, response) => {
+  try {
+    const [result] = await dbPool.execute(
+      `INSERT INTO customer_contracts
+         (user_id, subscription_id, plan_id, titulo, status, data_envio, observacao)
+       SELECT
+         s.user_id,
+         s.id,
+         s.plan_id,
+         CONCAT('Contrato de Prestacao de Servicos - ', COALESCE(p.nome, s.plan_id)),
+         'enviado',
+         NOW(),
+         'Contrato gerado em massa pelo painel administrativo.'
+       FROM subscriptions s
+       LEFT JOIN plans p ON p.id = s.plan_id
+       LEFT JOIN customer_contracts c ON c.subscription_id = s.id
+       WHERE c.id IS NULL
+         AND s.status IN ('authorized', 'active')
+       ORDER BY s.created_at DESC`,
+    );
+
+    response.status(201).json({
+      ok: true,
+      created: result.affectedRows || 0,
+      message: result.affectedRows
+        ? `${result.affectedRows} contrato(s) gerado(s) no banco.`
+        : "Nenhuma assinatura ativa sem contrato foi encontrada.",
+    });
+  } catch (error) {
+    if (error.code === "ER_NO_SUCH_TABLE") {
+      return response.status(500).json({ error: "Tabela customer_contracts ainda nao existe. Rode database/add-customer-contracts.sql." });
+    }
+
+    console.error(error);
+    response.status(500).json({ error: "Erro ao gerar contratos em massa." });
+  }
+});
+
+app.post("/api/admin/contracts/:id/send", requireAdminSession, async (request, response) => {
+  try {
+    const contractId = Number(request.params.id);
+    const [result] = await dbPool.execute(
+      `UPDATE customer_contracts
+       SET status = CASE
+             WHEN status = 'assinado' THEN status
+             ELSE 'enviado'
+           END,
+           data_envio = CASE
+             WHEN data_envio IS NULL THEN NOW()
+             ELSE data_envio
+           END,
+           observacao = CASE
+             WHEN status = 'assinado' THEN observacao
+             ELSE 'Contrato reenviado pelo painel administrativo.'
+           END,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE id = :contractId`,
+      { contractId },
+    );
+
+    if (!result.affectedRows) return response.status(404).json({ error: "Contrato nao encontrado." });
+    response.json({ ok: true, message: "Contrato marcado como enviado." });
+  } catch (error) {
+    console.error(error);
+    response.status(500).json({ error: "Erro ao reenviar contrato." });
   }
 });
 
@@ -871,21 +1024,47 @@ app.get("/api/admin/payments", requireAdminSession, async (request, response) =>
     let statusFilter = "";
 
     if (status) {
-      statusFilter = "WHERE p.status = :status";
-      params.status = status;
+      const statusGroups = {
+        paid: ["approved", "paid", "pago"],
+        pending: ["pending", "in_process"],
+        cancelled: ["cancelled", "rejected", "refunded", "charged_back"],
+      };
+      const statuses = statusGroups[status] || [status];
+      statusFilter = `WHERE p.status IN (${statuses.map((_, index) => `:status${index}`).join(", ")})`;
+      statuses.forEach((item, index) => {
+        params[`status${index}`] = item;
+      });
     }
 
     const [payments] = await dbPool.execute(
-      `SELECT p.*, u.nome AS user_name, u.email
+      `SELECT
+         p.*,
+         u.nome AS user_name,
+         u.email,
+         pl.nome AS plan_name
        FROM payments p
        JOIN users u ON u.id = p.user_id
+       LEFT JOIN subscriptions s ON s.id = p.subscription_id
+       LEFT JOIN plans pl ON pl.id = s.plan_id
        ${statusFilter}
        ORDER BY p.created_at DESC
        LIMIT 160`,
       params,
     );
 
-    response.json({ payments });
+    const [summaryRows] = await dbPool.execute(
+      `SELECT
+         COUNT(*) AS total,
+         COALESCE(SUM(CASE WHEN status IN ('approved', 'paid', 'pago') AND YEAR(COALESCE(data_pagamento, created_at)) = YEAR(CURDATE()) THEN valor ELSE 0 END), 0) AS approvedAmount,
+         COALESCE(SUM(CASE WHEN status IN ('approved', 'paid', 'pago') AND COALESCE(data_pagamento, created_at) >= DATE_FORMAT(CURDATE(), '%Y-%m-01') THEN valor ELSE 0 END), 0) AS monthlyApprovedAmount,
+         COALESCE(SUM(CASE WHEN status IN ('pending', 'in_process') THEN valor ELSE 0 END), 0) AS pendingAmount,
+         SUM(status IN ('approved', 'paid', 'pago')) AS approved,
+         SUM(status IN ('pending', 'in_process')) AS pending,
+         SUM(status IN ('cancelled', 'rejected', 'refunded', 'charged_back')) AS cancelled
+       FROM payments`,
+    );
+
+    response.json({ payments, summary: summaryRows[0] || {} });
   } catch (error) {
     console.error(error);
     response.status(500).json({ error: "Erro ao listar pagamentos." });
