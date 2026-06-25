@@ -7,7 +7,7 @@
     <meta name="robots" content="noindex, nofollow" />
     <link rel="icon" type="image/png" href="../assets/logopequeno.png?v=20260615" />
     <link rel="apple-touch-icon" href="../assets/logopequeno.png?v=20260615" />
-    <link rel="stylesheet" href="../admin/admin.css?v=20260624-contracts-page" />
+    <link rel="stylesheet" href="../admin/admin.css?v=20260625-reports-page" />
   </head>
   <body>
     <main class="admin-shell">
@@ -504,6 +504,65 @@
               </section>
             </div>
           </section>
+
+          <section class="view-panel" data-view="reports">
+            <div class="admin-page-heading reports-page-heading">
+              <div>
+                <h1>Relatorios</h1>
+                <p>Acompanhe o desempenho do seu negocio</p>
+              </div>
+              <div class="reports-actions">
+                <select class="report-period" data-report-period>
+                  <option value="month">Este mes</option>
+                </select>
+                <button class="gold-button" type="button" data-export-report>
+                  <span class="admin-line-icon icon-chart"></span>
+                  Exportar Relatorio
+                </button>
+              </div>
+            </div>
+
+            <div class="reports-kpi-grid" data-reports-kpis></div>
+
+            <div class="reports-chart-grid">
+              <section class="report-card large">
+                <h3>Receita nos ultimos 6 meses</h3>
+                <div data-report-revenue-chart></div>
+              </section>
+              <section class="report-card">
+                <h3>Pagamentos por status</h3>
+                <div data-report-status-chart></div>
+              </section>
+              <section class="report-card large">
+                <h3>Novos clientes (ultimos 6 meses)</h3>
+                <div data-report-customers-chart></div>
+              </section>
+            </div>
+
+            <div class="reports-bottom-grid">
+              <section class="report-card plans-report-card">
+                <div class="dashboard-card-header">
+                  <h3>Planos mais contratados</h3>
+                </div>
+                <div data-report-plans></div>
+                <button class="ghost-button full-width" type="button" data-view-button="plans">Ver todos os planos</button>
+              </section>
+
+              <section class="report-card activities-report-card">
+                <div class="dashboard-card-header">
+                  <h3>Atividades recentes</h3>
+                </div>
+                <div data-report-activities></div>
+              </section>
+
+              <section class="report-card quick-report-card">
+                <div class="dashboard-card-header">
+                  <h3>Relatorios rapidos</h3>
+                </div>
+                <div data-report-quick></div>
+              </section>
+            </div>
+          </section>
         </section>
       </section>
     </main>
@@ -517,6 +576,6 @@
     </div>
 
     <script src="../config.js?v=20260606-railway"></script>
-    <script src="../admin/admin.js?v=20260624-contracts-page"></script>
+    <script src="../admin/admin.js?v=20260625-reports-page"></script>
   </body>
 </html>

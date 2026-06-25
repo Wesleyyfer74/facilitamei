@@ -29,6 +29,13 @@ const paymentsCount = document.querySelector("[data-payments-count]");
 const contractsTable = document.querySelector("[data-contracts-table]");
 const contractsSummary = document.querySelector("[data-contracts-summary]");
 const contractsCount = document.querySelector("[data-contracts-count]");
+const reportsKpis = document.querySelector("[data-reports-kpis]");
+const reportRevenueChart = document.querySelector("[data-report-revenue-chart]");
+const reportStatusChart = document.querySelector("[data-report-status-chart]");
+const reportCustomersChart = document.querySelector("[data-report-customers-chart]");
+const reportPlans = document.querySelector("[data-report-plans]");
+const reportActivities = document.querySelector("[data-report-activities]");
+const reportQuick = document.querySelector("[data-report-quick]");
 const customerSearch = document.querySelector("[data-customer-search]");
 const customerStatus = document.querySelector("[data-customer-status]");
 const customerPlan = document.querySelector("[data-customer-plan]");
@@ -39,6 +46,7 @@ const contractStatus = document.querySelector("[data-contract-status]");
 const contractPlan = document.querySelector("[data-contract-plan]");
 const contractPeriod = document.querySelector("[data-contract-period]");
 const exportContractsButton = document.querySelector("[data-export-contracts]");
+const exportReportButton = document.querySelector("[data-export-report]");
 const drawer = document.querySelector("[data-drawer]");
 const drawerContent = document.querySelector("[data-drawer-content]");
 const closeDrawerButtons = document.querySelectorAll("[data-close-drawer]");
@@ -65,6 +73,7 @@ let currentView = "overview";
 let plansCache = [];
 let customersCache = [];
 let contractsCache = [];
+let reportsCache = null;
 let selectedCustomerId = null;
 let selectedPlanId = null;
 let currentPaymentFilter = "";
@@ -1105,6 +1114,245 @@ function exportContractsCsv() {
   URL.revokeObjectURL(url);
 }
 
+function monthLabel(period = "") {
+  const [year, month] = String(period).split("-").map(Number);
+  if (!year || !month) return period || "-";
+  return new Date(year, month - 1, 1).toLocaleDateString("pt-BR", { month: "short", year: "2-digit" }).replace(".", "");
+}
+
+function lastSixMonths() {
+  const now = new Date();
+  return Array.from({ length: 6 }, (_, index) => {
+    const date = new Date(now.getFullYear(), now.getMonth() - (5 - index), 1);
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+  });
+}
+
+function normalizeMonthlyRows(rows = [], valueKey) {
+  const valuesByPeriod = Object.fromEntries(rows.map((row) => [row.period, Number(row[valueKey] || 0)]));
+  return lastSixMonths().map((period) => ({
+    period,
+    label: monthLabel(period),
+    value: valuesByPeriod[period] || 0,
+  }));
+}
+
+function renderLineChart(rows = []) {
+  const width = 620;
+  const height = 230;
+  const padding = { top: 24, right: 20, bottom: 42, left: 62 };
+  const max = Math.max(...rows.map((item) => item.value), 1);
+  const points = rows.map((item, index) => {
+    const x = padding.left + (index * (width - padding.left - padding.right)) / Math.max(rows.length - 1, 1);
+    const y = padding.top + (1 - item.value / max) * (height - padding.top - padding.bottom);
+    return { ...item, x, y };
+  });
+  const path = points.map((point, index) => `${index ? "L" : "M"} ${point.x.toFixed(1)} ${point.y.toFixed(1)}`).join(" ");
+  const grid = [0, 0.25, 0.5, 0.75, 1].map((ratio) => {
+    const y = padding.top + ratio * (height - padding.top - padding.bottom);
+    const value = max * (1 - ratio);
+    return `<g><line x1="${padding.left}" y1="${y}" x2="${width - padding.right}" y2="${y}" /><text x="8" y="${y + 4}">${money(value)}</text></g>`;
+  });
+
+  return `
+    <svg class="report-line-chart" viewBox="0 0 ${width} ${height}" role="img" aria-label="Receita nos ultimos seis meses">
+      <g class="report-grid">${grid.join("")}</g>
+      <path class="report-line" d="${path}" />
+      ${points
+        .map(
+          (point) => `
+            <g class="report-point">
+              <circle cx="${point.x}" cy="${point.y}" r="5" />
+              <text x="${point.x}" y="${point.y - 12}">${money(point.value)}</text>
+              <text class="axis-label" x="${point.x}" y="${height - 12}">${escapeHtml(point.label)}</text>
+            </g>
+          `,
+        )
+        .join("")}
+    </svg>
+  `;
+}
+
+function renderBarChart(rows = []) {
+  const max = Math.max(...rows.map((item) => item.value), 1);
+  return `
+    <div class="report-bar-chart">
+      ${rows
+        .map(
+          (item) => `
+            <div class="report-bar-item">
+              <span>${escapeHtml(item.value)}</span>
+              <i style="height: ${Math.max(12, (item.value / max) * 150)}px"></i>
+              <small>${escapeHtml(item.label)}</small>
+            </div>
+          `,
+        )
+        .join("")}
+    </div>
+  `;
+}
+
+function renderDonutChart(rows = []) {
+  const approved = Number(rows.find((row) => row.status_group === "approved")?.total || 0);
+  const pending = Number(rows.find((row) => row.status_group === "pending")?.total || 0);
+  const cancelled = Number(rows.find((row) => row.status_group === "cancelled")?.total || 0);
+  const total = approved + pending + cancelled;
+  const approvedDeg = total ? (approved / total) * 360 : 0;
+  const pendingDeg = total ? (pending / total) * 360 : 0;
+  const percent = (value) => (total ? `${((value / total) * 100).toFixed(1)}%` : "0%");
+
+  return `
+    <div class="report-donut-wrap">
+      <div
+        class="report-donut"
+        style="--approved-deg:${approvedDeg}deg; --pending-deg:${pendingDeg}deg"
+      >
+        <span>Total<strong>${total}</strong></span>
+      </div>
+      <div class="report-donut-legend">
+        <p><i class="ok"></i>Aprovados <strong>${approved} (${percent(approved)})</strong></p>
+        <p><i class="warn"></i>Pendentes <strong>${pending} (${percent(pending)})</strong></p>
+        <p><i class="danger"></i>Cancelados <strong>${cancelled} (${percent(cancelled)})</strong></p>
+      </div>
+    </div>
+  `;
+}
+
+function renderReports(data = {}) {
+  reportsCache = data;
+  const summary = data.summary || {};
+  const totalPayments = Number(summary.totalPayments || 0);
+  const approvedPayments = Number(summary.approvedPayments || 0);
+  const approvalRate = totalPayments ? `${((approvedPayments / totalPayments) * 100).toFixed(0)}%` : "0%";
+
+  if (reportsKpis) {
+    reportsKpis.innerHTML = [
+      ["money", "Receita (Este mes)", money(summary.monthlyRevenue), "Dados do mes atual"],
+      ["chart", "Receita (Ano)", money(summary.annualRevenue), "Acumulado no ano"],
+      ["users", "Novos Clientes", summary.newCustomers || 0, "Ultimos 30 dias"],
+      ["card", "Pagamentos Aprovados", approvedPayments, "Pagamentos confirmados"],
+      ["growth", "Taxa de Aprovacao", approvalRate, "Pagamentos aprovados"],
+    ]
+      .map(
+        ([icon, label, value, detail]) => `
+          <article class="report-kpi-card">
+            <span>${iconSvg(icon)}</span>
+            <p>${escapeHtml(label)}</p>
+            <strong>${escapeHtml(value)}</strong>
+            <small>${escapeHtml(detail)}</small>
+          </article>
+        `,
+      )
+      .join("");
+  }
+
+  const revenueMonths = normalizeMonthlyRows(data.revenueMonths || [], "revenue");
+  const customerMonths = normalizeMonthlyRows(data.customerMonths || [], "total");
+  if (reportRevenueChart) reportRevenueChart.innerHTML = renderLineChart(revenueMonths);
+  if (reportCustomersChart) reportCustomersChart.innerHTML = renderBarChart(customerMonths);
+  if (reportStatusChart) reportStatusChart.innerHTML = renderDonutChart(data.paymentStatus || []);
+
+  if (reportPlans) {
+    const totalRevenue = (data.planPerformance || []).reduce((sum, plan) => sum + Number(plan.monthly_revenue || 0), 0);
+    reportPlans.innerHTML = `
+      <table class="report-plan-table">
+        <thead><tr><th>Plano</th><th>Clientes</th><th>Receita</th><th>% do total</th></tr></thead>
+        <tbody>
+          ${(data.planPerformance || [])
+            .map((plan) => {
+              const percent = totalRevenue ? (Number(plan.monthly_revenue || 0) / totalRevenue) * 100 : 0;
+              return `
+                <tr>
+                  <td><span class="plan-icon-box">${iconSvg(getPlanIcon(plan.id))}</span><strong>${escapeHtml(plan.nome)}</strong></td>
+                  <td>${Number(plan.active_clients || 0)}</td>
+                  <td>${money(plan.monthly_revenue)}</td>
+                  <td><span class="report-progress"><i style="width:${percent.toFixed(1)}%"></i></span>${percent.toFixed(1)}%</td>
+                </tr>
+              `;
+            })
+            .join("")}
+        </tbody>
+      </table>
+    `;
+  }
+
+  if (reportActivities) {
+    reportActivities.innerHTML = (data.activities || []).length
+      ? data.activities
+          .map((activity) => {
+            const type = String(activity.type || "");
+            const status = String(activity.status || "");
+            const icon = type === "payment" ? (["cancelled", "rejected"].includes(status) ? "cancel" : "money") : type === "contract" ? "contract" : "users";
+            const title =
+              type === "payment"
+                ? `Pagamento ${["approved", "paid", "pago"].includes(status) ? "recebido" : "registrado"} de ${activity.user_name || "cliente"}`
+                : type === "contract"
+                  ? `Contrato ${status || "registrado"} para ${activity.user_name || "cliente"}`
+                  : `Novo cliente cadastrado: ${activity.user_name || "cliente"}`;
+            return `
+              <article class="report-activity-row">
+                <span>${iconSvg(icon)}</span>
+                <p><strong>${escapeHtml(title)}</strong><small>${escapeHtml(activity.plan_name || "")}${activity.valor ? ` - ${money(activity.valor)}` : ""}</small></p>
+                <time>${formatDate(activity.occurred_at)}</time>
+              </article>
+            `;
+          })
+          .join("")
+      : `<p class="empty-note">Nenhuma atividade encontrada.</p>`;
+  }
+
+  if (reportQuick) {
+    reportQuick.innerHTML = [
+      ["plan", "Financeiro", "Receitas e pagamentos", "payments"],
+      ["users", "Clientes", "Cadastros e crescimento", "customers"],
+      ["card", "Planos", "Desempenho dos planos", "plans"],
+      ["contract", "Contratos", "Status e assinaturas", "contracts"],
+      ["download", "Exportar dados", "Download de relatorios", ""],
+    ]
+      .map(
+        ([icon, title, detail, view]) => `
+          <button class="quick-report-row" type="button" ${view ? `data-view-button="${view}"` : "data-export-report"}>
+            <span>${iconSvg(icon)}</span>
+            <p><strong>${escapeHtml(title)}</strong><small>${escapeHtml(detail)}</small></p>
+            <b>›</b>
+          </button>
+        `,
+      )
+      .join("");
+  }
+}
+
+async function loadReports() {
+  setStatus("Carregando relatorios...");
+  const data = await apiRequest("/api/admin/reports");
+  renderReports(data);
+  setStatus("");
+}
+
+function exportReportsCsv() {
+  if (!reportsCache) {
+    setStatus("Carregue os relatorios antes de exportar.", "error");
+    return;
+  }
+
+  const rows = [
+    ["Tipo", "Nome", "Valor"],
+    ["Resumo", "Receita mensal", Number(reportsCache.summary?.monthlyRevenue || 0).toFixed(2)],
+    ["Resumo", "Receita anual", Number(reportsCache.summary?.annualRevenue || 0).toFixed(2)],
+    ["Resumo", "Novos clientes", reportsCache.summary?.newCustomers || 0],
+    ["Resumo", "Pagamentos aprovados", reportsCache.summary?.approvedPayments || 0],
+    ...(reportsCache.planPerformance || []).map((plan) => ["Plano", plan.nome, Number(plan.monthly_revenue || 0).toFixed(2)]),
+  ];
+  const csv = rows.map((row) => row.map((cell) => `"${String(cell).replaceAll('"', '""')}"`).join(";")).join("\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `relatorio-facilita-${new Date().toISOString().slice(0, 10)}.csv`;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
 async function loadCurrentView() {
   try {
     if (currentView === "overview") await loadOverview();
@@ -1112,6 +1360,7 @@ async function loadCurrentView() {
     if (currentView === "plans") await loadPlans();
     if (currentView === "payments") await loadPayments();
     if (currentView === "contracts") await loadContracts();
+    if (currentView === "reports") await loadReports();
   } catch (error) {
     setStatus(error.message, "error");
   }
@@ -1528,6 +1777,7 @@ contractSearch?.addEventListener("keydown", (event) => {
   if (event.key === "Enter") loadContracts().catch((error) => setStatus(error.message, "error"));
 });
 exportContractsButton?.addEventListener("click", exportContractsCsv);
+exportReportButton?.addEventListener("click", exportReportsCsv);
 
 viewButtons.forEach((button) => {
   button.addEventListener("click", () => activateView(button.dataset.viewButton));
@@ -1544,6 +1794,7 @@ document.addEventListener("click", (event) => {
   const newPlanButton = event.target.closest("[data-new-plan]");
   const contractBulkButton = event.target.closest("[data-contract-bulk]");
   const sendContractButton = event.target.closest("[data-send-contract]");
+  const dynamicExportReportButton = event.target.closest("[data-export-report]");
   const dynamicViewButton = event.target.closest("[data-view-button]");
   const collapseButton = event.target.closest("[data-collapse-detail]");
   const closeButton = event.target.closest("[data-close-drawer]");
@@ -1568,6 +1819,7 @@ document.addEventListener("click", (event) => {
   if (newPlanButton) openNewPlan();
   if (contractBulkButton) generateBulkContracts().catch((error) => setStatus(error.message, "error"));
   if (sendContractButton) sendContract(sendContractButton.dataset.sendContract).catch((error) => setStatus(error.message, "error"));
+  if (dynamicExportReportButton && dynamicExportReportButton !== exportReportButton) exportReportsCsv();
   if (closeButton) closeDrawer();
   if (collapseButton && customerDetail) {
     selectedCustomerId = null;

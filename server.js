@@ -790,6 +790,148 @@ app.get("/api/admin/contracts", requireAdminSession, async (request, response) =
   }
 });
 
+app.get("/api/admin/reports", requireAdminSession, async (_request, response) => {
+  try {
+    const [
+      [summaryRows],
+      [revenueRows],
+      [customerRows],
+      [statusRows],
+      [planRows],
+      [paymentActivity],
+      [customerActivity],
+      [contractActivity],
+    ] = await Promise.all([
+      dbPool.execute(
+        `SELECT
+           COALESCE(SUM(CASE WHEN p.status IN ('approved', 'paid', 'pago') AND COALESCE(p.data_pagamento, p.created_at) >= DATE_FORMAT(CURDATE(), '%Y-%m-01') THEN p.valor ELSE 0 END), 0) AS monthlyRevenue,
+           COALESCE(SUM(CASE WHEN p.status IN ('approved', 'paid', 'pago') AND YEAR(COALESCE(p.data_pagamento, p.created_at)) = YEAR(CURDATE()) THEN p.valor ELSE 0 END), 0) AS annualRevenue,
+           COALESCE(SUM(p.status IN ('approved', 'paid', 'pago')), 0) AS approvedPayments,
+           COUNT(*) AS totalPayments
+         FROM payments p`,
+      ),
+      dbPool.execute(
+        `SELECT
+           DATE_FORMAT(COALESCE(data_pagamento, created_at), '%Y-%m') AS period,
+           COALESCE(SUM(valor), 0) AS revenue
+         FROM payments
+         WHERE status IN ('approved', 'paid', 'pago')
+           AND COALESCE(data_pagamento, created_at) >= DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL 5 MONTH), '%Y-%m-01')
+         GROUP BY period
+         ORDER BY period ASC`,
+      ),
+      dbPool.execute(
+        `SELECT
+           DATE_FORMAT(created_at, '%Y-%m') AS period,
+           COUNT(*) AS total
+         FROM users
+         WHERE created_at >= DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL 5 MONTH), '%Y-%m-01')
+         GROUP BY period
+         ORDER BY period ASC`,
+      ),
+      dbPool.execute(
+        `SELECT
+           CASE
+             WHEN status IN ('approved', 'paid', 'pago') THEN 'approved'
+             WHEN status IN ('pending', 'in_process') THEN 'pending'
+             WHEN status IN ('cancelled', 'rejected', 'refunded', 'charged_back') THEN 'cancelled'
+             ELSE 'other'
+           END AS status_group,
+           COUNT(*) AS total
+         FROM payments
+         GROUP BY status_group`,
+      ),
+      dbPool.execute(
+        `SELECT
+           p.id,
+           p.nome,
+           p.valor,
+           COALESCE(COUNT(DISTINCT CASE WHEN s.status IN ('authorized', 'active') THEN s.user_id END), 0) AS active_clients,
+           COALESCE(SUM(CASE WHEN s.status IN ('authorized', 'active') THEN s.valor ELSE 0 END), 0) AS monthly_revenue
+         FROM plans p
+         LEFT JOIN subscriptions s ON s.plan_id = p.id
+         GROUP BY p.id, p.nome, p.valor
+         ORDER BY monthly_revenue DESC, active_clients DESC, p.ordem ASC`,
+      ),
+      dbPool.execute(
+        `SELECT
+           'payment' AS type,
+           p.created_at AS occurred_at,
+           p.status,
+           p.valor,
+           u.nome AS user_name,
+           pl.nome AS plan_name
+         FROM payments p
+         JOIN users u ON u.id = p.user_id
+         LEFT JOIN subscriptions s ON s.id = p.subscription_id
+         LEFT JOIN plans pl ON pl.id = s.plan_id
+         ORDER BY p.created_at DESC
+         LIMIT 5`,
+      ),
+      dbPool.execute(
+        `SELECT
+           'customer' AS type,
+           u.created_at AS occurred_at,
+           u.status,
+           0 AS valor,
+           u.nome AS user_name,
+           pl.nome AS plan_name
+         FROM users u
+         LEFT JOIN subscriptions s ON s.id = (
+           SELECT s2.id
+           FROM subscriptions s2
+           WHERE s2.user_id = u.id
+           ORDER BY s2.created_at DESC
+           LIMIT 1
+         )
+         LEFT JOIN plans pl ON pl.id = s.plan_id
+         ORDER BY u.created_at DESC
+         LIMIT 5`,
+      ),
+      dbPool.execute(
+        `SELECT
+           'contract' AS type,
+           c.created_at AS occurred_at,
+           c.status,
+           0 AS valor,
+           u.nome AS user_name,
+           pl.nome AS plan_name
+         FROM customer_contracts c
+         JOIN users u ON u.id = c.user_id
+         LEFT JOIN subscriptions s ON s.id = c.subscription_id
+         LEFT JOIN plans pl ON pl.id = COALESCE(c.plan_id, s.plan_id)
+         ORDER BY c.created_at DESC
+         LIMIT 5`,
+      ),
+    ]);
+
+    const [newCustomerRows] = await dbPool.execute(
+      `SELECT COUNT(*) AS newCustomers
+       FROM users
+       WHERE created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)`,
+    );
+
+    const activities = [...paymentActivity, ...customerActivity, ...contractActivity]
+      .sort((a, b) => new Date(b.occurred_at) - new Date(a.occurred_at))
+      .slice(0, 6);
+
+    response.json({
+      summary: {
+        ...(summaryRows[0] || {}),
+        newCustomers: newCustomerRows[0]?.newCustomers || 0,
+      },
+      revenueMonths: revenueRows,
+      customerMonths: customerRows,
+      paymentStatus: statusRows,
+      planPerformance: planRows,
+      activities,
+    });
+  } catch (error) {
+    console.error(error);
+    response.status(500).json({ error: "Erro ao carregar relatorios." });
+  }
+});
+
 app.post("/api/admin/contracts/generate-bulk", requireAdminSession, async (_request, response) => {
   try {
     const [result] = await dbPool.execute(
