@@ -1095,6 +1095,170 @@ async function sendContract(contractId) {
   await loadContracts();
 }
 
+async function openContractTemplate() {
+  setStatus("Carregando modelo de contrato...");
+  const data = await apiRequest("/api/admin/contracts/template");
+  const template = data.template || {
+    nome: "Contrato de Prestacao de Servicos Facilita MEI",
+    conteudo: "",
+  };
+
+  openDrawer(`
+    <div class="drawer-content">
+      <div>
+        <p class="eyebrow">Contratos</p>
+        <h2>Modelo de Contrato</h2>
+        <p>Edite o texto base usado para gerar os contratos dos clientes.</p>
+      </div>
+
+      <form class="form-grid" data-contract-template-form>
+        <label>Nome do modelo<input name="nome" value="${escapeHtml(template.nome || "")}" required /></label>
+        <label>
+          Conteudo do contrato
+          <textarea name="conteudo" rows="16" required>${escapeHtml(template.conteudo || "")}</textarea>
+        </label>
+        <div class="drawer-helper">
+          Variaveis disponiveis: {{cliente_nome}}, {{cliente_email}}, {{plano_nome}}, {{plano_valor}}.
+        </div>
+        <div class="action-bar">
+          <button class="gold-button" type="submit">Salvar modelo</button>
+          <button class="ghost-button" type="button" data-close-drawer>Cancelar</button>
+        </div>
+      </form>
+    </div>
+  `);
+  setStatus("");
+}
+
+async function saveContractTemplate(form) {
+  const formData = new FormData(form);
+  const payload = Object.fromEntries(formData.entries());
+
+  const data = await apiRequest("/api/admin/contracts/template", {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+
+  setStatus(data.message || "Modelo salvo.");
+  closeDrawer();
+}
+
+async function openContractReminders() {
+  setStatus("Carregando lembretes de contrato...");
+  const data = await apiRequest("/api/admin/contracts/reminders");
+  const settings = data.settings || {
+    ativo: 1,
+    dias_primeiro_lembrete: 2,
+    intervalo_dias: 3,
+    max_lembretes: 3,
+    canal_email: 1,
+    canal_whatsapp: 1,
+    mensagem_padrao: "",
+  };
+
+  openDrawer(`
+    <div class="drawer-content">
+      <div>
+        <p class="eyebrow">Contratos</p>
+        <h2>Lembretes Automaticos</h2>
+        <p>Configure a regra que sera usada para lembrar clientes com contrato pendente.</p>
+      </div>
+
+      <form class="form-grid" data-contract-reminder-form>
+        <label class="checkbox-line">
+          <input name="ativo" type="checkbox" ${Number(settings.ativo) ? "checked" : ""} />
+          Lembretes automaticos ativos
+        </label>
+        <div class="form-grid two-cols">
+          <label>Primeiro lembrete apos dias<input name="dias_primeiro_lembrete" type="number" min="0" value="${Number(settings.dias_primeiro_lembrete || 2)}" /></label>
+          <label>Intervalo entre lembretes<input name="intervalo_dias" type="number" min="1" value="${Number(settings.intervalo_dias || 3)}" /></label>
+        </div>
+        <label>Maximo de lembretes<input name="max_lembretes" type="number" min="1" value="${Number(settings.max_lembretes || 3)}" /></label>
+        <div class="form-grid two-cols">
+          <label class="checkbox-line">
+            <input name="canal_email" type="checkbox" ${Number(settings.canal_email) ? "checked" : ""} />
+            Enviar por e-mail
+          </label>
+          <label class="checkbox-line">
+            <input name="canal_whatsapp" type="checkbox" ${Number(settings.canal_whatsapp) ? "checked" : ""} />
+            Preparar WhatsApp
+          </label>
+        </div>
+        <label>
+          Mensagem padrao
+          <textarea name="mensagem_padrao" rows="6">${escapeHtml(settings.mensagem_padrao || "")}</textarea>
+        </label>
+        <div class="drawer-helper">
+          Por enquanto a regra fica salva no banco. O disparo automatico pode ser ligado depois com rotina agendada.
+        </div>
+        <div class="action-bar">
+          <button class="gold-button" type="submit">Salvar lembretes</button>
+          <button class="ghost-button" type="button" data-close-drawer>Cancelar</button>
+        </div>
+      </form>
+    </div>
+  `);
+  setStatus("");
+}
+
+async function saveContractReminders(form) {
+  const formData = new FormData(form);
+  const payload = Object.fromEntries(formData.entries());
+  payload.ativo = Boolean(form.elements.ativo?.checked);
+  payload.canal_email = Boolean(form.elements.canal_email?.checked);
+  payload.canal_whatsapp = Boolean(form.elements.canal_whatsapp?.checked);
+
+  const data = await apiRequest("/api/admin/contracts/reminders", {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+
+  setStatus(data.message || "Lembretes salvos.");
+  closeDrawer();
+}
+
+async function openContractHistory() {
+  setStatus("Carregando historico de contratos...");
+  const data = await apiRequest("/api/admin/contracts/history");
+  const events = data.events || [];
+
+  openDrawer(`
+    <div class="drawer-content">
+      <div>
+        <p class="eyebrow">Contratos</p>
+        <h2>Historico de Envio</h2>
+        <p>Ultimas acoes registradas para contratos e modelos.</p>
+      </div>
+
+      <div class="contract-history-list">
+        ${
+          events.length
+            ? events
+                .map(
+                  (event) => `
+                    <article class="contract-history-item">
+                      <div>
+                        <strong>${escapeHtml(event.acao || "acao")}</strong>
+                        ${statusPill(event.status || "registrado")}
+                      </div>
+                      <p>${escapeHtml(event.mensagem || event.contract_title || "Evento registrado no painel.")}</p>
+                      <small>
+                        ${escapeHtml(event.user_name || event.email || "Sistema")}
+                        ${event.destino ? ` - ${escapeHtml(event.destino)}` : ""}
+                        - ${formatDate(event.created_at)}
+                      </small>
+                    </article>
+                  `,
+                )
+                .join("")
+            : `<article class="contract-history-item"><p>Nenhum historico registrado ainda.</p></article>`
+        }
+      </div>
+    </div>
+  `);
+  setStatus("");
+}
+
 function exportContractsCsv() {
   if (!contractsCache.length) {
     setStatus("Nao ha contratos carregados para exportar.", "error");
@@ -1896,6 +2060,9 @@ document.addEventListener("click", (event) => {
   const newCustomerButton = event.target.closest("[data-new-customer]");
   const newPlanButton = event.target.closest("[data-new-plan]");
   const contractBulkButton = event.target.closest("[data-contract-bulk]");
+  const contractTemplateButton = event.target.closest("[data-contract-template]");
+  const contractRemindersButton = event.target.closest("[data-contract-reminders]");
+  const contractHistoryButton = event.target.closest("[data-contract-history]");
   const sendContractButton = event.target.closest("[data-send-contract]");
   const dynamicExportReportButton = event.target.closest("[data-export-report]");
   const settingsActionButton = event.target.closest("[data-settings-action]");
@@ -1922,6 +2089,9 @@ document.addEventListener("click", (event) => {
   if (newCustomerButton) openNewCustomer();
   if (newPlanButton) openNewPlan();
   if (contractBulkButton) generateBulkContracts().catch((error) => setStatus(error.message, "error"));
+  if (contractTemplateButton) openContractTemplate().catch((error) => setStatus(error.message, "error"));
+  if (contractRemindersButton) openContractReminders().catch((error) => setStatus(error.message, "error"));
+  if (contractHistoryButton) openContractHistory().catch((error) => setStatus(error.message, "error"));
   if (sendContractButton) sendContract(sendContractButton.dataset.sendContract).catch((error) => setStatus(error.message, "error"));
   if (dynamicExportReportButton && dynamicExportReportButton !== exportReportButton) exportReportsCsv();
   if (settingsActionButton) setStatus(`${settingsActionButton.dataset.settingsAction}: configuracao detalhada sera conectada na proxima etapa.`);
@@ -1939,6 +2109,8 @@ document.addEventListener("submit", (event) => {
   const customerForm = event.target.closest("[data-customer-form]");
   const subscriptionForm = event.target.closest("[data-subscription-form]");
   const planForm = event.target.closest("[data-plan-form]");
+  const contractTemplateForm = event.target.closest("[data-contract-template-form]");
+  const contractReminderForm = event.target.closest("[data-contract-reminder-form]");
 
   if (createCustomerForm) {
     event.preventDefault();
@@ -1963,6 +2135,16 @@ document.addEventListener("submit", (event) => {
   if (planForm) {
     event.preventDefault();
     savePlan(planForm).catch((error) => setStatus(error.message, "error"));
+  }
+
+  if (contractTemplateForm) {
+    event.preventDefault();
+    saveContractTemplate(contractTemplateForm).catch((error) => setStatus(error.message, "error"));
+  }
+
+  if (contractReminderForm) {
+    event.preventDefault();
+    saveContractReminders(contractReminderForm).catch((error) => setStatus(error.message, "error"));
   }
 });
 

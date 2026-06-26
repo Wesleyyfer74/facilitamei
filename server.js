@@ -255,6 +255,20 @@ async function getActiveSubscriptionPlans() {
   return rows.map(normalizePlan);
 }
 
+async function logContractEvent({ contractId = null, userId = null, acao, status = "registrado", destino = null, mensagem = null }) {
+  try {
+    await dbPool.execute(
+      `INSERT INTO customer_contract_events
+        (contract_id, user_id, acao, status, destino, mensagem)
+       VALUES
+        (:contractId, :userId, :acao, :status, :destino, :mensagem)`,
+      { contractId, userId, acao, status, destino, mensagem },
+    );
+  } catch (error) {
+    console.warn("Nao foi possivel registrar historico de contrato.", error.message);
+  }
+}
+
 function getAccessTokenOrThrow() {
   const accessToken = process.env.MERCADO_PAGO_ACCESS_TOKEN;
 
@@ -791,6 +805,152 @@ app.get("/api/admin/contracts", requireAdminSession, async (request, response) =
   }
 });
 
+app.get("/api/admin/contracts/template", requireAdminSession, async (_request, response) => {
+  try {
+    const [rows] = await dbPool.execute(
+      `SELECT id, nome, conteudo, ativo, created_at, updated_at
+       FROM contract_templates
+       WHERE ativo = 1
+       ORDER BY id ASC
+       LIMIT 1`,
+    );
+
+    response.json({ template: rows[0] || null });
+  } catch (error) {
+    if (error.code === "ER_NO_SUCH_TABLE") {
+      return response.status(500).json({ error: "Tabela contract_templates ainda nao existe. Rode database/add-contract-admin-features.sql." });
+    }
+
+    console.error(error);
+    response.status(500).json({ error: "Erro ao carregar modelo de contrato." });
+  }
+});
+
+app.patch("/api/admin/contracts/template", requireAdminSession, async (request, response) => {
+  try {
+    const nome = String(request.body?.nome || "").trim();
+    const conteudo = String(request.body?.conteudo || "").trim();
+
+    if (!nome) return response.status(400).json({ error: "Informe o nome do modelo." });
+    if (conteudo.length < 40) return response.status(400).json({ error: "O modelo precisa ter pelo menos 40 caracteres." });
+
+    await dbPool.execute(
+      `INSERT INTO contract_templates (id, nome, conteudo, ativo)
+       VALUES (1, :nome, :conteudo, 1)
+       ON DUPLICATE KEY UPDATE
+         nome = VALUES(nome),
+         conteudo = VALUES(conteudo),
+         ativo = 1,
+         updated_at = CURRENT_TIMESTAMP`,
+      { nome, conteudo },
+    );
+
+    await logContractEvent({
+      acao: "modelo_atualizado",
+      status: "ok",
+      mensagem: `Modelo de contrato atualizado: ${nome}`,
+    });
+
+    response.json({ ok: true, message: "Modelo de contrato salvo." });
+  } catch (error) {
+    console.error(error);
+    response.status(500).json({ error: "Erro ao salvar modelo de contrato." });
+  }
+});
+
+app.get("/api/admin/contracts/reminders", requireAdminSession, async (_request, response) => {
+  try {
+    const [rows] = await dbPool.execute(
+      `SELECT id, ativo, dias_primeiro_lembrete, intervalo_dias, max_lembretes, canal_email, canal_whatsapp, mensagem_padrao, updated_at
+       FROM contract_reminder_settings
+       ORDER BY id ASC
+       LIMIT 1`,
+    );
+
+    response.json({ settings: rows[0] || null });
+  } catch (error) {
+    if (error.code === "ER_NO_SUCH_TABLE") {
+      return response.status(500).json({ error: "Tabela contract_reminder_settings ainda nao existe. Rode database/add-contract-admin-features.sql." });
+    }
+
+    console.error(error);
+    response.status(500).json({ error: "Erro ao carregar lembretes de contrato." });
+  }
+});
+
+app.patch("/api/admin/contracts/reminders", requireAdminSession, async (request, response) => {
+  try {
+    const ativo = request.body?.ativo === false || request.body?.ativo === "0" ? 0 : 1;
+    const diasPrimeiroLembrete = Math.max(0, Number(request.body?.dias_primeiro_lembrete || 2));
+    const intervaloDias = Math.max(1, Number(request.body?.intervalo_dias || 3));
+    const maxLembretes = Math.max(1, Number(request.body?.max_lembretes || 3));
+    const canalEmail = request.body?.canal_email === false || request.body?.canal_email === "0" ? 0 : 1;
+    const canalWhatsapp = request.body?.canal_whatsapp === false || request.body?.canal_whatsapp === "0" ? 0 : 1;
+    const mensagemPadrao = String(request.body?.mensagem_padrao || "").trim();
+
+    await dbPool.execute(
+      `INSERT INTO contract_reminder_settings
+        (id, ativo, dias_primeiro_lembrete, intervalo_dias, max_lembretes, canal_email, canal_whatsapp, mensagem_padrao)
+       VALUES
+        (1, :ativo, :diasPrimeiroLembrete, :intervaloDias, :maxLembretes, :canalEmail, :canalWhatsapp, :mensagemPadrao)
+       ON DUPLICATE KEY UPDATE
+         ativo = VALUES(ativo),
+         dias_primeiro_lembrete = VALUES(dias_primeiro_lembrete),
+         intervalo_dias = VALUES(intervalo_dias),
+         max_lembretes = VALUES(max_lembretes),
+         canal_email = VALUES(canal_email),
+         canal_whatsapp = VALUES(canal_whatsapp),
+         mensagem_padrao = VALUES(mensagem_padrao),
+         updated_at = CURRENT_TIMESTAMP`,
+      { ativo, diasPrimeiroLembrete, intervaloDias, maxLembretes, canalEmail, canalWhatsapp, mensagemPadrao },
+    );
+
+    await logContractEvent({
+      acao: "lembretes_atualizados",
+      status: ativo ? "ativo" : "inativo",
+      mensagem: `Lembretes: primeiro em ${diasPrimeiroLembrete} dia(s), intervalo ${intervaloDias} dia(s), maximo ${maxLembretes}.`,
+    });
+
+    response.json({ ok: true, message: "Lembretes automaticos salvos." });
+  } catch (error) {
+    console.error(error);
+    response.status(500).json({ error: "Erro ao salvar lembretes de contrato." });
+  }
+});
+
+app.get("/api/admin/contracts/history", requireAdminSession, async (_request, response) => {
+  try {
+    const [events] = await dbPool.execute(
+      `SELECT
+         e.id,
+         e.contract_id,
+         e.user_id,
+         e.acao,
+         e.status,
+         e.destino,
+         e.mensagem,
+         e.created_at,
+         u.nome AS user_name,
+         u.email,
+         c.titulo AS contract_title
+       FROM customer_contract_events e
+       LEFT JOIN users u ON u.id = e.user_id
+       LEFT JOIN customer_contracts c ON c.id = e.contract_id
+       ORDER BY e.created_at DESC
+       LIMIT 120`,
+    );
+
+    response.json({ events });
+  } catch (error) {
+    if (error.code === "ER_NO_SUCH_TABLE") {
+      return response.status(500).json({ error: "Tabela customer_contract_events ainda nao existe. Rode database/add-contract-admin-features.sql." });
+    }
+
+    console.error(error);
+    response.status(500).json({ error: "Erro ao carregar historico de contratos." });
+  }
+});
+
 app.get("/api/admin/reports", requireAdminSession, async (_request, response) => {
   try {
     const [
@@ -980,6 +1140,14 @@ app.post("/api/admin/contracts/generate-bulk", requireAdminSession, async (_requ
        ORDER BY s.created_at DESC`,
     );
 
+    await logContractEvent({
+      acao: "envio_massa",
+      status: "ok",
+      mensagem: result.affectedRows
+        ? `${result.affectedRows} contrato(s) gerado(s) em massa.`
+        : "Envio em massa executado sem novos contratos para gerar.",
+    });
+
     response.status(201).json({
       ok: true,
       created: result.affectedRows || 0,
@@ -1000,6 +1168,17 @@ app.post("/api/admin/contracts/generate-bulk", requireAdminSession, async (_requ
 app.post("/api/admin/contracts/:id/send", requireAdminSession, async (request, response) => {
   try {
     const contractId = Number(request.params.id);
+    const [[contract]] = await dbPool.execute(
+      `SELECT c.id, c.user_id, u.email
+       FROM customer_contracts c
+       LEFT JOIN users u ON u.id = c.user_id
+       WHERE c.id = :contractId
+       LIMIT 1`,
+      { contractId },
+    );
+
+    if (!contract) return response.status(404).json({ error: "Contrato nao encontrado." });
+
     const [result] = await dbPool.execute(
       `UPDATE customer_contracts
        SET status = CASE
@@ -1020,6 +1199,15 @@ app.post("/api/admin/contracts/:id/send", requireAdminSession, async (request, r
     );
 
     if (!result.affectedRows) return response.status(404).json({ error: "Contrato nao encontrado." });
+    await logContractEvent({
+      contractId,
+      userId: contract.user_id,
+      acao: "contrato_reenviado",
+      status: "ok",
+      destino: contract.email || null,
+      mensagem: "Contrato marcado como enviado pelo painel administrativo.",
+    });
+
     response.json({ ok: true, message: "Contrato marcado como enviado." });
   } catch (error) {
     console.error(error);
