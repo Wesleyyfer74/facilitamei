@@ -54,6 +54,7 @@ const exportReportButton = document.querySelector("[data-export-report]");
 const drawer = document.querySelector("[data-drawer]");
 const drawerContent = document.querySelector("[data-drawer-content]");
 const closeDrawerButtons = document.querySelectorAll("[data-close-drawer]");
+const notificationsBadge = document.querySelector("[data-notifications-badge]");
 
 const configuredApiBase = String(window.FACILITA_API_BASE || "").replace(/\/$/, "");
 const isLocalFile = window.location.protocol === "file:";
@@ -81,6 +82,7 @@ let reportsCache = null;
 let selectedCustomerId = null;
 let selectedPlanId = null;
 let currentPaymentFilter = "";
+let notificationTimer = null;
 
 function getToken() {
   return localStorage.getItem(SESSION_KEY) || "";
@@ -224,11 +226,21 @@ function downloadJson(filename, data) {
 function showLogin() {
   loginView.hidden = false;
   dashboardView.hidden = true;
+  if (notificationTimer) {
+    window.clearInterval(notificationTimer);
+    notificationTimer = null;
+  }
 }
 
 function showDashboard() {
   loginView.hidden = true;
   dashboardView.hidden = false;
+  refreshNotifications({ silent: true }).catch(() => {});
+  if (!notificationTimer) {
+    notificationTimer = window.setInterval(() => {
+      refreshNotifications({ silent: true }).catch(() => {});
+    }, 60000);
+  }
 }
 
 function activateView(viewName) {
@@ -1725,6 +1737,7 @@ async function loadCurrentView() {
     if (currentView === "contracts") await loadContracts();
     if (currentView === "reports") await loadReports();
     if (currentView === "settings") await loadSettings();
+    refreshNotifications({ silent: true }).catch(() => {});
   } catch (error) {
     setStatus(error.message, "error");
   }
@@ -1738,6 +1751,67 @@ function openDrawer(html) {
 function closeDrawer() {
   drawer.hidden = true;
   drawerContent.innerHTML = "";
+}
+
+function renderNotificationBadge(count = 0) {
+  if (!notificationsBadge) return;
+  const total = Number(count || 0);
+  notificationsBadge.hidden = total <= 0;
+  notificationsBadge.textContent = total > 99 ? "99+" : String(total);
+}
+
+function notificationIcon(type) {
+  const icons = {
+    cliente: "users",
+    pagamento: "card",
+    contrato: "contract",
+    sistema: "bell",
+  };
+  return iconSvg(icons[type] || "bell");
+}
+
+async function refreshNotifications({ silent = false } = {}) {
+  if (!silent) setStatus("Carregando notificacoes...");
+  const data = await apiRequest("/api/admin/notifications");
+  renderNotificationBadge(data.count || 0);
+  if (!silent) setStatus("");
+  return data;
+}
+
+async function openNotifications() {
+  const data = await refreshNotifications();
+  const items = data.items || [];
+
+  openDrawer(`
+    <div class="drawer-content">
+      <div>
+        <p class="eyebrow">Central de notificacoes</p>
+        <h2>Notificacoes do sistema</h2>
+        <p>Eventos recentes e pendencias detectadas diretamente no banco de dados.</p>
+      </div>
+
+      <div class="notification-list">
+        ${
+          items.length
+            ? items
+                .map(
+                  (item) => `
+                    <article class="notification-item ${escapeHtml(item.severity || "info")}">
+                      <span>${notificationIcon(item.type)}</span>
+                      <div>
+                        <strong>${escapeHtml(item.title || "Notificacao")}</strong>
+                        <p>${escapeHtml(item.detail || "Evento registrado no sistema.")}</p>
+                        <small>${formatDate(item.created_at)}</small>
+                      </div>
+                    </article>
+                  `,
+                )
+                .join("")
+            : `<article class="notification-item info"><span>${iconSvg("bell")}</span><div><strong>Nenhuma notificacao no momento</strong><p>Quando surgir algo novo no sistema, o sino sera atualizado.</p></div></article>`
+        }
+      </div>
+    </div>
+  `);
 }
 
 function openNewCustomer() {
@@ -2164,6 +2238,7 @@ document.addEventListener("click", (event) => {
   const dynamicExportReportButton = event.target.closest("[data-export-report]");
   const settingsActionButton = event.target.closest("[data-settings-action]");
   const settingsQuickButton = event.target.closest("[data-settings-quick]");
+  const notificationsButton = event.target.closest("[data-notifications-button]");
   const dynamicViewButton = event.target.closest("[data-view-button]");
   const collapseButton = event.target.closest("[data-collapse-detail]");
   const closeButton = event.target.closest("[data-close-drawer]");
@@ -2193,6 +2268,7 @@ document.addEventListener("click", (event) => {
   if (sendContractButton) sendContract(sendContractButton.dataset.sendContract).catch((error) => setStatus(error.message, "error"));
   if (dynamicExportReportButton && dynamicExportReportButton !== exportReportButton) exportReportsCsv();
   if (settingsQuickButton) handleSettingsQuick(settingsQuickButton.dataset.settingsQuick).catch((error) => setStatus(error.message, "error"));
+  if (notificationsButton) openNotifications().catch((error) => setStatus(error.message, "error"));
   if (settingsActionButton) setStatus(`${settingsActionButton.dataset.settingsAction}: configuracao detalhada sera conectada na proxima etapa.`);
   if (closeButton) closeDrawer();
   if (collapseButton && customerDetail) {

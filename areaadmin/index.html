@@ -7,7 +7,7 @@
     <meta name="robots" content="noindex, nofollow" />
     <link rel="icon" type="image/png" href="../assets/logopequeno.png?v=20260615" />
     <link rel="apple-touch-icon" href="../assets/logopequeno.png?v=20260615" />
-    <link rel="stylesheet" href="../admin/admin.css?v=20260626-settings-real-data" />
+    <link rel="stylesheet" href="../admin/admin.css?v=20260626-notifications" />
   </head>
   <body>
     <main class="admin-shell">
@@ -54,7 +54,10 @@
               </div>
             </div>
             <div class="topbar-actions">
-              <button class="icon-button has-badge" type="button" aria-label="Notificacoes"><span class="admin-line-icon icon-bell"></span><span>3</span></button>
+              <button class="icon-button notification-button has-badge" type="button" aria-label="Notificacoes" data-notifications-button>
+                <span class="admin-line-icon icon-bell"></span>
+                <span class="notification-badge" data-notifications-badge hidden>0</span>
+              </button>
               <button class="admin-user" type="button">
                 <span>FA</span>
                 <strong>Facilita Adm<small>Administrador</small></strong>
@@ -625,6 +628,6 @@
     </div>
 
     <script src="../config.js?v=20260606-railway"></script>
-    <script src="../admin/admin.js?v=20260626-settings-real-data"></script>
+    <script src="../admin/admin.js?v=20260626-notifications"></script>
   </body>
 </html>

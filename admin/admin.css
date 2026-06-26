@@ -392,7 +392,11 @@ textarea:focus {
   font-size: 1.35rem;
 }
 
-.has-badge span {
+.notification-button .admin-line-icon {
+  position: static;
+}
+
+.notification-badge {
   position: absolute;
   top: -7px;
   right: -7px;
@@ -405,6 +409,10 @@ textarea:focus {
   background: var(--gold-strong);
   font-size: 0.78rem;
   font-weight: 900;
+}
+
+.notification-badge[hidden] {
+  display: none;
 }
 
 .admin-user {
@@ -3122,6 +3130,66 @@ td small {
 .contract-history-item small {
   color: var(--muted);
   line-height: 1.35;
+}
+
+.notification-list {
+  display: grid;
+  gap: 12px;
+  max-height: 66vh;
+  overflow: auto;
+  padding-right: 4px;
+}
+
+.notification-item {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+  padding: 14px;
+  border: 1px solid rgba(240, 191, 90, 0.18);
+  border-radius: 10px;
+  background: linear-gradient(180deg, rgba(35, 28, 19, 0.86), rgba(11, 10, 8, 0.92));
+}
+
+.notification-item > span {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  color: var(--gold-strong);
+  border: 1px solid rgba(240, 191, 90, 0.24);
+  border-radius: 999px;
+  background: rgba(255, 204, 82, 0.07);
+}
+
+.notification-item.success > span {
+  color: var(--success);
+  border-color: rgba(65, 200, 105, 0.4);
+}
+
+.notification-item.warning > span {
+  color: var(--gold-strong);
+  border-color: rgba(255, 214, 112, 0.45);
+}
+
+.notification-item.danger > span {
+  color: var(--danger);
+  border-color: rgba(255, 91, 91, 0.45);
+}
+
+.notification-item strong {
+  display: block;
+  color: var(--text);
+}
+
+.notification-item p {
+  margin: 5px 0;
+  color: var(--muted);
+  line-height: 1.4;
+}
+
+.notification-item small {
+  color: var(--gold-strong);
 }
 
 .detail-grid {

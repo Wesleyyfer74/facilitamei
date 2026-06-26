@@ -1255,6 +1255,102 @@ app.post("/api/admin/settings/clear-cache", requireAdminSession, async (_request
   });
 });
 
+app.get("/api/admin/notifications", requireAdminSession, async (_request, response) => {
+  try {
+    const [items] = await dbPool.execute(
+      `SELECT *
+       FROM (
+         SELECT
+           'cliente' AS type,
+           u.id AS ref_id,
+           'Novo cliente cadastrado' AS title,
+           CONCAT(u.nome, ' entrou no sistema.') AS detail,
+           u.created_at AS created_at,
+           'info' AS severity
+         FROM users u
+         WHERE u.created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)
+
+         UNION ALL
+
+         SELECT
+           'pagamento' AS type,
+           p.id AS ref_id,
+           CASE
+             WHEN p.status IN ('approved', 'paid', 'pago') THEN 'Pagamento aprovado'
+             WHEN p.status IN ('pending', 'in_process') THEN 'Pagamento pendente'
+             ELSE 'Atualizacao de pagamento'
+           END AS title,
+           CONCAT(COALESCE(u.nome, 'Cliente'), ' - R$ ', FORMAT(p.valor, 2, 'de_DE'), ' - ', p.status) AS detail,
+           COALESCE(p.data_pagamento, p.created_at) AS created_at,
+           CASE
+             WHEN p.status IN ('approved', 'paid', 'pago') THEN 'success'
+             WHEN p.status IN ('pending', 'in_process') THEN 'warning'
+             ELSE 'danger'
+           END AS severity
+         FROM payments p
+         LEFT JOIN users u ON u.id = p.user_id
+         WHERE p.created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+            OR p.status IN ('pending', 'in_process')
+
+         UNION ALL
+
+         SELECT
+           'contrato' AS type,
+           c.id AS ref_id,
+           CASE
+             WHEN c.status = 'assinado' THEN 'Contrato assinado'
+             WHEN c.status = 'expirado' THEN 'Contrato expirado'
+             ELSE 'Contrato pendente'
+           END AS title,
+           CONCAT(COALESCE(u.nome, 'Cliente'), ' - ', c.status) AS detail,
+           COALESCE(c.data_assinatura, c.data_envio, c.updated_at, c.created_at) AS created_at,
+           CASE
+             WHEN c.status = 'assinado' THEN 'success'
+             WHEN c.status = 'expirado' THEN 'danger'
+             ELSE 'warning'
+           END AS severity
+         FROM customer_contracts c
+         LEFT JOIN users u ON u.id = c.user_id
+         WHERE c.created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+            OR c.status IN ('pendente', 'enviado', 'expirado')
+
+         UNION ALL
+
+         SELECT
+           'sistema' AS type,
+           e.id AS ref_id,
+           'Evento de contrato' AS title,
+           COALESCE(e.mensagem, e.acao) AS detail,
+           e.created_at AS created_at,
+           CASE WHEN e.status IN ('erro', 'falha') THEN 'danger' ELSE 'info' END AS severity
+         FROM customer_contract_events e
+         WHERE e.created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)
+       ) notifications
+       ORDER BY created_at DESC
+       LIMIT 40`,
+    );
+
+    const [countRows] = await dbPool.execute(
+      `SELECT
+         (
+           (SELECT COUNT(*) FROM users WHERE created_at >= DATE_SUB(NOW(), INTERVAL 1 DAY)) +
+           (SELECT COUNT(*) FROM payments WHERE status IN ('pending', 'in_process')) +
+           (SELECT COUNT(*) FROM customer_contracts WHERE status IN ('pendente', 'enviado', 'expirado')) +
+           (SELECT COUNT(*) FROM customer_contract_events WHERE created_at >= DATE_SUB(NOW(), INTERVAL 1 DAY))
+         ) AS total`,
+    );
+
+    response.json({
+      count: Number(countRows[0]?.total || 0),
+      items,
+      generatedAt: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error(error);
+    response.status(500).json({ error: "Erro ao carregar notificacoes." });
+  }
+});
+
 app.post("/api/admin/contracts/generate-bulk", requireAdminSession, async (_request, response) => {
   try {
     const [result] = await dbPool.execute(
