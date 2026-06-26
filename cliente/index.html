@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Area do Cliente | Facilita MEI</title>
+    <meta name="robots" content="noindex, nofollow" />
+    <link rel="icon" href="../assets/logopequeno.png" />
+    <link rel="stylesheet" href="./cliente.css?v=20260626-client-area" />
+  </head>
+  <body>
+    <main class="client-shell">
+      <section class="client-access" data-access-view>
+        <div class="access-card">
+          <img src="../assets/logo.png" alt="Facilita MEI" />
+          <p class="eyebrow">Area do cliente</p>
+          <h1>Acompanhe sua assinatura</h1>
+          <p>Crie sua senha depois da assinatura ou entre para ver plano, pagamentos, contratos e documentos.</p>
+
+          <div class="access-tabs">
+            <button class="is-active" type="button" data-access-tab="login">Entrar</button>
+            <button type="button" data-access-tab="setup">Criar senha</button>
+          </div>
+
+          <form class="access-form is-active" data-login-form>
+            <label>E-mail<input name="email" type="email" autocomplete="email" required /></label>
+            <label>Senha<input name="password" type="password" autocomplete="current-password" required /></label>
+            <button class="gold-button" type="submit">Entrar na plataforma</button>
+          </form>
+
+          <form class="access-form" data-setup-form>
+            <label>E-mail da assinatura<input name="email" type="email" autocomplete="email" required /></label>
+            <label>CPF ou CNPJ<input name="documento" inputmode="numeric" autocomplete="off" required /></label>
+            <label>Crie sua senha<input name="password" type="password" minlength="8" autocomplete="new-password" required /></label>
+            <button class="gold-button" type="submit">Criar acesso</button>
+          </form>
+
+          <div class="client-status" data-client-status></div>
+        </div>
+      </section>
+
+      <section class="client-dashboard" data-dashboard-view hidden>
+        <aside class="client-sidebar">
+          <img src="../assets/logo.png" alt="Facilita MEI" />
+          <nav>
+            <a href="#resumo">Resumo</a>
+            <a href="#pagamentos">Pagamentos</a>
+            <a href="#contratos">Contratos</a>
+            <a href="#documentos">Documentos</a>
+          </nav>
+          <button class="ghost-button" type="button" data-logout>Sair</button>
+        </aside>
+
+        <section class="client-main">
+          <header class="client-topbar">
+            <div>
+              <p class="eyebrow">Facilita MEI</p>
+              <h2 data-client-name>Area do cliente</h2>
+            </div>
+            <a class="whatsapp-button" href="https://wa.me/5567992230801" target="_blank" rel="noopener">Falar no WhatsApp</a>
+          </header>
+
+          <div class="client-grid" id="resumo">
+            <article class="hero-panel">
+              <p class="eyebrow">Assinatura atual</p>
+              <h1 data-plan-name>Carregando...</h1>
+              <p data-plan-detail>Buscando dados da sua assinatura.</p>
+              <div class="hero-tags">
+                <span data-plan-status>Status</span>
+                <span data-next-charge>Proxima cobranca</span>
+              </div>
+            </article>
+
+            <article class="summary-panel">
+              <h3>Dados do cliente</h3>
+              <div class="detail-list" data-client-details></div>
+            </article>
+          </div>
+
+          <section class="panel" id="pagamentos">
+            <div class="panel-header">
+              <h3>Pagamentos</h3>
+              <span data-payments-count>0 registros</span>
+            </div>
+            <div class="responsive-table">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Data</th>
+                    <th>Valor</th>
+                    <th>Status</th>
+                    <th>ID Mercado Pago</th>
+                  </tr>
+                </thead>
+                <tbody data-payments-table></tbody>
+              </table>
+            </div>
+          </section>
+
+          <div class="two-panel-grid">
+            <section class="panel" id="contratos">
+              <div class="panel-header">
+                <h3>Contratos</h3>
+              </div>
+              <div class="card-list" data-contracts-list></div>
+            </section>
+
+            <section class="panel" id="documentos">
+              <div class="panel-header">
+                <h3>Documentos</h3>
+              </div>
+              <div class="card-list" data-documents-list></div>
+            </section>
+          </div>
+        </section>
+      </section>
+    </main>
+
+    <script src="../config.js?v=20260606-railway"></script>
+    <script src="./cliente.js?v=20260626-client-area"></script>
+  </body>
+</html>

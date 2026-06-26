@@ -24,7 +24,9 @@ const mercadoPagoBackUrl = process.env.MERCADO_PAGO_BACK_URL || frontendUrl;
 const isProduction = process.env.NODE_ENV === "production";
 const paymentStore = new Map();
 const adminSessions = new Map();
+const clientSessions = new Map();
 const adminSessionDurationMs = 1000 * 60 * 60 * 8;
+const clientSessionDurationMs = 1000 * 60 * 60 * 24 * 7;
 const dbPool = mysql.createPool({
   host: process.env.DB_HOST || "127.0.0.1",
   port: Number(process.env.DB_PORT || 3306),
@@ -149,10 +151,29 @@ function createAdminSession() {
   return { token, expiresAt };
 }
 
+function createClientSession(user) {
+  const token = crypto.randomBytes(32).toString("hex");
+  const expiresAt = Date.now() + clientSessionDurationMs;
+
+  clientSessions.set(token, {
+    userId: user.id,
+    email: user.email,
+    expiresAt,
+  });
+  return { token, expiresAt };
+}
+
 function deleteExpiredAdminSessions() {
   const now = Date.now();
   for (const [token, session] of adminSessions.entries()) {
     if (session.expiresAt <= now) adminSessions.delete(token);
+  }
+}
+
+function deleteExpiredClientSessions() {
+  const now = Date.now();
+  for (const [token, session] of clientSessions.entries()) {
+    if (session.expiresAt <= now) clientSessions.delete(token);
   }
 }
 
@@ -194,6 +215,12 @@ function hashPassword(password = "") {
   const salt = crypto.randomBytes(16).toString("hex");
   const hash = crypto.scryptSync(String(password), salt, 64).toString("hex");
   return { hash, salt };
+}
+
+function verifyPassword(password = "", hash = "", salt = "") {
+  if (!hash || !salt) return false;
+  const attemptedHash = crypto.scryptSync(String(password), salt, 64).toString("hex");
+  return safeCompare(attemptedHash, hash);
 }
 
 function getMercadoPagoClient() {
@@ -359,6 +386,23 @@ function requireAdminSession(request, response, next) {
   return next();
 }
 
+function requireClientSession(request, response, next) {
+  deleteExpiredClientSessions();
+
+  const authorization = request.get("authorization") || "";
+  const bearerToken = authorization.startsWith("Bearer ") ? authorization.slice(7).trim() : "";
+  const session = bearerToken ? clientSessions.get(bearerToken) : null;
+
+  if (!session || session.expiresAt <= Date.now()) {
+    if (bearerToken) clientSessions.delete(bearerToken);
+    return response.status(401).json({ error: "Sessao do cliente expirada. Faca login novamente." });
+  }
+
+  session.expiresAt = Date.now() + clientSessionDurationMs;
+  request.clientSession = session;
+  return next();
+}
+
 app.get("/api/plans", async (_request, response) => {
   try {
     const [rows] = await dbPool.execute(
@@ -395,6 +439,206 @@ app.get("/api/nfse/certificado/arquivo", (_request, response) => {
     path: certificatePath,
     arquivoExiste,
   });
+});
+
+app.post("/api/client/auth/setup", async (request, response) => {
+  try {
+    const email = String(request.body?.email || "").trim().toLowerCase();
+    const documento = normalizeDigits(request.body?.documento || "");
+    const password = String(request.body?.password || "");
+
+    if (!email) return response.status(400).json({ error: "Informe o e-mail usado na assinatura." });
+    if (!documento) return response.status(400).json({ error: "Informe o CPF ou CNPJ usado na assinatura." });
+    if (password.length < 8) return response.status(400).json({ error: "A senha precisa ter pelo menos 8 caracteres." });
+
+    const [users] = await dbPool.execute(
+      `SELECT id, nome, email, documento, cnpj, cliente_login_ativo
+       FROM users
+       WHERE LOWER(email) = :email
+       LIMIT 1`,
+      { email },
+    );
+    const user = users[0];
+
+    if (!user) return response.status(404).json({ error: "Nao encontramos uma assinatura com este e-mail." });
+    if (Number(user.cliente_login_ativo) === 0) return response.status(403).json({ error: "O acesso deste cliente esta bloqueado. Fale com o atendimento." });
+
+    const storedDocuments = [user.documento, user.cnpj].map(normalizeDigits).filter(Boolean);
+    if (!storedDocuments.includes(documento)) {
+      return response.status(401).json({ error: "Documento nao confere com o cadastro da assinatura." });
+    }
+
+    const [[accessRows], [subscriptionRows]] = await Promise.all([
+      dbPool.execute(
+        `SELECT COUNT(*) AS total
+         FROM payments
+         WHERE user_id = :userId
+           AND status IN ('approved', 'paid', 'pago')`,
+        { userId: user.id },
+      ),
+      dbPool.execute(
+        `SELECT COUNT(*) AS total
+         FROM subscriptions
+         WHERE user_id = :userId
+           AND status IN ('pending', 'authorized', 'active')`,
+        { userId: user.id },
+      ),
+    ]);
+
+    if (!Number(accessRows[0]?.total || 0) && !Number(subscriptionRows[0]?.total || 0)) {
+      return response.status(403).json({ error: "Seu cadastro ainda nao tem assinatura vinculada." });
+    }
+
+    const { hash, salt } = hashPassword(password);
+    await dbPool.execute(
+      `UPDATE users
+       SET senha_hash = :hash,
+           senha_salt = :salt,
+           cliente_login_ativo = 1,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE id = :userId`,
+      { hash, salt, userId: user.id },
+    );
+
+    const session = createClientSession(user);
+    response.json({
+      token: session.token,
+      expiresAt: new Date(session.expiresAt).toISOString(),
+      client: { id: user.id, nome: user.nome, email: user.email },
+    });
+  } catch (error) {
+    console.error(error);
+    response.status(500).json({ error: "Erro ao criar acesso do cliente." });
+  }
+});
+
+app.post("/api/client/auth/login", async (request, response) => {
+  try {
+    const email = String(request.body?.email || "").trim().toLowerCase();
+    const password = String(request.body?.password || "");
+
+    const [rows] = await dbPool.execute(
+      `SELECT id, nome, email, senha_hash, senha_salt, cliente_login_ativo, status
+       FROM users
+       WHERE LOWER(email) = :email
+       LIMIT 1`,
+      { email },
+    );
+    const user = rows[0];
+
+    if (!user || !verifyPassword(password, user.senha_hash, user.senha_salt)) {
+      return response.status(401).json({ error: "E-mail ou senha invalidos." });
+    }
+
+    if (Number(user.cliente_login_ativo) === 0 || user.status === "blocked" || user.status === "cancelled") {
+      return response.status(403).json({ error: "Acesso do cliente bloqueado. Fale com o atendimento." });
+    }
+
+    const session = createClientSession(user);
+    response.json({
+      token: session.token,
+      expiresAt: new Date(session.expiresAt).toISOString(),
+      client: { id: user.id, nome: user.nome, email: user.email, status: user.status },
+    });
+  } catch (error) {
+    console.error(error);
+    response.status(500).json({ error: "Erro ao fazer login do cliente." });
+  }
+});
+
+app.post("/api/client/auth/logout", requireClientSession, (request, response) => {
+  const authorization = request.get("authorization") || "";
+  const bearerToken = authorization.startsWith("Bearer ") ? authorization.slice(7).trim() : "";
+  if (bearerToken) clientSessions.delete(bearerToken);
+  response.json({ ok: true });
+});
+
+app.get("/api/client/auth/me", requireClientSession, async (request, response) => {
+  try {
+    const [rows] = await dbPool.execute(
+      `SELECT id, nome, email, telefone, whatsapp, documento, cnpj, status, cliente_login_ativo, created_at
+       FROM users
+       WHERE id = :userId
+       LIMIT 1`,
+      { userId: request.clientSession.userId },
+    );
+    if (!rows[0]) return response.status(404).json({ error: "Cliente nao encontrado." });
+    response.json({ client: rows[0] });
+  } catch (error) {
+    console.error(error);
+    response.status(500).json({ error: "Erro ao carregar cliente." });
+  }
+});
+
+app.get("/api/client/dashboard", requireClientSession, async (request, response) => {
+  try {
+    const userId = request.clientSession.userId;
+    const [[clientRows], [subscriptionRows], [paymentRows], [contractRows], [documentRows]] = await Promise.all([
+      dbPool.execute(
+        `SELECT id, nome, email, telefone, whatsapp, documento, cnpj, status, created_at
+         FROM users
+         WHERE id = :userId
+         LIMIT 1`,
+        { userId },
+      ),
+      dbPool.execute(
+        `SELECT
+           s.id,
+           s.plan_id,
+           s.status,
+           s.valor,
+           s.data_inicio,
+           s.data_proxima_cobranca,
+           s.metodo_pagamento,
+           s.init_point,
+           p.nome AS plan_name,
+           p.descricao AS plan_description
+         FROM subscriptions s
+         LEFT JOIN plans p ON p.id = s.plan_id
+         WHERE s.user_id = :userId
+         ORDER BY s.created_at DESC
+         LIMIT 5`,
+        { userId },
+      ),
+      dbPool.execute(
+        `SELECT id, subscription_id, mercado_pago_payment_id, valor, status, data_pagamento, created_at
+         FROM payments
+         WHERE user_id = :userId
+         ORDER BY COALESCE(data_pagamento, created_at) DESC
+         LIMIT 12`,
+        { userId },
+      ),
+      dbPool.execute(
+        `SELECT id, subscription_id, plan_id, titulo, status, arquivo_url, assinatura_url, data_envio, data_assinatura, data_expiracao, observacao, created_at
+         FROM customer_contracts
+         WHERE user_id = :userId
+         ORDER BY created_at DESC
+         LIMIT 12`,
+        { userId },
+      ),
+      dbPool.execute(
+        `SELECT id, titulo, tipo, status, arquivo_url, observacao, data_emissao, data_assinatura, created_at
+         FROM customer_documents
+         WHERE user_id = :userId
+         ORDER BY created_at DESC
+         LIMIT 12`,
+        { userId },
+      ),
+    ]);
+
+    const activeSubscription = subscriptionRows.find((subscription) => ["active", "authorized"].includes(subscription.status)) || subscriptionRows[0] || null;
+    response.json({
+      client: clientRows[0] || null,
+      activeSubscription,
+      subscriptions: subscriptionRows,
+      payments: paymentRows,
+      contracts: contractRows,
+      documents: documentRows,
+    });
+  } catch (error) {
+    console.error(error);
+    response.status(500).json({ error: "Erro ao carregar area do cliente." });
+  }
 });
 
 app.post("/api/admin/auth/login", (request, response) => {

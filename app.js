@@ -1106,7 +1106,7 @@ function renderSubscription(data, planId, customer) {
   if (resultPlan) resultPlan.textContent = details.title;
   if (resultStatus) resultStatus.textContent = data.message || "Plano assinado com sucesso.";
   if (subscriptionMessage) {
-    subscriptionMessage.textContent = "Agora fale com o atendimento para continuar o processo.";
+    subscriptionMessage.textContent = "Agora crie sua senha na area do cliente ou fale com o atendimento para continuar o processo.";
   }
   if (whatsappAttendance) whatsappAttendance.href = getAttendanceUrl({ planId, customer });
 
