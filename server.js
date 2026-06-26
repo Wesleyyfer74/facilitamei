@@ -573,7 +573,17 @@ app.get("/api/client/auth/me", requireClientSession, async (request, response) =
 app.get("/api/client/dashboard", requireClientSession, async (request, response) => {
   try {
     const userId = request.clientSession.userId;
-    const [[clientRows], [subscriptionRows], [paymentRows], [contractRows], [documentRows]] = await Promise.all([
+    const [
+      [clientRows],
+      [subscriptionRows],
+      [paymentRows],
+      [contractRows],
+      [documentRows],
+      [paymentSummaryRows],
+      [documentSummaryRows],
+      [contractSummaryRows],
+      [declarationRows],
+    ] = await Promise.all([
       dbPool.execute(
         `SELECT id, nome, email, telefone, whatsapp, documento, cnpj, status, created_at
          FROM users
@@ -624,16 +634,157 @@ app.get("/api/client/dashboard", requireClientSession, async (request, response)
          LIMIT 12`,
         { userId },
       ),
+      dbPool.execute(
+        `SELECT
+           COALESCE(SUM(CASE
+             WHEN status IN ('approved', 'paid', 'pago')
+              AND COALESCE(data_pagamento, created_at) >= DATE_FORMAT(CURDATE(), '%Y-%m-01')
+              AND COALESCE(data_pagamento, created_at) < DATE_ADD(DATE_FORMAT(CURDATE(), '%Y-%m-01'), INTERVAL 1 MONTH)
+             THEN valor ELSE 0 END), 0) AS monthlyRevenue,
+           COALESCE(SUM(CASE
+             WHEN status IN ('approved', 'paid', 'pago')
+              AND COALESCE(data_pagamento, created_at) >= MAKEDATE(YEAR(CURDATE()), 1)
+              AND COALESCE(data_pagamento, created_at) < MAKEDATE(YEAR(CURDATE()) + 1, 1)
+             THEN valor ELSE 0 END), 0) AS annualRevenue,
+           COALESCE(SUM(status IN ('pending', 'in_process')), 0) AS pendingPayments,
+           COUNT(*) AS totalPayments
+         FROM payments
+         WHERE user_id = :userId`,
+        { userId },
+      ),
+      dbPool.execute(
+        `SELECT
+           COALESCE(SUM(status IN ('pendente', 'vencido', 'recusado')), 0) AS pendingDocuments,
+           COALESCE(SUM(
+             (LOWER(COALESCE(titulo, '')) LIKE '%nota%' OR LOWER(COALESCE(titulo, '')) LIKE '%nf%')
+             AND created_at >= DATE_FORMAT(CURDATE(), '%Y-%m-01')
+             AND created_at < DATE_ADD(DATE_FORMAT(CURDATE(), '%Y-%m-01'), INTERVAL 1 MONTH)
+           ), 0) AS invoicesThisMonth
+         FROM customer_documents
+         WHERE user_id = :userId`,
+        { userId },
+      ),
+      dbPool.execute(
+        `SELECT COALESCE(SUM(status IN ('pendente', 'enviado', 'expirado')), 0) AS pendingContracts
+         FROM customer_contracts
+         WHERE user_id = :userId`,
+        { userId },
+      ),
+      dbPool.execute(
+        `SELECT id, titulo, tipo, status, arquivo_url, observacao, data_emissao, created_at
+         FROM customer_documents
+         WHERE user_id = :userId
+           AND (LOWER(COALESCE(titulo, '')) LIKE '%declara%' OR LOWER(COALESCE(titulo, '')) LIKE '%dasn%')
+         ORDER BY COALESCE(data_emissao, created_at) DESC
+         LIMIT 1`,
+        { userId },
+      ),
     ]);
 
     const activeSubscription = subscriptionRows.find((subscription) => ["active", "authorized"].includes(subscription.status)) || subscriptionRows[0] || null;
+    const client = clientRows[0] || null;
+    const paymentSummary = paymentSummaryRows[0] || {};
+    const documentSummary = documentSummaryRows[0] || {};
+    const contractSummary = contractSummaryRows[0] || {};
+    const declaration = declarationRows[0] || null;
+    const annualLimit = Number(process.env.MEI_ANNUAL_LIMIT || 81000);
+    const pendingPayments = Number(paymentSummary.pendingPayments || 0);
+    const pendingDocuments = Number(documentSummary.pendingDocuments || 0);
+    const pendingContracts = Number(contractSummary.pendingContracts || 0);
+    const pendingTotal = pendingPayments + pendingDocuments + pendingContracts;
+    const paidStatuses = new Set(["approved", "paid", "pago"]);
+    const pendingStatuses = new Set(["pending", "in_process", "pendente", "enviado", "expirado", "vencido", "recusado"]);
+    const companyDocument = normalizeDigits(client?.cnpj || client?.documento || "");
+    const dueItems = [];
+
+    if (activeSubscription?.data_proxima_cobranca) {
+      dueItems.push({
+        type: "subscription",
+        title: activeSubscription.plan_name || "Assinatura Facilita",
+        description: activeSubscription.status ? `Status: ${activeSubscription.status}` : "Proxima cobranca da assinatura",
+        dueDate: activeSubscription.data_proxima_cobranca,
+        status: activeSubscription.status,
+      });
+    }
+
+    paymentRows
+      .filter((payment) => pendingStatuses.has(String(payment.status || "").toLowerCase()))
+      .slice(0, 4)
+      .forEach((payment) => {
+        dueItems.push({
+          type: "payment",
+          title: "Pagamento pendente",
+          description: payment.mercado_pago_payment_id || "Registro no Mercado Pago",
+          dueDate: payment.data_pagamento || payment.created_at,
+          value: payment.valor,
+          status: payment.status,
+        });
+      });
+
+    [...contractRows, ...documentRows]
+      .filter((item) => pendingStatuses.has(String(item.status || "").toLowerCase()))
+      .slice(0, 4)
+      .forEach((item) => {
+        dueItems.push({
+          type: item.assinatura_url !== undefined ? "contract" : "document",
+          title: item.titulo || item.tipo || "Pendencia cadastrada",
+          description: item.observacao || statusLabelForApi(item.status),
+          dueDate: item.data_expiracao || item.data_emissao || item.data_envio || item.created_at,
+          status: item.status,
+        });
+      });
+
+    const companyChecks = [
+      {
+        title: "Cadastro do cliente",
+        description: client?.status ? `Status: ${client.status}` : "Cliente nao encontrado",
+        ok: Boolean(client && !["blocked", "cancelled"].includes(client.status)),
+      },
+      {
+        title: "Assinatura",
+        description: activeSubscription ? statusLabelForApi(activeSubscription.status) : "Nenhuma assinatura vinculada",
+        ok: Boolean(activeSubscription && ["active", "authorized"].includes(activeSubscription.status)),
+      },
+      {
+        title: "Pagamentos",
+        description: pendingPayments ? `${pendingPayments} pagamento(s) pendente(s)` : "Sem pagamentos pendentes",
+        ok: pendingPayments === 0,
+      },
+      {
+        title: "Documentos e contratos",
+        description: pendingDocuments + pendingContracts ? `${pendingDocuments + pendingContracts} pendencia(s) cadastrada(s)` : "Sem pendencias cadastradas",
+        ok: pendingDocuments + pendingContracts === 0,
+      },
+    ];
+
     response.json({
-      client: clientRows[0] || null,
+      client,
       activeSubscription,
       subscriptions: subscriptionRows,
       payments: paymentRows,
       contracts: contractRows,
       documents: documentRows,
+      summary: {
+        monthlyRevenue: Number(paymentSummary.monthlyRevenue || 0),
+        annualRevenue: Number(paymentSummary.annualRevenue || 0),
+        annualLimit,
+        annualAvailable: Math.max(annualLimit - Number(paymentSummary.annualRevenue || 0), 0),
+        pendingPayments,
+        pendingDocuments,
+        pendingContracts,
+        pendingTotal,
+        invoicesThisMonth: Number(documentSummary.invoicesThisMonth || 0),
+        paidPayments: paymentRows.filter((payment) => paidStatuses.has(String(payment.status || "").toLowerCase())).length,
+        nextDue: activeSubscription?.data_proxima_cobranca || null,
+        declaration,
+        company: {
+          cnpj: companyDocument.length === 14 ? companyDocument : null,
+          status: client?.status || null,
+          regular: Boolean(client && !["blocked", "cancelled"].includes(client.status) && pendingTotal === 0),
+        },
+        dueItems: dueItems.slice(0, 6),
+        companyChecks,
+      },
     });
   } catch (error) {
     console.error(error);
@@ -2065,6 +2216,30 @@ app.post("/api/admin/plans/mercado-pago/sync", requireAdminKey, async (_request,
 
 function normalizeDigits(value = "") {
   return String(value).replace(/\D/g, "");
+}
+
+function statusLabelForApi(status = "") {
+  const labels = {
+    active: "Ativo",
+    authorized: "Ativo",
+    approved: "Pago",
+    paid: "Pago",
+    pago: "Pago",
+    pending: "Pendente",
+    in_process: "Em analise",
+    paused: "Pausado",
+    cancelled: "Cancelado",
+    expired: "Expirado",
+    rejected: "Recusado",
+    pendente: "Pendente",
+    enviado: "Enviado",
+    assinado: "Assinado",
+    expirado: "Expirado",
+    vencido: "Vencido",
+    recusado: "Recusado",
+  };
+
+  return labels[String(status || "").toLowerCase()] || status || "-";
 }
 
 function splitName(name = "") {

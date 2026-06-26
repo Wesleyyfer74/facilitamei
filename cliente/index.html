@@ -42,42 +42,133 @@
       <section class="client-dashboard" data-dashboard-view hidden>
         <aside class="client-sidebar">
           <img src="../assets/logo.png" alt="Facilita MEI" />
-          <nav>
-            <a href="#resumo">Resumo</a>
-            <a href="#pagamentos">Pagamentos</a>
-            <a href="#contratos">Contratos</a>
-            <a href="#documentos">Documentos</a>
+          <nav class="client-nav">
+            <a class="is-active" href="#dashboard"><span>🏠</span>Dashboard</a>
+            <a href="#documentos"><span>📄</span>Documentos</a>
+            <a href="#servicos-rapidos"><span>⚡</span>Serviços Rápidos</a>
+            <a href="https://wa.me/5567992230801" target="_blank" rel="noopener"><span>💬</span>Suporte</a>
+            <a href="#configuracoes"><span>⚙️</span>Configurações</a>
           </nav>
-          <button class="ghost-button" type="button" data-logout>Sair</button>
+          <button class="ghost-button sidebar-exit" type="button" data-logout><span>↪</span>Sair</button>
         </aside>
 
-        <section class="client-main">
+        <section class="client-main" id="dashboard">
           <header class="client-topbar">
-            <div>
-              <p class="eyebrow">Facilita MEI</p>
-              <h2 data-client-name>Area do cliente</h2>
+            <button class="menu-button" type="button" aria-label="Menu">☰</button>
+            <div class="client-hello">
+              <h2>Olá, <span data-client-first-name>Cliente</span> 👋</h2>
+              <p data-sidebar-plan>Carregando plano...</p>
             </div>
-            <a class="whatsapp-button" href="https://wa.me/5567992230801" target="_blank" rel="noopener">Falar no WhatsApp</a>
+            <div class="client-top-actions">
+              <button class="top-action" type="button" data-refresh-dashboard>↻ Atualizar</button>
+              <button class="top-action" type="button">📅 Este mês</button>
+              <span class="notification-pill" title="Pendências"><span data-notification-badge>0</span></span>
+              <div class="profile-chip">
+                <span data-client-initials>CL</span>
+                <strong data-client-name>Área do cliente</strong>
+              </div>
+            </div>
           </header>
 
-          <div class="client-grid" id="resumo">
-            <article class="hero-panel">
-              <p class="eyebrow">Assinatura atual</p>
-              <h1 data-plan-name>Carregando...</h1>
-              <p data-plan-detail>Buscando dados da sua assinatura.</p>
-              <div class="hero-tags">
-                <span data-plan-status>Status</span>
-                <span data-next-charge>Proxima cobranca</span>
+          <div class="dashboard-heading">
+            <div>
+              <h1>Dashboard</h1>
+              <p>Acompanhe a situação do seu MEI de forma rápida e prática.</p>
+            </div>
+            <div class="company-chip">
+              <strong>CNPJ <span data-company-cnpj>Não informado</span></strong>
+              <span>Situação: <b data-company-status>Carregando</b></span>
+            </div>
+          </div>
+
+          <section class="client-kpi-grid">
+            <article class="client-kpi-card kpi-green">
+              <span class="kpi-icon">🧾</span>
+              <h3>DAS-MEI</h3>
+              <p>Próxima cobrança</p>
+              <strong data-das-date>Não cadastrada</strong>
+              <small data-das-status>Sem registro</small>
+              <a href="https://wa.me/5567992230801?text=Olá,%20preciso%20de%20ajuda%20com%20DAS-MEI." target="_blank" rel="noopener">Solicitar DAS <span>→</span></a>
+            </article>
+
+            <article class="client-kpi-card kpi-blue">
+              <span class="kpi-icon">🧾</span>
+              <h3>Nota Fiscal</h3>
+              <p>Emitidas este mês</p>
+              <strong data-invoices-month>0</strong>
+              <small>Registros encontrados</small>
+              <a href="https://wa.me/5567992230801?text=Olá,%20preciso%20de%20ajuda%20para%20emitir%20nota%20fiscal." target="_blank" rel="noopener">Emitir Nota <span>→</span></a>
+            </article>
+
+            <article class="client-kpi-card kpi-gold">
+              <span class="kpi-icon">📅</span>
+              <h3>Declaração Anual</h3>
+              <p data-declaration-label>DASN</p>
+              <strong data-declaration-status>Sem registro</strong>
+              <small>Documento no sistema</small>
+              <a href="#documentos">Consultar <span>→</span></a>
+            </article>
+
+            <article class="client-kpi-card kpi-red">
+              <span class="kpi-icon">⚠️</span>
+              <h3>Pendências</h3>
+              <p>Você possui</p>
+              <strong><span data-pending-count>0</span> pendência(s)</strong>
+              <small data-pending-detail>Baseado no banco</small>
+              <a href="#vencimentos">Ver pendências <span>→</span></a>
+            </article>
+          </section>
+
+          <section class="client-info-grid">
+            <article class="client-panel" id="vencimentos">
+              <div class="panel-header">
+                <h3>📅 Próximos Vencimentos</h3>
+              </div>
+              <div class="due-list" data-due-list></div>
+            </article>
+
+            <article class="client-panel">
+              <div class="panel-header">
+                <h3>📊 Resumo Financeiro</h3>
+              </div>
+              <div class="finance-summary">
+                <p>Faturamento do mês</p>
+                <strong data-finance-month>R$ 0,00</strong>
+                <div class="finance-row">
+                  <span>Limite anual configurado</span>
+                  <b data-finance-limit>R$ 0,00</b>
+                </div>
+                <div class="finance-bar"><span data-finance-progress></span></div>
+                <div class="finance-row">
+                  <span data-finance-progress-label>0% utilizado</span>
+                  <b data-finance-available>R$ 0,00 disponível</b>
+                </div>
+                <a class="outline-action" href="#pagamentos">Ver relatório completo <span>→</span></a>
               </div>
             </article>
 
-            <article class="summary-panel">
-              <h3>Dados do cliente</h3>
-              <div class="detail-list" data-client-details></div>
+            <article class="client-panel">
+              <div class="panel-header">
+                <h3>🛡️ Situação da Empresa</h3>
+              </div>
+              <div class="company-status-list" data-company-list></div>
             </article>
-          </div>
+          </section>
 
-          <section class="panel" id="pagamentos">
+          <section class="client-panel quick-services" id="servicos-rapidos">
+            <div class="panel-header">
+              <h3>⚡ Serviços Rápidos</h3>
+            </div>
+            <div class="quick-service-grid">
+              <a href="https://wa.me/5567992230801?text=Olá,%20preciso%20alterar%20dados%20do%20meu%20MEI." target="_blank" rel="noopener"><span>✏️</span>Alteração de Dados <b>→</b></a>
+              <a href="https://wa.me/5567992230801?text=Olá,%20preciso%20de%20ajuda%20com%20baixa%20do%20MEI." target="_blank" rel="noopener"><span>❎</span>Baixa do MEI <b>→</b></a>
+              <a href="https://wa.me/5567992230801?text=Olá,%20preciso%20de%20ajuda%20com%20parcelamento%20DAS." target="_blank" rel="noopener"><span>💳</span>Parcelamento DAS <b>→</b></a>
+              <a href="https://wa.me/5567992230801?text=Olá,%20preciso%20de%20certificado%20digital." target="_blank" rel="noopener"><span>🏅</span>Certificado Digital <b>→</b></a>
+              <a href="https://wa.me/5567992230801?text=Olá,%20preciso%20emitir%20certidões." target="_blank" rel="noopener"><span>📜</span>Emitir Certidões <b>→</b></a>
+            </div>
+          </section>
+
+          <section class="panel compact-data" id="pagamentos">
             <div class="panel-header">
               <h3>Pagamentos</h3>
               <span data-payments-count>0 registros</span>
@@ -97,7 +188,7 @@
             </div>
           </section>
 
-          <div class="two-panel-grid">
+          <div class="two-panel-grid compact-data">
             <section class="panel" id="contratos">
               <div class="panel-header">
                 <h3>Contratos</h3>
@@ -112,6 +203,13 @@
               <div class="card-list" data-documents-list></div>
             </section>
           </div>
+
+          <section class="panel compact-data" id="configuracoes">
+            <div class="panel-header">
+              <h3>Dados do cliente</h3>
+            </div>
+            <div class="detail-list" data-client-details></div>
+          </section>
         </section>
       </section>
     </main>
