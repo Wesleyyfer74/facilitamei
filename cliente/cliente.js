@@ -25,7 +25,6 @@ const financeAvailable = document.querySelector("[data-finance-available]");
 const financeProgress = document.querySelector("[data-finance-progress]");
 const financeProgressLabel = document.querySelector("[data-finance-progress-label]");
 const companyList = document.querySelector("[data-company-list]");
-const clientDetails = document.querySelector("[data-client-details]");
 const paymentsTable = document.querySelector("[data-payments-table]");
 const paymentsCount = document.querySelector("[data-payments-count]");
 const contractsList = document.querySelector("[data-contracts-list]");
@@ -154,21 +153,6 @@ function showDashboard() {
   dashboardView.hidden = false;
 }
 
-function renderDetails(client = {}, subscription = {}) {
-  clientDetails.innerHTML = [
-    ["Nome", client.nome],
-    ["E-mail", client.email],
-    ["Telefone", client.telefone || client.whatsapp],
-    ["Documento", client.cnpj || client.documento],
-    ["Status", statusLabel(client.status)],
-    ["Plano", subscription.plan_name],
-    ["Status assinatura", statusLabel(subscription.status)],
-    ["Próxima cobrança", formatDate(subscription.data_proxima_cobranca)],
-  ]
-    .map(([label, value]) => `<p><span>${escapeHtml(label)}</span><strong>${escapeHtml(value || "-")}</strong></p>`)
-    .join("");
-}
-
 function renderPayments(payments = []) {
   paymentsCount.textContent = `${payments.length} registro(s)`;
   paymentsTable.innerHTML = payments.length
@@ -282,7 +266,6 @@ function renderDashboard(data) {
 
   renderDueItems(summary.dueItems || []);
   renderCompanyChecks(summary.companyChecks || []);
-  renderDetails(client, subscription);
   renderPayments(data.payments || []);
   renderCards(contractsList, data.contracts || [], "Nenhum contrato registrado ainda.", "contrato");
   renderCards(documentsList, data.documents || [], "Nenhum documento registrado ainda.", "documento");
