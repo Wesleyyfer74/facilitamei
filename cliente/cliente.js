@@ -28,7 +28,8 @@ const companyList = document.querySelector("[data-company-list]");
 const paymentsTable = document.querySelector("[data-payments-table]");
 const paymentsCount = document.querySelector("[data-payments-count]");
 const contractsList = document.querySelector("[data-contracts-list]");
-const documentsList = document.querySelector("[data-documents-list]");
+const documentsCards = document.querySelector("[data-documents-cards]");
+const documentsHistory = document.querySelector("[data-documents-history]");
 const refreshDashboardButton = document.querySelector("[data-refresh-dashboard]");
 
 const configuredApiBase = String(window.FACILITA_API_BASE || "").replace(/\/$/, "");
@@ -189,6 +190,77 @@ function renderCards(container, items = [], emptyMessage, type) {
     : `<article class="mini-card"><p>${escapeHtml(emptyMessage)}</p></article>`;
 }
 
+function getDocumentIcon(document = {}) {
+  const text = `${document.titulo || ""} ${document.tipo || ""}`.toLowerCase();
+  if (text.includes("cnpj")) return "🪪";
+  if (text.includes("contrato") || text.includes("ccmei")) return "📄";
+  if (text.includes("inscri")) return "🏛️";
+  if (text.includes("declara")) return "📋";
+  if (text.includes("nota") || text.includes("nf")) return "📑";
+  return "📁";
+}
+
+function renderDocumentRequestCard() {
+  return `
+    <article class="document-card request-document-card">
+      <span class="document-icon">📄+</span>
+      <h3>Precisando de outro documento?</h3>
+      <p>Fale com a nossa equipe e solicite o documento que você precisa.</p>
+      <a href="https://wa.me/5567992230801?text=Olá,%20preciso%20solicitar%20um%20documento%20da%20minha%20empresa." target="_blank" rel="noopener">Solicitar documento</a>
+    </article>
+  `;
+}
+
+function renderDocuments(documents = []) {
+  const sortedDocuments = [...documents].sort((a, b) => {
+    const dateA = new Date(a.data_emissao || a.created_at || 0).getTime();
+    const dateB = new Date(b.data_emissao || b.created_at || 0).getTime();
+    return dateB - dateA;
+  });
+
+  const cards = sortedDocuments
+    .slice(0, 3)
+    .map((document) => {
+      const fileUrl = document.arquivo_url || "";
+      const action = fileUrl
+        ? `<a href="${escapeHtml(fileUrl)}" target="_blank" rel="noopener">Baixar PDF</a>`
+        : `<button type="button" disabled>Sem arquivo</button>`;
+
+      return `
+        <article class="document-card">
+          <span class="document-icon">${getDocumentIcon(document)}</span>
+          <h3>${escapeHtml(document.titulo || document.tipo || "Documento")}</h3>
+          <p>${escapeHtml(document.observacao || "Documento cadastrado no sistema da Facilita.")}</p>
+          <div class="document-meta">
+            <span>Emitido em</span>
+            <strong>${formatDate(document.data_emissao || document.created_at)}</strong>
+            <span>Situação</span>
+            <b>${escapeHtml(statusLabel(document.status))}</b>
+          </div>
+          ${action}
+        </article>
+      `;
+    })
+    .join("");
+
+  documentsCards.innerHTML = `${cards}${renderDocumentRequestCard()}`;
+  documentsHistory.innerHTML = sortedDocuments.length
+    ? sortedDocuments
+        .map((document) => {
+          const fileUrl = document.arquivo_url || "";
+          return `
+            <tr>
+              <td><span class="table-document-icon">${getDocumentIcon(document)}</span>${escapeHtml(document.titulo || document.tipo || "Documento")}</td>
+              <td>${formatDate(document.data_emissao || document.created_at)}</td>
+              <td><span class="status-pill">${escapeHtml(statusLabel(document.status))}</span></td>
+              <td>${fileUrl ? `<a href="${escapeHtml(fileUrl)}" target="_blank" rel="noopener">PDF</a>` : "-"}</td>
+            </tr>
+          `;
+        })
+        .join("")
+    : `<tr><td colspan="4">Nenhum documento cadastrado ainda.</td></tr>`;
+}
+
 function renderDueItems(items = []) {
   dueList.innerHTML = items.length
     ? items
@@ -268,7 +340,7 @@ function renderDashboard(data) {
   renderCompanyChecks(summary.companyChecks || []);
   renderPayments(data.payments || []);
   renderCards(contractsList, data.contracts || [], "Nenhum contrato registrado ainda.", "contrato");
-  renderCards(documentsList, data.documents || [], "Nenhum documento registrado ainda.", "documento");
+  renderDocuments(data.documents || []);
 }
 
 async function loadDashboard() {

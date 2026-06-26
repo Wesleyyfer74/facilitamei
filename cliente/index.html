@@ -194,14 +194,43 @@
               </div>
               <div class="card-list" data-contracts-list></div>
             </section>
-
-            <section class="panel" id="documentos">
-              <div class="panel-header">
-                <h3>Documentos</h3>
-              </div>
-              <div class="card-list" data-documents-list></div>
-            </section>
           </div>
+
+          <section class="client-documents-section" id="documentos">
+            <div class="documents-heading">
+              <div>
+                <h2>Documentos</h2>
+                <p>Acesse e baixe os principais documentos da sua empresa.</p>
+              </div>
+            </div>
+
+            <div class="documents-grid" data-documents-cards></div>
+
+            <article class="documents-note">
+              <span>i</span>
+              <p>Todos os documentos exibidos aqui são registros cadastrados no sistema da Facilita. Em caso de dúvidas ou problemas para baixar, nossa equipe está à disposição para ajudar.</p>
+              <a href="https://wa.me/5567992230801?text=Olá,%20preciso%20de%20ajuda%20com%20documentos%20da%20minha%20empresa." target="_blank" rel="noopener">Falar com a equipe</a>
+            </article>
+
+            <article class="documents-history">
+              <div class="panel-header">
+                <h3>Histórico de Emissões</h3>
+              </div>
+              <div class="responsive-table">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Documento</th>
+                      <th>Data de emissão</th>
+                      <th>Situação</th>
+                      <th>Ação</th>
+                    </tr>
+                  </thead>
+                  <tbody data-documents-history></tbody>
+                </table>
+              </div>
+            </article>
+          </section>
 
         </section>
       </section>
