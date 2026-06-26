@@ -211,6 +211,16 @@ async function apiRequest(path, options = {}) {
   return data;
 }
 
+function downloadJson(filename, data) {
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
 function showLogin() {
   loginView.hidden = false;
   dashboardView.hidden = true;
@@ -1536,6 +1546,13 @@ function settingsStatusPill(isConnected) {
 function renderSettings(data = {}) {
   const integrations = data.integrations || {};
   const system = data.system || {};
+  const counts = system.counts || {};
+  const services = system.services || {};
+  const storage = system.storage || {};
+  const storagePercent = Math.max(0, Math.min(100, Number(storage.percent || 0)));
+  const usedMb = Number(storage.usedMb || 0).toLocaleString("pt-BR", { maximumFractionDigits: 2 });
+  const quotaMb = Number(storage.quotaMb || 0).toLocaleString("pt-BR", { maximumFractionDigits: 0 });
+  const environmentLabel = system.environment === "production" ? "Producao" : system.environment || "development";
 
   if (settingsIntegrations) {
     settingsIntegrations.innerHTML = [
@@ -1580,28 +1597,31 @@ function renderSettings(data = {}) {
   }
 
   if (settingsInfo) {
-    const storagePercent = 24;
     settingsInfo.innerHTML = `
       <p><span>${iconSvg("settings")}Versao do Sistema:</span><strong>${escapeHtml(system.version || "0.1.0")}</strong></p>
-      <p><span>${iconSvg("cube")}Ambiente:</span>${statusPill(system.environment === "production" ? "Ativo" : "Pendente")}</p>
-      <p><span>${iconSvg("card")}Banco de Dados:</span><strong>${escapeHtml(system.database || "Verificando")}</strong></p>
-      <p><span>${iconSvg("growth")}Status dos Servicos:</span>${statusPill("Ativo")}</p>
-      <p class="storage-line"><span>${iconSvg("cloud")}Armazenamento Utilizado:</span><strong>2.4 GB / 10 GB (${storagePercent}%)</strong></p>
+      <p><span>${iconSvg("cube")}Ambiente:</span><strong>${escapeHtml(environmentLabel)}</strong></p>
+      <p><span>${iconSvg("card")}Banco de Dados:</span><strong>${escapeHtml(system.database || "Verificando")} - ${escapeHtml(system.databaseName || "DB")}</strong></p>
+      <p><span>${iconSvg("growth")}Status dos Servicos:</span>${statusPill(services.database && services.mercadoPago ? "Ativo" : "Pendente")}</p>
+      <p><span>${iconSvg("users")}Clientes:</span><strong>${Number(counts.users || 0)} cadastrados</strong></p>
+      <p><span>${iconSvg("plan")}Planos:</span><strong>${Number(counts.plans || 0)} planos no banco</strong></p>
+      <p><span>${iconSvg("contract")}Contratos:</span><strong>${Number(counts.contracts || 0)} contratos no banco</strong></p>
+      <p><span>${iconSvg("settings")}Tabelas:</span><strong>${Number(system.tablesCount || 0)} tabelas verificadas</strong></p>
+      <p class="storage-line"><span>${iconSvg("cloud")}Armazenamento Utilizado:</span><strong>${usedMb} MB / ${quotaMb} MB (${storagePercent}%)</strong></p>
       <div class="storage-bar"><i style="width:${storagePercent}%"></i></div>
     `;
   }
 
   if (settingsQuick) {
     settingsQuick.innerHTML = [
-      ["download", "Exportar Dados", "Baixar dados do sistema", "reports"],
-      ["cloud", "Fazer Backup", "Backup completo do sistema", ""],
-      ["renew", "Limpar Cache", "Limpar cache e dados temporarios", ""],
-      ["key", "Alterar Senha", "Alterar senha de acesso", ""],
-      ["help", "Central de Ajuda", "Acessar documentacao e tutoriais", ""],
+      ["download", "Exportar Dados", "Baixar dados do banco", "export-data"],
+      ["cloud", "Fazer Backup", "Backup logico do banco", "backup"],
+      ["renew", "Limpar Cache", "Recarregar dados do banco", "clear-cache"],
+      ["key", "Alterar Senha", "Senha via Railway env", "password"],
+      ["help", "Central de Ajuda", "Resumo tecnico do sistema", "help"],
     ]
       .map(
-        ([icon, title, detail, view]) => `
-          <button type="button" ${view ? `data-view-button="${view}"` : `data-settings-action="${escapeHtml(title)}"`}>
+        ([icon, title, detail, action]) => `
+          <button type="button" data-settings-quick="${escapeHtml(action)}">
             <span>${iconSvg(icon)}</span>
             <strong>${escapeHtml(title)}</strong>
             <small>${escapeHtml(detail)}</small>
@@ -1617,6 +1637,83 @@ async function loadSettings() {
   const data = await apiRequest("/api/admin/settings");
   renderSettings(data);
   setStatus("");
+}
+
+async function exportSettingsData() {
+  setStatus("Exportando dados reais do banco...");
+  const data = await apiRequest("/api/admin/settings/export-data");
+  downloadJson(`facilita-dados-${new Date().toISOString().slice(0, 10)}.json`, data);
+  setStatus("Exportacao gerada.");
+}
+
+async function createSettingsBackup() {
+  setStatus("Preparando backup logico...");
+  const backup = await apiRequest("/api/admin/settings/backup", { method: "POST" });
+  const data = await apiRequest("/api/admin/settings/export-data");
+  downloadJson(backup.filename || `backup-facilita-${new Date().toISOString().slice(0, 10)}.json`, {
+    backup,
+    data,
+  });
+  setStatus(backup.message || "Backup preparado.");
+}
+
+async function clearSettingsCache() {
+  const data = await apiRequest("/api/admin/settings/clear-cache", { method: "POST" });
+  setStatus(data.message || "Cache limpo.");
+  await loadSettings();
+}
+
+function openPasswordInfo() {
+  openDrawer(`
+    <div class="drawer-content">
+      <div>
+        <p class="eyebrow">Seguranca</p>
+        <h2>Alterar senha administrativa</h2>
+        <p>A senha do admin nao fica salva no frontend nem solta no banco. Ela deve ser alterada nas variaveis do Railway.</p>
+      </div>
+      <article class="panel">
+        <h3>Variaveis usadas</h3>
+        <div class="detail-grid">
+          <p><span>Login</span><strong>ADMIN_EMAIL</strong></p>
+          <p><span>Senha</span><strong>ADMIN_PASSWORD</strong></p>
+          <p><span>Chave interna</span><strong>ADMIN_API_KEY</strong></p>
+        </div>
+      </article>
+      <div class="drawer-helper">
+        Apos alterar a senha no Railway, faca redeploy do backend para a nova variavel entrar em uso.
+      </div>
+    </div>
+  `);
+}
+
+function openSettingsHelp() {
+  openDrawer(`
+    <div class="drawer-content">
+      <div>
+        <p class="eyebrow">Central de Ajuda</p>
+        <h2>Resumo tecnico do painel</h2>
+        <p>Esta pagina usa dados reais do banco conectado ao backend administrativo.</p>
+      </div>
+      <article class="panel">
+        <h3>O que esta ligado ao banco</h3>
+        <div class="history-list">
+          <div class="history-item"><strong>Clientes</strong><small>Usuarios cadastrados, assinaturas, pagamentos e contratos.</small></div>
+          <div class="history-item"><strong>Exportacao</strong><small>Baixa um JSON com os dados principais, sem senhas.</small></div>
+          <div class="history-item"><strong>Backup logico</strong><small>Gera um pacote JSON com resumo e dados atuais do banco.</small></div>
+          <div class="history-item"><strong>Integracoes</strong><small>Mostra status com base nas variaveis configuradas no Railway.</small></div>
+        </div>
+      </article>
+    </div>
+  `);
+}
+
+async function handleSettingsQuick(action) {
+  if (action === "export-data") return exportSettingsData();
+  if (action === "backup") return createSettingsBackup();
+  if (action === "clear-cache") return clearSettingsCache();
+  if (action === "password") return openPasswordInfo();
+  if (action === "help") return openSettingsHelp();
+  return setStatus("Acao de configuracao nao encontrada.", "error");
 }
 
 async function loadCurrentView() {
@@ -2066,6 +2163,7 @@ document.addEventListener("click", (event) => {
   const sendContractButton = event.target.closest("[data-send-contract]");
   const dynamicExportReportButton = event.target.closest("[data-export-report]");
   const settingsActionButton = event.target.closest("[data-settings-action]");
+  const settingsQuickButton = event.target.closest("[data-settings-quick]");
   const dynamicViewButton = event.target.closest("[data-view-button]");
   const collapseButton = event.target.closest("[data-collapse-detail]");
   const closeButton = event.target.closest("[data-close-drawer]");
@@ -2094,6 +2192,7 @@ document.addEventListener("click", (event) => {
   if (contractHistoryButton) openContractHistory().catch((error) => setStatus(error.message, "error"));
   if (sendContractButton) sendContract(sendContractButton.dataset.sendContract).catch((error) => setStatus(error.message, "error"));
   if (dynamicExportReportButton && dynamicExportReportButton !== exportReportButton) exportReportsCsv();
+  if (settingsQuickButton) handleSettingsQuick(settingsQuickButton.dataset.settingsQuick).catch((error) => setStatus(error.message, "error"));
   if (settingsActionButton) setStatus(`${settingsActionButton.dataset.settingsAction}: configuracao detalhada sera conectada na proxima etapa.`);
   if (closeButton) closeDrawer();
   if (collapseButton && customerDetail) {

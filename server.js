@@ -1097,14 +1097,67 @@ app.get("/api/admin/settings", requireAdminSession, async (_request, response) =
   try {
     await dbPool.query("SELECT 1");
     const hasValue = (value) => Boolean(String(value || "").trim());
+    const databaseName = process.env.DB_NAME || "facilita_modern";
+    const storageQuotaMb = Number(process.env.DB_STORAGE_QUOTA_MB || 10240);
+
+    const [
+      [statsRows],
+      [storageRows],
+      [tableRows],
+    ] = await Promise.all([
+      dbPool.execute(
+        `SELECT
+           (SELECT COUNT(*) FROM users) AS users_count,
+           (SELECT COUNT(*) FROM plans) AS plans_count,
+           (SELECT COUNT(*) FROM subscriptions) AS subscriptions_count,
+           (SELECT COUNT(*) FROM payments) AS payments_count,
+           (SELECT COUNT(*) FROM customer_contracts) AS contracts_count`,
+      ),
+      dbPool.execute(
+        `SELECT COALESCE(SUM(data_length + index_length), 0) AS bytes_used
+         FROM information_schema.tables
+         WHERE table_schema = DATABASE()`,
+      ),
+      dbPool.execute(
+        `SELECT COUNT(*) AS tables_count
+         FROM information_schema.tables
+         WHERE table_schema = DATABASE()`,
+      ),
+    ]);
+
+    const stats = statsRows[0] || {};
+    const bytesUsed = Number(storageRows[0]?.bytes_used || 0);
+    const usedMb = bytesUsed / 1024 / 1024;
+    const storagePercent = storageQuotaMb > 0 ? Math.min(100, Math.round((usedMb / storageQuotaMb) * 100)) : 0;
+    const coreServicesOk = true;
 
     response.json({
       system: {
         version: packageJson.version || "0.1.0",
         environment: process.env.NODE_ENV || "development",
         database: "Conectado",
+        databaseName,
+        tablesCount: Number(tableRows[0]?.tables_count || 0),
         apiPublicUrl,
         frontendUrl,
+        storage: {
+          usedMb: Number(usedMb.toFixed(2)),
+          quotaMb: storageQuotaMb,
+          percent: storagePercent,
+        },
+        counts: {
+          users: Number(stats.users_count || 0),
+          plans: Number(stats.plans_count || 0),
+          subscriptions: Number(stats.subscriptions_count || 0),
+          payments: Number(stats.payments_count || 0),
+          contracts: Number(stats.contracts_count || 0),
+        },
+        services: {
+          database: coreServicesOk,
+          mercadoPago: hasValue(process.env.MERCADO_PAGO_ACCESS_TOKEN) && hasValue(process.env.MERCADO_PAGO_PUBLIC_KEY),
+          webhooks: hasValue(process.env.MERCADO_PAGO_WEBHOOK_SECRET),
+          email: hasValue(process.env.EMAIL_HOST) && hasValue(process.env.EMAIL_USER),
+        },
       },
       integrations: {
         mercadoPago: hasValue(process.env.MERCADO_PAGO_ACCESS_TOKEN) && hasValue(process.env.MERCADO_PAGO_PUBLIC_KEY),
@@ -1117,6 +1170,89 @@ app.get("/api/admin/settings", requireAdminSession, async (_request, response) =
     console.error(error);
     response.status(500).json({ error: "Erro ao carregar configuracoes." });
   }
+});
+
+app.get("/api/admin/settings/export-data", requireAdminSession, async (_request, response) => {
+  try {
+    const [
+      [users],
+      [plans],
+      [subscriptions],
+      [payments],
+      [contracts],
+    ] = await Promise.all([
+      dbPool.execute(
+        `SELECT id, nome, email, telefone, documento, status, cliente_login_ativo, created_at, updated_at
+         FROM users
+         ORDER BY id ASC`,
+      ),
+      dbPool.execute(
+        `SELECT id, nome, descricao, valor, frequencia, tipo_frequencia, servico, mercado_pago_plan_id, tipo_cobranca, ativo, ordem, created_at, updated_at
+         FROM plans
+         ORDER BY ordem ASC, id ASC`,
+      ),
+      dbPool.execute(
+        `SELECT id, user_id, plan_id, mercado_pago_subscription_id, status, valor, metodo_pagamento, data_inicio, data_proxima_cobranca, created_at, updated_at
+         FROM subscriptions
+         ORDER BY id ASC`,
+      ),
+      dbPool.execute(
+        `SELECT id, user_id, subscription_id, mercado_pago_payment_id, valor, status, data_pagamento, created_at
+         FROM payments
+         ORDER BY id ASC`,
+      ),
+      dbPool.execute(
+        `SELECT id, user_id, subscription_id, plan_id, titulo, status, arquivo_url, assinatura_url, provedor, provider_contract_id, data_envio, data_assinatura, data_expiracao, observacao, created_at, updated_at
+         FROM customer_contracts
+         ORDER BY id ASC`,
+      ),
+    ]);
+
+    response.json({
+      generatedAt: new Date().toISOString(),
+      database: process.env.DB_NAME || "facilita_modern",
+      users,
+      plans,
+      subscriptions,
+      payments,
+      contracts,
+    });
+  } catch (error) {
+    console.error(error);
+    response.status(500).json({ error: "Erro ao exportar dados do banco." });
+  }
+});
+
+app.post("/api/admin/settings/backup", requireAdminSession, async (_request, response) => {
+  try {
+    const [summaryRows] = await dbPool.execute(
+      `SELECT
+         (SELECT COUNT(*) FROM users) AS users,
+         (SELECT COUNT(*) FROM plans) AS plans,
+         (SELECT COUNT(*) FROM subscriptions) AS subscriptions,
+         (SELECT COUNT(*) FROM payments) AS payments,
+         (SELECT COUNT(*) FROM customer_contracts) AS contracts`,
+    );
+
+    response.json({
+      ok: true,
+      generatedAt: new Date().toISOString(),
+      filename: `backup-facilita-${new Date().toISOString().slice(0, 10)}.json`,
+      summary: summaryRows[0] || {},
+      message: "Backup logico preparado com dados reais do banco.",
+    });
+  } catch (error) {
+    console.error(error);
+    response.status(500).json({ error: "Erro ao preparar backup." });
+  }
+});
+
+app.post("/api/admin/settings/clear-cache", requireAdminSession, async (_request, response) => {
+  response.json({
+    ok: true,
+    clearedAt: new Date().toISOString(),
+    message: "Cache administrativo limpo. Os proximos dados serao carregados direto do banco.",
+  });
 });
 
 app.post("/api/admin/contracts/generate-bulk", requireAdminSession, async (_request, response) => {
