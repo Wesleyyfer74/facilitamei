@@ -227,6 +227,22 @@ input:focus {
   padding: 28px;
 }
 
+.client-page {
+  display: none;
+}
+
+.client-page:not(.is-active) {
+  display: none !important;
+}
+
+.client-page.is-active {
+  display: block;
+}
+
+.client-page > * + * {
+  margin-top: 20px;
+}
+
 .client-topbar {
   display: flex;
   justify-content: space-between;

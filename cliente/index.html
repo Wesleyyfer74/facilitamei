@@ -6,7 +6,7 @@
     <title>Area do Cliente | Facilita MEI</title>
     <meta name="robots" content="noindex, nofollow" />
     <link rel="icon" href="../assets/logopequeno.png" />
-    <link rel="stylesheet" href="./cliente.css?v=20260626-client-area" />
+    <link rel="stylesheet" href="./cliente.css?v=20260627-client-pages" />
   </head>
   <body>
     <main class="client-shell">
@@ -43,118 +43,160 @@
         <aside class="client-sidebar">
           <img src="../assets/logo.png" alt="Facilita MEI" />
           <nav class="client-nav">
-            <a class="is-active" href="#dashboard"><span>🏠</span>Dashboard</a>
-            <a href="#documentos"><span>📄</span>Documentos</a>
-            <a href="#servicos-rapidos"><span>⚡</span>Serviços Rápidos</a>
-            <a href="https://wa.me/5567992230801" target="_blank" rel="noopener"><span>💬</span>Suporte</a>
-            <a href="#configuracoes"><span>⚙️</span>Configurações</a>
+            <a class="is-active" href="#dashboard" data-client-route="dashboard"><span>&#8962;</span>Dashboard</a>
+            <a href="#documentos" data-client-route="documentos"><span>&#128196;</span>Documentos</a>
+            <a href="#servicos-rapidos" data-client-route="servicos"><span>&#9889;</span>Servi&ccedil;os R&aacute;pidos</a>
+            <a href="https://wa.me/5567992230801" target="_blank" rel="noopener"><span>&#128172;</span>Suporte</a>
+            <a href="#configuracoes" data-client-route="configuracoes"><span>&#9881;</span>Configura&ccedil;&otilde;es</a>
           </nav>
-          <button class="ghost-button sidebar-exit" type="button" data-logout><span>↪</span>Sair</button>
+          <button class="ghost-button sidebar-exit" type="button" data-logout><span>&#8618;</span>Sair</button>
         </aside>
 
-        <section class="client-main" id="dashboard">
+        <section class="client-main">
           <header class="client-topbar">
-            <button class="menu-button" type="button" aria-label="Menu">☰</button>
+            <button class="menu-button" type="button" aria-label="Menu">&#9776;</button>
             <div class="client-hello">
-              <h2>Olá, <span data-client-first-name>Cliente</span> 👋</h2>
+              <h2>Ol&aacute;, <span data-client-first-name>Cliente</span> &#128075;</h2>
               <p data-sidebar-plan>Carregando plano...</p>
             </div>
             <div class="client-top-actions">
-              <button class="top-action" type="button" data-refresh-dashboard>↻ Atualizar</button>
-              <span class="notification-pill" title="Pendências"><span data-notification-badge>0</span></span>
+              <button class="top-action" type="button" data-refresh-dashboard>&#8635; Atualizar</button>
+              <span class="notification-pill" title="Pend&ecirc;ncias"><span data-notification-badge>0</span></span>
               <div class="profile-chip">
                 <span data-client-initials>CL</span>
-                <strong data-client-name>Área do cliente</strong>
+                <strong data-client-name>&Aacute;rea do cliente</strong>
               </div>
             </div>
           </header>
 
-          <div class="dashboard-heading">
-            <div>
-              <h1>Dashboard</h1>
-              <p>Acompanhe a situação do seu MEI de forma rápida e prática.</p>
+          <section class="client-page is-active" data-client-page="dashboard" id="dashboard">
+            <div class="dashboard-heading">
+              <div>
+                <h1>Dashboard</h1>
+                <p>Acompanhe a situa&ccedil;&atilde;o do seu MEI de forma r&aacute;pida e pr&aacute;tica.</p>
+              </div>
+              <div class="company-chip">
+                <strong>CNPJ <span data-company-cnpj>N&atilde;o informado</span></strong>
+                <span>Situa&ccedil;&atilde;o: <b data-company-status>Carregando</b></span>
+              </div>
             </div>
-            <div class="company-chip">
-              <strong>CNPJ <span data-company-cnpj>Não informado</span></strong>
-              <span>Situação: <b data-company-status>Carregando</b></span>
+
+            <section class="client-kpi-grid">
+              <article class="client-kpi-card kpi-green">
+                <span class="kpi-icon">&#128181;</span>
+                <h3>DAS-MEI</h3>
+                <p>Pr&oacute;xima cobran&ccedil;a</p>
+                <strong data-das-date>N&atilde;o cadastrada</strong>
+                <small data-das-status>Sem registro</small>
+                <a href="https://wa.me/5567992230801?text=Ol%C3%A1,%20preciso%20de%20ajuda%20com%20DAS-MEI." target="_blank" rel="noopener">Solicitar DAS <span>&rarr;</span></a>
+              </article>
+
+              <article class="client-kpi-card kpi-blue">
+                <span class="kpi-icon">&#128209;</span>
+                <h3>Nota Fiscal</h3>
+                <p>Emitidas este m&ecirc;s</p>
+                <strong data-invoices-month>0</strong>
+                <small>Registros encontrados</small>
+                <a href="https://wa.me/5567992230801?text=Ol%C3%A1,%20preciso%20de%20ajuda%20para%20emitir%20nota%20fiscal." target="_blank" rel="noopener">Emitir Nota <span>&rarr;</span></a>
+              </article>
+
+              <article class="client-kpi-card kpi-gold">
+                <span class="kpi-icon">&#128197;</span>
+                <h3>Declara&ccedil;&atilde;o Anual</h3>
+                <p data-declaration-label>DASN</p>
+                <strong data-declaration-status>Sem registro</strong>
+                <small>Documento no sistema</small>
+                <a href="#documentos" data-go-page="documentos">Consultar <span>&rarr;</span></a>
+              </article>
+
+              <article class="client-kpi-card kpi-red">
+                <span class="kpi-icon">&#128680;</span>
+                <h3>Pend&ecirc;ncias</h3>
+                <p>Voc&ecirc; possui</p>
+                <strong><span data-pending-count>0</span> pend&ecirc;ncia(s)</strong>
+                <small data-pending-detail>Baseado no banco</small>
+                <a href="#dashboard" data-go-page="dashboard">Ver pend&ecirc;ncias <span>&rarr;</span></a>
+              </article>
+            </section>
+
+            <section class="client-info-grid">
+              <article class="client-panel">
+                <div class="panel-header">
+                  <h3>&#128197; Pr&oacute;ximos Vencimentos</h3>
+                </div>
+                <div class="due-list" data-due-list></div>
+              </article>
+
+              <article class="client-panel">
+                <div class="panel-header">
+                  <h3>&#128202; Resumo Financeiro</h3>
+                </div>
+                <div class="finance-summary">
+                  <p>Faturamento do m&ecirc;s</p>
+                  <strong data-finance-month>R$ 0,00</strong>
+                  <div class="finance-row">
+                    <span>Limite anual configurado</span>
+                    <b data-finance-limit>R$ 0,00</b>
+                  </div>
+                  <div class="finance-bar"><span data-finance-progress></span></div>
+                  <div class="finance-row">
+                    <span data-finance-progress-label>0% utilizado</span>
+                    <b data-finance-available>R$ 0,00 dispon&iacute;vel</b>
+                  </div>
+                  <a class="outline-action" href="#configuracoes" data-go-page="configuracoes">Ver hist&oacute;rico <span>&rarr;</span></a>
+                </div>
+              </article>
+
+              <article class="client-panel">
+                <div class="panel-header">
+                  <h3>&#128737; Situa&ccedil;&atilde;o da Empresa</h3>
+                </div>
+                <div class="company-status-list" data-company-list></div>
+              </article>
+            </section>
+          </section>
+
+          <section class="client-page" data-client-page="documentos" id="documentos">
+            <div class="documents-heading">
+              <div>
+                <h2>Documentos</h2>
+                <p>Acesse e baixe os principais documentos da sua empresa.</p>
+              </div>
+              <div class="company-chip compact-company-chip">
+                <strong>CNPJ <span data-company-cnpj-copy>N&atilde;o informado</span></strong>
+                <span>Situa&ccedil;&atilde;o: <b data-company-status-copy>Carregando</b></span>
+              </div>
             </div>
-          </div>
 
-          <section class="client-kpi-grid">
-            <article class="client-kpi-card kpi-green">
-              <span class="kpi-icon">💵</span>
-              <h3>DAS-MEI</h3>
-              <p>Próxima cobrança</p>
-              <strong data-das-date>Não cadastrada</strong>
-              <small data-das-status>Sem registro</small>
-              <a href="https://wa.me/5567992230801?text=Olá,%20preciso%20de%20ajuda%20com%20DAS-MEI." target="_blank" rel="noopener">Solicitar DAS <span>→</span></a>
+            <div class="documents-grid" data-documents-cards></div>
+
+            <article class="documents-note">
+              <span>i</span>
+              <p>Todos os documentos exibidos aqui s&atilde;o registros cadastrados no sistema da Facilita. Em caso de d&uacute;vidas ou problemas para baixar, nossa equipe est&aacute; &agrave; disposi&ccedil;&atilde;o para ajudar.</p>
+              <a href="https://wa.me/5567992230801?text=Ol%C3%A1,%20preciso%20de%20ajuda%20com%20documentos%20da%20minha%20empresa." target="_blank" rel="noopener">Falar com a equipe</a>
             </article>
 
-            <article class="client-kpi-card kpi-blue">
-              <span class="kpi-icon">📑</span>
-              <h3>Nota Fiscal</h3>
-              <p>Emitidas este mês</p>
-              <strong data-invoices-month>0</strong>
-              <small>Registros encontrados</small>
-              <a href="https://wa.me/5567992230801?text=Olá,%20preciso%20de%20ajuda%20para%20emitir%20nota%20fiscal." target="_blank" rel="noopener">Emitir Nota <span>→</span></a>
-            </article>
-
-            <article class="client-kpi-card kpi-gold">
-              <span class="kpi-icon">🗓️</span>
-              <h3>Declaração Anual</h3>
-              <p data-declaration-label>DASN</p>
-              <strong data-declaration-status>Sem registro</strong>
-              <small>Documento no sistema</small>
-              <a href="#documentos">Consultar <span>→</span></a>
-            </article>
-
-            <article class="client-kpi-card kpi-red">
-              <span class="kpi-icon">🚨</span>
-              <h3>Pendências</h3>
-              <p>Você possui</p>
-              <strong><span data-pending-count>0</span> pendência(s)</strong>
-              <small data-pending-detail>Baseado no banco</small>
-              <a href="#vencimentos">Ver pendências <span>→</span></a>
+            <article class="documents-history">
+              <div class="panel-header">
+                <h3>Hist&oacute;rico de Emiss&otilde;es</h3>
+              </div>
+              <div class="responsive-table">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Documento</th>
+                      <th>Data de emiss&atilde;o</th>
+                      <th>Situa&ccedil;&atilde;o</th>
+                      <th>A&ccedil;&atilde;o</th>
+                    </tr>
+                  </thead>
+                  <tbody data-documents-history></tbody>
+                </table>
+              </div>
             </article>
           </section>
 
-          <section class="client-info-grid">
-            <article class="client-panel" id="vencimentos">
-              <div class="panel-header">
-                <h3>📅 Próximos Vencimentos</h3>
-              </div>
-              <div class="due-list" data-due-list></div>
-            </article>
-
-            <article class="client-panel">
-              <div class="panel-header">
-                <h3>📊 Resumo Financeiro</h3>
-              </div>
-              <div class="finance-summary">
-                <p>Faturamento do mês</p>
-                <strong data-finance-month>R$ 0,00</strong>
-                <div class="finance-row">
-                  <span>Limite anual configurado</span>
-                  <b data-finance-limit>R$ 0,00</b>
-                </div>
-                <div class="finance-bar"><span data-finance-progress></span></div>
-                <div class="finance-row">
-                  <span data-finance-progress-label>0% utilizado</span>
-                  <b data-finance-available>R$ 0,00 disponível</b>
-                </div>
-                <a class="outline-action" href="#pagamentos">Ver relatório completo <span>→</span></a>
-              </div>
-            </article>
-
-            <article class="client-panel">
-              <div class="panel-header">
-                <h3>🛡️ Situação da Empresa</h3>
-              </div>
-              <div class="company-status-list" data-company-list></div>
-            </article>
-          </section>
-
-          <section class="quick-services" id="servicos-rapidos">
+          <section class="client-page" data-client-page="servicos" id="servicos-rapidos">
             <div class="quick-services-heading">
               <h2>Servi&ccedil;os R&aacute;pidos</h2>
               <p>Escolha o servi&ccedil;o que voc&ecirc; precisa e resolva tudo de forma pr&aacute;tica e online.</p>
@@ -219,89 +261,46 @@
             </article>
           </section>
 
-          <section class="client-panel quick-services-old" aria-hidden="true">
-            <div class="panel-header">
-              <h3>⚡ Serviços Rápidos</h3>
-            </div>
-            <div class="quick-service-grid">
-              <a href="https://wa.me/5567992230801?text=Olá,%20preciso%20alterar%20dados%20do%20meu%20MEI." target="_blank" rel="noopener"><span>✏️</span>Alteração de Dados <b>→</b></a>
-              <a href="https://wa.me/5567992230801?text=Olá,%20preciso%20de%20ajuda%20com%20baixa%20do%20MEI." target="_blank" rel="noopener"><span>❎</span>Baixa do MEI <b>→</b></a>
-              <a href="https://wa.me/5567992230801?text=Olá,%20preciso%20de%20ajuda%20com%20parcelamento%20DAS." target="_blank" rel="noopener"><span>💳</span>Parcelamento DAS <b>→</b></a>
-              <a href="https://wa.me/5567992230801?text=Olá,%20preciso%20de%20certificado%20digital." target="_blank" rel="noopener"><span>🏅</span>Certificado Digital <b>→</b></a>
-              <a href="https://wa.me/5567992230801?text=Olá,%20preciso%20emitir%20certidões." target="_blank" rel="noopener"><span>📜</span>Emitir Certidões <b>→</b></a>
-            </div>
-          </section>
-
-          <section class="panel compact-data" id="pagamentos">
-            <div class="panel-header">
-              <h3>Pagamentos</h3>
-              <span data-payments-count>0 registros</span>
-            </div>
-            <div class="responsive-table">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Data</th>
-                    <th>Valor</th>
-                    <th>Status</th>
-                    <th>ID Mercado Pago</th>
-                  </tr>
-                </thead>
-                <tbody data-payments-table></tbody>
-              </table>
-            </div>
-          </section>
-
-          <div class="two-panel-grid compact-data">
-            <section class="panel" id="contratos">
-              <div class="panel-header">
-                <h3>Contratos</h3>
-              </div>
-              <div class="card-list" data-contracts-list></div>
-            </section>
-          </div>
-
-          <section class="client-documents-section" id="documentos">
+          <section class="client-page" data-client-page="configuracoes" id="configuracoes">
             <div class="documents-heading">
               <div>
-                <h2>Documentos</h2>
-                <p>Acesse e baixe os principais documentos da sua empresa.</p>
+                <h2>Configura&ccedil;&otilde;es</h2>
+                <p>Consulte seus pagamentos, contratos e dados de atendimento.</p>
               </div>
             </div>
 
-            <div class="documents-grid" data-documents-cards></div>
-
-            <article class="documents-note">
-              <span>i</span>
-              <p>Todos os documentos exibidos aqui são registros cadastrados no sistema da Facilita. Em caso de dúvidas ou problemas para baixar, nossa equipe está à disposição para ajudar.</p>
-              <a href="https://wa.me/5567992230801?text=Olá,%20preciso%20de%20ajuda%20com%20documentos%20da%20minha%20empresa." target="_blank" rel="noopener">Falar com a equipe</a>
-            </article>
-
-            <article class="documents-history">
+            <section class="panel compact-data" id="pagamentos">
               <div class="panel-header">
-                <h3>Histórico de Emissões</h3>
+                <h3>Pagamentos</h3>
+                <span data-payments-count>0 registros</span>
               </div>
               <div class="responsive-table">
                 <table>
                   <thead>
                     <tr>
-                      <th>Documento</th>
-                      <th>Data de emissão</th>
-                      <th>Situação</th>
-                      <th>Ação</th>
+                      <th>Data</th>
+                      <th>Valor</th>
+                      <th>Status</th>
+                      <th>ID Mercado Pago</th>
                     </tr>
                   </thead>
-                  <tbody data-documents-history></tbody>
+                  <tbody data-payments-table></tbody>
                 </table>
               </div>
-            </article>
-          </section>
+            </section>
 
+            <section class="panel compact-data">
+              <div class="panel-header">
+                <h3>Contratos</h3>
+              </div>
+              <div class="card-list" data-contracts-list></div>
+            </section>
+          </section>
         </section>
       </section>
     </main>
 
     <script src="../config.js?v=20260606-railway"></script>
-    <script src="./cliente.js?v=20260626-client-area"></script>
+    <script src="./cliente.js?v=20260627-client-pages"></script>
   </body>
 </html>

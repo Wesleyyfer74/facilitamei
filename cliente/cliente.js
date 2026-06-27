@@ -4,6 +4,9 @@ const loginForm = document.querySelector("[data-login-form]");
 const setupForm = document.querySelector("[data-setup-form]");
 const statusBox = document.querySelector("[data-client-status]");
 const tabButtons = document.querySelectorAll("[data-access-tab]");
+const routeButtons = document.querySelectorAll("[data-client-route]");
+const clientPages = document.querySelectorAll("[data-client-page]");
+const pageLinks = document.querySelectorAll("[data-go-page]");
 const clientName = document.querySelector("[data-client-name]");
 const clientFirstName = document.querySelector("[data-client-first-name]");
 const clientInitials = document.querySelector("[data-client-initials]");
@@ -11,6 +14,8 @@ const sidebarPlan = document.querySelector("[data-sidebar-plan]");
 const notificationBadge = document.querySelector("[data-notification-badge]");
 const companyCnpj = document.querySelector("[data-company-cnpj]");
 const companyStatus = document.querySelector("[data-company-status]");
+const companyCnpjCopy = document.querySelector("[data-company-cnpj-copy]");
+const companyStatusCopy = document.querySelector("[data-company-status-copy]");
 const dasDate = document.querySelector("[data-das-date]");
 const dasStatus = document.querySelector("[data-das-status]");
 const invoicesMonth = document.querySelector("[data-invoices-month]");
@@ -152,6 +157,14 @@ function showAccess() {
 function showDashboard() {
   accessView.hidden = true;
   dashboardView.hidden = false;
+}
+
+function showClientPage(page = "dashboard", updateHash = true) {
+  const targetPage = document.querySelector(`[data-client-page="${page}"]`) ? page : "dashboard";
+  clientPages.forEach((item) => item.classList.toggle("is-active", item.dataset.clientPage === targetPage));
+  routeButtons.forEach((item) => item.classList.toggle("is-active", item.dataset.clientRoute === targetPage));
+  if (updateHash) history.replaceState(null, "", `#${targetPage === "servicos" ? "servicos-rapidos" : targetPage}`);
+  window.scrollTo({ top: 0, behavior: "auto" });
 }
 
 function renderPayments(payments = []) {
@@ -321,6 +334,11 @@ function renderDashboard(data) {
   companyCnpj.textContent = formatCnpj(summary.company?.cnpj || client.cnpj || client.documento);
   companyStatus.textContent = summary.company?.regular ? "Regular" : statusLabel(client.status);
   companyStatus.classList.toggle("is-regular", Boolean(summary.company?.regular));
+  if (companyCnpjCopy) companyCnpjCopy.textContent = companyCnpj.textContent;
+  if (companyStatusCopy) {
+    companyStatusCopy.textContent = companyStatus.textContent;
+    companyStatusCopy.classList.toggle("is-regular", Boolean(summary.company?.regular));
+  }
 
   dasDate.textContent = summary.nextDue ? formatDate(summary.nextDue) : "Não cadastrada";
   dasStatus.textContent = hasActiveSubscription ? "Em dia no sistema" : "Sem assinatura ativa";
@@ -349,6 +367,18 @@ async function loadDashboard() {
   showDashboard();
 }
 
+function pageFromHash() {
+  const hash = window.location.hash.replace("#", "");
+  const map = {
+    dashboard: "dashboard",
+    documentos: "documentos",
+    "servicos-rapidos": "servicos",
+    servicos: "servicos",
+    configuracoes: "configuracoes",
+  };
+  return map[hash] || "dashboard";
+}
+
 tabButtons.forEach((button) => {
   button.addEventListener("click", () => {
     const tab = button.dataset.accessTab;
@@ -356,6 +386,20 @@ tabButtons.forEach((button) => {
     loginForm.classList.toggle("is-active", tab === "login");
     setupForm.classList.toggle("is-active", tab === "setup");
     setStatus("");
+  });
+});
+
+routeButtons.forEach((button) => {
+  button.addEventListener("click", (event) => {
+    event.preventDefault();
+    showClientPage(button.dataset.clientRoute || "dashboard");
+  });
+});
+
+pageLinks.forEach((link) => {
+  link.addEventListener("click", (event) => {
+    event.preventDefault();
+    showClientPage(link.dataset.goPage || "dashboard");
   });
 });
 
@@ -371,6 +415,7 @@ loginForm.addEventListener("submit", async (event) => {
     setToken(data.token);
     setStatus("");
     await loadDashboard();
+    showClientPage(pageFromHash(), false);
   } catch (error) {
     setStatus(error.message, "error");
   }
@@ -388,6 +433,7 @@ setupForm.addEventListener("submit", async (event) => {
     setToken(data.token);
     setStatus("");
     await loadDashboard();
+    showClientPage(pageFromHash(), false);
   } catch (error) {
     setStatus(error.message, "error");
   }
@@ -421,6 +467,7 @@ refreshDashboardButton?.addEventListener("click", async () => {
   try {
     await apiRequest("/api/client/auth/me");
     await loadDashboard();
+    showClientPage(pageFromHash(), false);
   } catch {
     clearToken();
     showAccess();
