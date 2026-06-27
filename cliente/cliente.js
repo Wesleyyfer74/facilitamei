@@ -47,6 +47,11 @@ const contractsList = document.querySelector("[data-contracts-list]");
 const documentsCards = document.querySelector("[data-documents-cards]");
 const documentsHistory = document.querySelector("[data-documents-history]");
 const refreshDashboardButton = document.querySelector("[data-refresh-dashboard]");
+const notificationToggle = document.querySelector("[data-notification-toggle]");
+const notificationMenu = document.querySelector("[data-notification-menu]");
+const notificationList = document.querySelector("[data-notification-list]");
+const notificationSummary = document.querySelector("[data-notification-summary]");
+const notificationRefreshButton = document.querySelector("[data-notification-refresh]");
 const settingsFields = {
   companyName: document.querySelector("[data-settings-company-name]"),
   tradeName: document.querySelector("[data-settings-trade-name]"),
@@ -415,6 +420,83 @@ function renderCompanyChecks(checks = []) {
     : `<article class="company-check is-warning"><span>!</span><div><strong>Sem verificações</strong><p>Nenhum dado retornado pelo backend.</p></div></article>`;
 }
 
+function notificationIcon(type = "") {
+  const icons = {
+    payment: "💳",
+    document: "📄",
+    contract: "📝",
+    subscription: "📅",
+    warning: "⚠️",
+    ok: "✅",
+  };
+  return icons[type] || "🔔";
+}
+
+function renderNotifications(data) {
+  if (!notificationList || !notificationSummary) return;
+  const summary = data.summary || {};
+  const items = [];
+
+  if (Number(summary.pendingPayments || 0) > 0) {
+    items.push({
+      type: "payment",
+      title: "Pagamento pendente",
+      description: `${summary.pendingPayments} pagamento(s) aguardando confirmacao.`,
+    });
+  }
+  if (Number(summary.pendingDocuments || 0) > 0) {
+    items.push({
+      type: "document",
+      title: "Documento pendente",
+      description: `${summary.pendingDocuments} documento(s) precisam de atencao.`,
+    });
+  }
+  if (Number(summary.pendingContracts || 0) > 0) {
+    items.push({
+      type: "contract",
+      title: "Contrato pendente",
+      description: `${summary.pendingContracts} contrato(s) aguardando assinatura ou envio.`,
+    });
+  }
+
+  (summary.dueItems || []).slice(0, 5).forEach((item) => {
+    items.push({
+      type: item.type,
+      title: item.title || "Vencimento cadastrado",
+      description: `${item.description || statusLabel(item.status)}${item.dueDate ? ` - ${formatDate(item.dueDate)}` : ""}`,
+    });
+  });
+
+  const pendingTotal = Number(summary.pendingTotal || 0);
+  notificationSummary.textContent = pendingTotal === 1 ? "1 pendencia" : `${pendingTotal} pendencias`;
+  notificationBadge.textContent = String(pendingTotal);
+  notificationBadge.hidden = pendingTotal <= 0;
+
+  notificationList.innerHTML = items.length
+    ? items
+        .map(
+          (item) => `
+            <article class="notification-item">
+              <span>${notificationIcon(item.type)}</span>
+              <div>
+                <strong>${escapeHtml(item.title)}</strong>
+                <p>${escapeHtml(item.description || "-")}</p>
+              </div>
+            </article>
+          `,
+        )
+        .join("")
+    : `
+        <article class="notification-item is-empty">
+          <span>${notificationIcon("ok")}</span>
+          <div>
+            <strong>Nenhuma pendencia no momento</strong>
+            <p>Os dados do banco nao retornaram alertas para sua conta.</p>
+          </div>
+        </article>
+      `;
+}
+
 function findDocumentByTerms(documents = [], terms = []) {
   return documents.find((document) => {
     const text = `${document.titulo || ""} ${document.tipo || ""} ${document.observacao || ""}`.toLowerCase();
@@ -536,6 +618,7 @@ function renderDashboard(data) {
   renderCards(contractsList, data.contracts || [], "Nenhum contrato registrado ainda.", "contrato");
   renderDocuments(data.documents || []);
   renderSettings(data);
+  renderNotifications(data);
 }
 
 async function loadDashboard() {
@@ -597,6 +680,45 @@ settingsModalButtons.forEach((button) => {
 
 closeSettingsModalButtons.forEach((button) => {
   button.addEventListener("click", closeSettingsModals);
+});
+
+function closeNotificationMenu() {
+  if (!notificationMenu || !notificationToggle) return;
+  notificationMenu.hidden = true;
+  notificationToggle.setAttribute("aria-expanded", "false");
+}
+
+async function refreshClientDashboard() {
+  if (!refreshDashboardButton) return;
+  const label = refreshDashboardButton.querySelector("b");
+  refreshDashboardButton.disabled = true;
+  refreshDashboardButton.classList.add("is-loading");
+  if (label) label.textContent = "Atualizando...";
+  try {
+    await loadDashboard();
+  } finally {
+    refreshDashboardButton.disabled = false;
+    refreshDashboardButton.classList.remove("is-loading");
+    if (label) label.textContent = "Atualizar";
+  }
+}
+
+notificationToggle?.addEventListener("click", (event) => {
+  event.stopPropagation();
+  const isOpening = notificationMenu?.hidden;
+  if (notificationMenu) notificationMenu.hidden = !isOpening;
+  notificationToggle.setAttribute("aria-expanded", isOpening ? "true" : "false");
+});
+
+notificationRefreshButton?.addEventListener("click", async () => {
+  await refreshClientDashboard();
+});
+
+document.addEventListener("click", (event) => {
+  if (!notificationMenu || notificationMenu.hidden) return;
+  if (event.target instanceof Node && !notificationMenu.contains(event.target) && !notificationToggle?.contains(event.target)) {
+    closeNotificationMenu();
+  }
 });
 
 addressForm?.addEventListener("submit", async (event) => {
@@ -686,12 +808,7 @@ document.querySelector("[data-logout]").addEventListener("click", async () => {
 });
 
 refreshDashboardButton?.addEventListener("click", async () => {
-  refreshDashboardButton.disabled = true;
-  try {
-    await loadDashboard();
-  } finally {
-    refreshDashboardButton.disabled = false;
-  }
+  await refreshClientDashboard();
 });
 
 (async function bootClientArea() {

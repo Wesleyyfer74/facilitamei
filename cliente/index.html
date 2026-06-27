@@ -6,7 +6,7 @@
     <title>Area do Cliente | Facilita MEI</title>
     <meta name="robots" content="noindex, nofollow" />
     <link rel="icon" href="../assets/logopequeno.png" />
-    <link rel="stylesheet" href="./cliente.css?v=20260627-client-settings-edit" />
+    <link rel="stylesheet" href="./cliente.css?v=20260627-client-notifications" />
   </head>
   <body>
     <main class="client-shell">
@@ -60,8 +60,21 @@
               <p data-sidebar-plan>Carregando plano...</p>
             </div>
             <div class="client-top-actions">
-              <button class="top-action" type="button" data-refresh-dashboard>&#8635; Atualizar</button>
-              <span class="notification-pill" title="Pend&ecirc;ncias"><span data-notification-badge>0</span></span>
+              <button class="top-action" type="button" data-refresh-dashboard><span>&#8635;</span><b>Atualizar</b></button>
+              <div class="notification-wrapper">
+                <button class="notification-pill" type="button" title="Pend&ecirc;ncias" aria-expanded="false" data-notification-toggle>
+                  <span class="notification-icon">&#128276;</span>
+                  <span class="notification-count" data-notification-badge>0</span>
+                </button>
+                <section class="notification-menu" data-notification-menu hidden>
+                  <div class="notification-menu-header">
+                    <strong>Notifica&ccedil;&otilde;es</strong>
+                    <span data-notification-summary>0 pend&ecirc;ncias</span>
+                  </div>
+                  <div class="notification-list" data-notification-list></div>
+                  <button type="button" data-notification-refresh>&#8635; Atualizar agora</button>
+                </section>
+              </div>
               <div class="profile-chip">
                 <span data-client-initials>CL</span>
                 <strong data-client-name>&Aacute;rea do cliente</strong>
@@ -601,6 +614,6 @@
     </div>
 
     <script src="../config.js?v=20260606-railway"></script>
-    <script src="./cliente.js?v=20260627-client-settings-edit"></script>
+    <script src="./cliente.js?v=20260627-client-notifications"></script>
   </body>
 </html>
