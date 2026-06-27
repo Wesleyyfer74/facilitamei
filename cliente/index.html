@@ -6,7 +6,7 @@
     <title>Area do Cliente | Facilita MEI</title>
     <meta name="robots" content="noindex, nofollow" />
     <link rel="icon" href="../assets/logopequeno.png" />
-    <link rel="stylesheet" href="./cliente.css?v=20260627-client-settings" />
+    <link rel="stylesheet" href="./cliente.css?v=20260627-client-settings-edit" />
   </head>
   <body>
     <main class="client-shell">
@@ -449,7 +449,10 @@
 
                 <aside class="settings-side-stack">
                   <article class="settings-card">
-                    <h3>&#128205; Endere&ccedil;o da Empresa</h3>
+                    <div class="settings-mini-header">
+                      <h3>&#128205; Endere&ccedil;o da Empresa</h3>
+                      <button type="button" data-open-settings-modal="address">&#9998; Editar</button>
+                    </div>
                     <div class="settings-address-grid">
                       <div><span>CEP</span><strong data-settings-cep>N&atilde;o cadastrado</strong></div>
                       <div><span>Logradouro</span><strong data-settings-street>N&atilde;o cadastrado</strong></div>
@@ -468,7 +471,7 @@
                       <div><span>Conta</span><strong data-settings-account>N&atilde;o cadastrado</strong></div>
                       <div><span>Tipo de Conta</span><strong data-settings-account-type>N&atilde;o cadastrado</strong></div>
                     </div>
-                    <a class="settings-outline-action" href="https://wa.me/5567992230801?text=Ol%C3%A1,%20preciso%20atualizar%20meus%20dados%20banc%C3%A1rios." target="_blank" rel="noopener">&#9998; Editar dados banc&aacute;rios</a>
+                    <button class="settings-outline-action" type="button" data-open-settings-modal="bank">&#9998; Editar dados banc&aacute;rios</button>
                   </article>
                 </aside>
               </div>
@@ -542,7 +545,62 @@
       </section>
     </main>
 
+    <div class="client-modal" data-settings-modal="address" hidden>
+      <div class="client-modal-backdrop" data-close-settings-modal></div>
+      <section class="client-modal-card">
+        <button class="client-modal-close" type="button" data-close-settings-modal>&times;</button>
+        <p class="eyebrow">Minha empresa</p>
+        <h2>Editar endere&ccedil;o</h2>
+        <form class="settings-edit-form" data-address-form>
+          <label>CEP<input name="cep" inputmode="numeric" maxlength="9" autocomplete="postal-code" /></label>
+          <label>Logradouro<input name="logradouro" maxlength="180" autocomplete="street-address" /></label>
+          <div class="form-row">
+            <label>N&uacute;mero<input name="numero" maxlength="30" /></label>
+            <label>Complemento<input name="complemento" maxlength="120" /></label>
+          </div>
+          <label>Bairro<input name="bairro" maxlength="120" /></label>
+          <div class="form-row">
+            <label>Cidade<input name="municipio" maxlength="120" /></label>
+            <label>UF<input name="uf" maxlength="2" /></label>
+          </div>
+          <div class="modal-actions">
+            <button class="ghost-button" type="button" data-close-settings-modal>Cancelar</button>
+            <button class="gold-button" type="submit">Salvar endere&ccedil;o</button>
+          </div>
+        </form>
+      </section>
+    </div>
+
+    <div class="client-modal" data-settings-modal="bank" hidden>
+      <div class="client-modal-backdrop" data-close-settings-modal></div>
+      <section class="client-modal-card">
+        <button class="client-modal-close" type="button" data-close-settings-modal>&times;</button>
+        <p class="eyebrow">Minha empresa</p>
+        <h2>Editar dados banc&aacute;rios</h2>
+        <form class="settings-edit-form" data-bank-form>
+          <label>Banco<input name="banco" maxlength="120" autocomplete="organization" /></label>
+          <div class="form-row">
+            <label>Ag&ecirc;ncia<input name="agencia" maxlength="30" /></label>
+            <label>Conta<input name="conta" maxlength="40" /></label>
+          </div>
+          <label>Tipo de conta
+            <select name="tipo_conta">
+              <option value="">Selecione</option>
+              <option value="Conta Corrente">Conta Corrente</option>
+              <option value="Conta Poupan&ccedil;a">Conta Poupan&ccedil;a</option>
+              <option value="Conta PJ">Conta PJ</option>
+              <option value="Conta Digital">Conta Digital</option>
+            </select>
+          </label>
+          <div class="modal-actions">
+            <button class="ghost-button" type="button" data-close-settings-modal>Cancelar</button>
+            <button class="gold-button" type="submit">Salvar dados banc&aacute;rios</button>
+          </div>
+        </form>
+      </section>
+    </div>
+
     <script src="../config.js?v=20260606-railway"></script>
-    <script src="./cliente.js?v=20260627-client-settings"></script>
+    <script src="./cliente.js?v=20260627-client-settings-edit"></script>
   </body>
 </html>

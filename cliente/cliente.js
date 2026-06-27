@@ -9,6 +9,11 @@ const clientPages = document.querySelectorAll("[data-client-page]");
 const pageLinks = document.querySelectorAll("[data-go-page]");
 const settingsTabButtons = document.querySelectorAll("[data-settings-tab]");
 const settingsPanels = document.querySelectorAll("[data-settings-panel]");
+const settingsModalButtons = document.querySelectorAll("[data-open-settings-modal]");
+const settingsModals = document.querySelectorAll("[data-settings-modal]");
+const closeSettingsModalButtons = document.querySelectorAll("[data-close-settings-modal]");
+const addressForm = document.querySelector("[data-address-form]");
+const bankForm = document.querySelector("[data-bank-form]");
 const clientName = document.querySelector("[data-client-name]");
 const clientFirstName = document.querySelector("[data-client-first-name]");
 const clientInitials = document.querySelector("[data-client-initials]");
@@ -92,6 +97,7 @@ const API_BASE =
   configuredApiBase ||
   (isLocalFile || isLocalHost ? "http://localhost:3000" : isFacilitaDomain ? productionApiBase : "");
 const SESSION_KEY = "facilita_client_session";
+let currentDashboardData = null;
 
 function escapeHtml(value = "") {
   return String(value)
@@ -177,6 +183,44 @@ function formatDocument(value = "") {
 function setText(element, value, fallback = "Não cadastrado") {
   if (!element) return;
   element.textContent = value || fallback;
+}
+
+function setFormValue(form, name, value = "") {
+  const field = form?.elements?.[name];
+  if (field) field.value = value || "";
+}
+
+function fillAddressForm() {
+  const client = currentDashboardData?.client || {};
+  setFormValue(addressForm, "cep", client.cep);
+  setFormValue(addressForm, "logradouro", client.logradouro);
+  setFormValue(addressForm, "numero", client.numero);
+  setFormValue(addressForm, "complemento", client.complemento);
+  setFormValue(addressForm, "bairro", client.bairro);
+  setFormValue(addressForm, "municipio", client.municipio || client.cidade);
+  setFormValue(addressForm, "uf", client.uf);
+}
+
+function fillBankForm() {
+  const client = currentDashboardData?.client || {};
+  setFormValue(bankForm, "banco", client.banco);
+  setFormValue(bankForm, "agencia", client.agencia);
+  setFormValue(bankForm, "conta", client.conta);
+  setFormValue(bankForm, "tipo_conta", client.tipo_conta);
+}
+
+function openSettingsModal(type) {
+  if (type === "address") fillAddressForm();
+  if (type === "bank") fillBankForm();
+  settingsModals.forEach((modal) => {
+    modal.hidden = modal.dataset.settingsModal !== type;
+  });
+}
+
+function closeSettingsModals() {
+  settingsModals.forEach((modal) => {
+    modal.hidden = true;
+  });
 }
 
 function statusLabel(status = "") {
@@ -433,6 +477,7 @@ function renderSettings(data) {
 }
 
 function renderDashboard(data) {
+  currentDashboardData = data;
   const client = data.client || {};
   const subscription = data.activeSubscription || {};
   const summary = data.summary || {};
@@ -542,6 +587,56 @@ settingsTabButtons.forEach((button) => {
     settingsTabButtons.forEach((item) => item.classList.toggle("is-active", item === button));
     settingsPanels.forEach((panel) => panel.classList.toggle("is-active", panel.dataset.settingsPanel === tab));
   });
+});
+
+settingsModalButtons.forEach((button) => {
+  button.addEventListener("click", () => {
+    openSettingsModal(button.dataset.openSettingsModal);
+  });
+});
+
+closeSettingsModalButtons.forEach((button) => {
+  button.addEventListener("click", closeSettingsModals);
+});
+
+addressForm?.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const submitButton = addressForm.querySelector("[type='submit']");
+  submitButton.disabled = true;
+  try {
+    const payload = Object.fromEntries(new FormData(addressForm).entries());
+    await apiRequest("/api/client/settings/address", {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    });
+    closeSettingsModals();
+    await loadDashboard();
+    showClientPage("configuracoes", false);
+  } catch (error) {
+    alert(error.message);
+  } finally {
+    submitButton.disabled = false;
+  }
+});
+
+bankForm?.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const submitButton = bankForm.querySelector("[type='submit']");
+  submitButton.disabled = true;
+  try {
+    const payload = Object.fromEntries(new FormData(bankForm).entries());
+    await apiRequest("/api/client/settings/bank", {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    });
+    closeSettingsModals();
+    await loadDashboard();
+    showClientPage("configuracoes", false);
+  } catch (error) {
+    alert(error.message);
+  } finally {
+    submitButton.disabled = false;
+  }
 });
 
 loginForm.addEventListener("submit", async (event) => {

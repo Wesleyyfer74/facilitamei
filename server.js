@@ -37,6 +37,30 @@ const dbPool = mysql.createPool({
   connectionLimit: 10,
   namedPlaceholders: true,
 });
+const clientEditableUserColumns = {
+  razao_social: "VARCHAR(180) NULL",
+  nome_fantasia: "VARCHAR(160) NULL",
+  data_abertura: "DATE NULL",
+  cep: "VARCHAR(12) NULL",
+  logradouro: "VARCHAR(180) NULL",
+  numero: "VARCHAR(30) NULL",
+  complemento: "VARCHAR(120) NULL",
+  bairro: "VARCHAR(120) NULL",
+  municipio: "VARCHAR(120) NULL",
+  uf: "VARCHAR(2) NULL",
+  cnae_principal_codigo: "VARCHAR(20) NULL",
+  cnae_principal_descricao: "VARCHAR(255) NULL",
+  cnae_secundario_codigo: "VARCHAR(80) NULL",
+  cnae_secundario_descricao: "VARCHAR(255) NULL",
+  capital_social: "DECIMAL(12,2) NULL",
+  inscricao_municipal: "VARCHAR(60) NULL",
+  inscricao_estadual: "VARCHAR(60) NULL",
+  alvara_status: "VARCHAR(80) NULL",
+  banco: "VARCHAR(120) NULL",
+  agencia: "VARCHAR(30) NULL",
+  conta: "VARCHAR(40) NULL",
+  tipo_conta: "VARCHAR(40) NULL",
+};
 const allowedOrigins = new Set([
   frontendUrl,
   apiPublicUrl,
@@ -294,6 +318,40 @@ async function logContractEvent({ contractId = null, userId = null, acao, status
   } catch (error) {
     console.warn("Nao foi possivel registrar historico de contrato.", error.message);
   }
+}
+
+async function ensureClientEditableUserFields() {
+  const databaseName = process.env.DB_NAME || "facilita_modern";
+  try {
+    const [rows] = await dbPool.execute(
+      `SELECT COLUMN_NAME
+       FROM INFORMATION_SCHEMA.COLUMNS
+       WHERE TABLE_SCHEMA = :databaseName
+         AND TABLE_NAME = 'users'`,
+      { databaseName },
+    );
+    const existingColumns = new Set(rows.map((row) => row.COLUMN_NAME));
+    const missingColumns = Object.entries(clientEditableUserColumns).filter(([column]) => !existingColumns.has(column));
+
+    for (const [column, definition] of missingColumns) {
+      await dbPool.query(`ALTER TABLE users ADD COLUMN ${column} ${definition}`);
+    }
+
+    if (missingColumns.length) {
+      console.log(`Campos editaveis do cliente criados: ${missingColumns.map(([column]) => column).join(", ")}`);
+    }
+  } catch (error) {
+    console.warn("Nao foi possivel garantir campos editaveis do cliente.", error.message);
+  }
+}
+
+function cleanText(value = "", maxLength = 180) {
+  return String(value || "").trim().slice(0, maxLength) || null;
+}
+
+function cleanUf(value = "") {
+  const uf = String(value || "").replace(/[^a-z]/gi, "").toUpperCase().slice(0, 2);
+  return uf || null;
 }
 
 function getAccessTokenOrThrow() {
@@ -556,7 +614,11 @@ app.post("/api/client/auth/logout", requireClientSession, (request, response) =>
 app.get("/api/client/auth/me", requireClientSession, async (request, response) => {
   try {
     const [rows] = await dbPool.execute(
-      `SELECT id, nome, email, telefone, whatsapp, documento, cnpj, status, cliente_login_ativo, created_at
+      `SELECT id, nome, email, telefone, whatsapp, documento, cnpj, status, cliente_login_ativo, created_at,
+              razao_social, nome_fantasia, data_abertura, cep, logradouro, numero, complemento,
+              bairro, municipio, uf, cnae_principal_codigo, cnae_principal_descricao,
+              cnae_secundario_codigo, cnae_secundario_descricao, capital_social,
+              inscricao_municipal, inscricao_estadual, alvara_status, banco, agencia, conta, tipo_conta
        FROM users
        WHERE id = :userId
        LIMIT 1`,
@@ -567,6 +629,70 @@ app.get("/api/client/auth/me", requireClientSession, async (request, response) =
   } catch (error) {
     console.error(error);
     response.status(500).json({ error: "Erro ao carregar cliente." });
+  }
+});
+
+app.patch("/api/client/settings/address", requireClientSession, async (request, response) => {
+  try {
+    const userId = request.clientSession.userId;
+    const payload = {
+      cep: normalizeDigits(request.body?.cep || "").slice(0, 8) || null,
+      logradouro: cleanText(request.body?.logradouro, 180),
+      numero: cleanText(request.body?.numero, 30),
+      complemento: cleanText(request.body?.complemento, 120),
+      bairro: cleanText(request.body?.bairro, 120),
+      municipio: cleanText(request.body?.municipio, 120),
+      uf: cleanUf(request.body?.uf),
+      userId,
+    };
+
+    await dbPool.execute(
+      `UPDATE users
+       SET cep = :cep,
+           logradouro = :logradouro,
+           numero = :numero,
+           complemento = :complemento,
+           bairro = :bairro,
+           municipio = :municipio,
+           uf = :uf,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE id = :userId`,
+      payload,
+    );
+
+    response.json({ ok: true, message: "Endereco atualizado com sucesso." });
+  } catch (error) {
+    console.error(error);
+    response.status(500).json({ error: "Erro ao salvar endereco do cliente." });
+  }
+});
+
+app.patch("/api/client/settings/bank", requireClientSession, async (request, response) => {
+  try {
+    const userId = request.clientSession.userId;
+    const payload = {
+      banco: cleanText(request.body?.banco, 120),
+      agencia: cleanText(request.body?.agencia, 30),
+      conta: cleanText(request.body?.conta, 40),
+      tipoConta: cleanText(request.body?.tipo_conta || request.body?.tipoConta, 40),
+      userId,
+    };
+
+    await dbPool.execute(
+      `UPDATE users
+       SET banco = :banco,
+           agencia = :agencia,
+           conta = :conta,
+           tipo_conta = :tipoConta,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE id = :userId`,
+      payload,
+    );
+
+    response.json({ ok: true, message: "Dados bancarios atualizados com sucesso." });
+  } catch (error) {
+    console.error(error);
+    response.status(500).json({ error: "Erro ao salvar dados bancarios do cliente." });
   }
 });
 
@@ -585,7 +711,11 @@ app.get("/api/client/dashboard", requireClientSession, async (request, response)
       [declarationRows],
     ] = await Promise.all([
       dbPool.execute(
-        `SELECT id, nome, email, telefone, whatsapp, documento, cnpj, status, created_at
+        `SELECT id, nome, email, telefone, whatsapp, documento, cnpj, status, created_at,
+                razao_social, nome_fantasia, data_abertura, cep, logradouro, numero, complemento,
+                bairro, municipio, uf, cnae_principal_codigo, cnae_principal_descricao,
+                cnae_secundario_codigo, cnae_secundario_descricao, capital_social,
+                inscricao_municipal, inscricao_estadual, alvara_status, banco, agencia, conta, tipo_conta
          FROM users
          WHERE id = :userId
          LIMIT 1`,
@@ -3248,6 +3378,8 @@ app.get("*", (_request, response) => {
   response.sendFile(path.join(__dirname, "index.html"));
 });
 
-app.listen(port, () => {
-  console.log(`Facilita Modern API em ${apiPublicUrl}`);
+ensureClientEditableUserFields().finally(() => {
+  app.listen(port, () => {
+    console.log(`Facilita Modern API em ${apiPublicUrl}`);
+  });
 });
