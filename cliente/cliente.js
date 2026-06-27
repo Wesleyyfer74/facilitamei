@@ -7,6 +7,8 @@ const tabButtons = document.querySelectorAll("[data-access-tab]");
 const routeButtons = document.querySelectorAll("[data-client-route]");
 const clientPages = document.querySelectorAll("[data-client-page]");
 const pageLinks = document.querySelectorAll("[data-go-page]");
+const settingsTabButtons = document.querySelectorAll("[data-settings-tab]");
+const settingsPanels = document.querySelectorAll("[data-settings-panel]");
 const clientName = document.querySelector("[data-client-name]");
 const clientFirstName = document.querySelector("[data-client-first-name]");
 const clientInitials = document.querySelector("[data-client-initials]");
@@ -18,6 +20,8 @@ const companyCnpjCopy = document.querySelector("[data-company-cnpj-copy]");
 const companyStatusCopy = document.querySelector("[data-company-status-copy]");
 const companyCnpjSupport = document.querySelector("[data-company-cnpj-support]");
 const companyStatusSupport = document.querySelector("[data-company-status-support]");
+const companyCnpjSettings = document.querySelector("[data-company-cnpj-settings]");
+const companyStatusSettings = document.querySelector("[data-company-status-settings]");
 const dasDate = document.querySelector("[data-das-date]");
 const dasStatus = document.querySelector("[data-das-status]");
 const invoicesMonth = document.querySelector("[data-invoices-month]");
@@ -38,6 +42,46 @@ const contractsList = document.querySelector("[data-contracts-list]");
 const documentsCards = document.querySelector("[data-documents-cards]");
 const documentsHistory = document.querySelector("[data-documents-history]");
 const refreshDashboardButton = document.querySelector("[data-refresh-dashboard]");
+const settingsFields = {
+  companyName: document.querySelector("[data-settings-company-name]"),
+  tradeName: document.querySelector("[data-settings-trade-name]"),
+  cnpj: document.querySelector("[data-settings-cnpj]"),
+  openDate: document.querySelector("[data-settings-open-date]"),
+  companyStatus: document.querySelector("[data-settings-company-status]"),
+  capital: document.querySelector("[data-settings-capital]"),
+  mainActivity: document.querySelector("[data-settings-main-activity]"),
+  secondaryActivity: document.querySelector("[data-settings-secondary-activity]"),
+  address: document.querySelector("[data-settings-address]"),
+  phone: document.querySelector("[data-settings-phone]"),
+  email: document.querySelector("[data-settings-email]"),
+  cep: document.querySelector("[data-settings-cep]"),
+  street: document.querySelector("[data-settings-street]"),
+  number: document.querySelector("[data-settings-number]"),
+  complement: document.querySelector("[data-settings-complement]"),
+  district: document.querySelector("[data-settings-district]"),
+  city: document.querySelector("[data-settings-city]"),
+  bank: document.querySelector("[data-settings-bank]"),
+  agency: document.querySelector("[data-settings-agency]"),
+  account: document.querySelector("[data-settings-account]"),
+  accountType: document.querySelector("[data-settings-account-type]"),
+  municipalRegistration: document.querySelector("[data-settings-municipal-registration]"),
+  stateRegistration: document.querySelector("[data-settings-state-registration]"),
+  license: document.querySelector("[data-settings-license]"),
+  ccmeiDate: document.querySelector("[data-settings-ccmei-date]"),
+  certificate: document.querySelector("[data-settings-certificate]"),
+  accountName: document.querySelector("[data-settings-account-name]"),
+  accountEmail: document.querySelector("[data-settings-account-email]"),
+  accountPhone: document.querySelector("[data-settings-account-phone]"),
+  accountWhatsapp: document.querySelector("[data-settings-account-whatsapp]"),
+  accountDocument: document.querySelector("[data-settings-account-document]"),
+  accountStatus: document.querySelector("[data-settings-account-status]"),
+  accountCreated: document.querySelector("[data-settings-account-created]"),
+  accountPlan: document.querySelector("[data-settings-account-plan]"),
+  subscriptionStatus: document.querySelector("[data-settings-subscription-status]"),
+  subscriptionValue: document.querySelector("[data-settings-subscription-value]"),
+  paymentMethod: document.querySelector("[data-settings-payment-method]"),
+  nextCharge: document.querySelector("[data-settings-next-charge]"),
+};
 
 const configuredApiBase = String(window.FACILITA_API_BASE || "").replace(/\/$/, "");
 const isLocalFile = window.location.protocol === "file:";
@@ -123,6 +167,18 @@ function formatCnpj(value = "") {
   return digits.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, "$1.$2.$3/$4-$5");
 }
 
+function formatDocument(value = "") {
+  const digits = String(value || "").replace(/\D/g, "");
+  if (digits.length === 14) return formatCnpj(digits);
+  if (digits.length === 11) return digits.replace(/^(\d{3})(\d{3})(\d{3})(\d{2})$/, "$1.$2.$3-$4");
+  return value || "Não cadastrado";
+}
+
+function setText(element, value, fallback = "Não cadastrado") {
+  if (!element) return;
+  element.textContent = value || fallback;
+}
+
 function statusLabel(status = "") {
   const labels = {
     active: "Ativo",
@@ -170,6 +226,7 @@ function showClientPage(page = "dashboard", updateHash = true) {
 }
 
 function renderPayments(payments = []) {
+  if (!paymentsTable || !paymentsCount) return;
   paymentsCount.textContent = `${payments.length} registro(s)`;
   paymentsTable.innerHTML = payments.length
     ? payments
@@ -188,6 +245,7 @@ function renderPayments(payments = []) {
 }
 
 function renderCards(container, items = [], emptyMessage, type) {
+  if (!container) return;
   container.innerHTML = items.length
     ? items
         .map((item) => {
@@ -313,6 +371,67 @@ function renderCompanyChecks(checks = []) {
     : `<article class="company-check is-warning"><span>!</span><div><strong>Sem verificações</strong><p>Nenhum dado retornado pelo backend.</p></div></article>`;
 }
 
+function findDocumentByTerms(documents = [], terms = []) {
+  return documents.find((document) => {
+    const text = `${document.titulo || ""} ${document.tipo || ""} ${document.observacao || ""}`.toLowerCase();
+    return terms.some((term) => text.includes(term));
+  });
+}
+
+function renderSettings(data) {
+  const client = data.client || {};
+  const subscription = data.activeSubscription || {};
+  const summary = data.summary || {};
+  const documents = data.documents || [];
+  const companyStatusText = summary.company?.regular ? "Ativa" : statusLabel(client.status);
+  const companyDocument = summary.company?.cnpj || client.cnpj || client.documento;
+  const ccmeiDocument = findDocumentByTerms(documents, ["ccmei", "contrato social", "cartao cnpj", "cartão cnpj"]);
+  const certificateDocument = findDocumentByTerms(documents, ["certificado"]);
+  const stateRegistrationDocument = findDocumentByTerms(documents, ["inscricao estadual", "inscrição estadual"]);
+  const licenseDocument = findDocumentByTerms(documents, ["alvara", "alvará"]);
+  const addressParts = [client.logradouro, client.numero, client.bairro, client.municipio || client.cidade, client.uf].filter(Boolean);
+
+  setText(settingsFields.companyName, client.razao_social || client.nome);
+  setText(settingsFields.tradeName, client.nome_fantasia);
+  setText(settingsFields.cnpj, formatDocument(companyDocument));
+  setText(settingsFields.openDate, formatDate(client.data_abertura || client.created_at));
+  setText(settingsFields.companyStatus, companyStatusText);
+  settingsFields.companyStatus?.classList.toggle("is-active", ["Ativa", "Ativo", "Regular"].includes(companyStatusText));
+  setText(settingsFields.capital, client.capital_social ? money(client.capital_social) : "");
+  setText(settingsFields.mainActivity, client.cnae_principal_descricao || client.cnae_principal_codigo);
+  setText(settingsFields.secondaryActivity, client.cnae_secundario_descricao || client.cnae_secundario_codigo);
+  setText(settingsFields.address, addressParts.join(", "));
+  setText(settingsFields.phone, client.telefone || client.whatsapp);
+  setText(settingsFields.email, client.email);
+  setText(settingsFields.cep, client.cep);
+  setText(settingsFields.street, client.logradouro);
+  setText(settingsFields.number, client.numero);
+  setText(settingsFields.complement, client.complemento);
+  setText(settingsFields.district, client.bairro);
+  setText(settingsFields.city, [client.municipio || client.cidade, client.uf].filter(Boolean).join(" / "));
+  setText(settingsFields.bank, client.banco);
+  setText(settingsFields.agency, client.agencia);
+  setText(settingsFields.account, client.conta);
+  setText(settingsFields.accountType, client.tipo_conta);
+  setText(settingsFields.municipalRegistration, client.inscricao_municipal);
+  setText(settingsFields.stateRegistration, client.inscricao_estadual || statusLabel(stateRegistrationDocument?.status));
+  setText(settingsFields.license, client.alvara_status || statusLabel(licenseDocument?.status));
+  setText(settingsFields.ccmeiDate, ccmeiDocument ? formatDate(ccmeiDocument.data_emissao || ccmeiDocument.created_at) : "");
+  setText(settingsFields.certificate, certificateDocument ? `${statusLabel(certificateDocument.status)}${certificateDocument.data_emissao ? ` desde ${formatDate(certificateDocument.data_emissao)}` : ""}` : "");
+  setText(settingsFields.accountName, client.nome);
+  setText(settingsFields.accountEmail, client.email);
+  setText(settingsFields.accountPhone, client.telefone);
+  setText(settingsFields.accountWhatsapp, client.whatsapp || client.telefone);
+  setText(settingsFields.accountDocument, formatDocument(client.documento || client.cnpj));
+  setText(settingsFields.accountStatus, statusLabel(client.status));
+  setText(settingsFields.accountCreated, formatDate(client.created_at));
+  setText(settingsFields.accountPlan, subscription.plan_name);
+  setText(settingsFields.subscriptionStatus, statusLabel(subscription.status));
+  setText(settingsFields.subscriptionValue, subscription.valor ? money(subscription.valor) : "");
+  setText(settingsFields.paymentMethod, subscription.metodo_pagamento);
+  setText(settingsFields.nextCharge, subscription.data_proxima_cobranca ? formatDate(subscription.data_proxima_cobranca) : "");
+}
+
 function renderDashboard(data) {
   const client = data.client || {};
   const subscription = data.activeSubscription || {};
@@ -346,6 +465,11 @@ function renderDashboard(data) {
     companyStatusSupport.textContent = companyStatus.textContent;
     companyStatusSupport.classList.toggle("is-regular", Boolean(summary.company?.regular));
   }
+  if (companyCnpjSettings) companyCnpjSettings.textContent = companyCnpj.textContent;
+  if (companyStatusSettings) {
+    companyStatusSettings.textContent = companyStatus.textContent;
+    companyStatusSettings.classList.toggle("is-regular", Boolean(summary.company?.regular));
+  }
 
   dasDate.textContent = summary.nextDue ? formatDate(summary.nextDue) : "Não cadastrada";
   dasStatus.textContent = hasActiveSubscription ? "Em dia no sistema" : "Sem assinatura ativa";
@@ -366,6 +490,7 @@ function renderDashboard(data) {
   renderPayments(data.payments || []);
   renderCards(contractsList, data.contracts || [], "Nenhum contrato registrado ainda.", "contrato");
   renderDocuments(data.documents || []);
+  renderSettings(data);
 }
 
 async function loadDashboard() {
@@ -408,6 +533,14 @@ pageLinks.forEach((link) => {
   link.addEventListener("click", (event) => {
     event.preventDefault();
     showClientPage(link.dataset.goPage || "dashboard");
+  });
+});
+
+settingsTabButtons.forEach((button) => {
+  button.addEventListener("click", () => {
+    const tab = button.dataset.settingsTab || "empresa";
+    settingsTabButtons.forEach((item) => item.classList.toggle("is-active", item === button));
+    settingsPanels.forEach((panel) => panel.classList.toggle("is-active", panel.dataset.settingsPanel === tab));
   });
 });
 

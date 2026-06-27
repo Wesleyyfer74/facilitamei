@@ -6,7 +6,7 @@
     <title>Area do Cliente | Facilita MEI</title>
     <meta name="robots" content="noindex, nofollow" />
     <link rel="icon" href="../assets/logopequeno.png" />
-    <link rel="stylesheet" href="./cliente.css?v=20260627-client-support" />
+    <link rel="stylesheet" href="./cliente.css?v=20260627-client-settings" />
   </head>
   <body>
     <main class="client-shell">
@@ -403,45 +403,146 @@
           </section>
 
           <section class="client-page" data-client-page="configuracoes" id="configuracoes">
-            <div class="documents-heading">
+            <div class="settings-heading">
               <div>
                 <h2>Configura&ccedil;&otilde;es</h2>
-                <p>Consulte seus pagamentos, contratos e dados de atendimento.</p>
+                <p>Gerencie os dados da sua conta e da sua empresa.</p>
+              </div>
+              <div class="company-chip compact-company-chip">
+                <strong>CNPJ <span data-company-cnpj-settings>N&atilde;o informado</span></strong>
+                <span>Situa&ccedil;&atilde;o: <b data-company-status-settings>Carregando</b></span>
               </div>
             </div>
 
-            <section class="panel compact-data" id="pagamentos">
-              <div class="panel-header">
-                <h3>Pagamentos</h3>
-                <span data-payments-count>0 registros</span>
-              </div>
-              <div class="responsive-table">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Data</th>
-                      <th>Valor</th>
-                      <th>Status</th>
-                      <th>ID Mercado Pago</th>
-                    </tr>
-                  </thead>
-                  <tbody data-payments-table></tbody>
-                </table>
-              </div>
-            </section>
+            <div class="settings-tabs" role="tablist" aria-label="Configura&ccedil;&otilde;es do cliente">
+              <button class="is-active" type="button" data-settings-tab="empresa">&#127970; Minha Empresa</button>
+              <button type="button" data-settings-tab="conta">&#128100; Minha Conta</button>
+              <button type="button" data-settings-tab="notificacoes">&#128276; Notifica&ccedil;&otilde;es</button>
+            </div>
 
-            <section class="panel compact-data">
-              <div class="panel-header">
-                <h3>Contratos</h3>
+            <div class="settings-tab-panel is-active" data-settings-panel="empresa">
+              <div class="settings-grid">
+                <article class="settings-card settings-company-card">
+                  <div class="settings-card-header">
+                    <h3>&#127970; Dados da Empresa</h3>
+                    <a href="https://wa.me/5567992230801?text=Ol%C3%A1,%20preciso%20editar%20os%20dados%20da%20minha%20empresa%20na%20%C3%A1rea%20do%20cliente." target="_blank" rel="noopener">&#9998; Editar dados</a>
+                  </div>
+                  <div class="settings-data-columns">
+                    <dl>
+                      <div><dt>Nome Empresarial</dt><dd data-settings-company-name>N&atilde;o cadastrado</dd></div>
+                      <div><dt>Nome Fantasia</dt><dd data-settings-trade-name>N&atilde;o cadastrado</dd></div>
+                      <div><dt>CNPJ</dt><dd data-settings-cnpj>N&atilde;o cadastrado</dd></div>
+                      <div><dt>Data de Abertura</dt><dd data-settings-open-date>N&atilde;o cadastrado</dd></div>
+                      <div><dt>Situa&ccedil;&atilde;o Cadastral</dt><dd><span class="settings-status-pill" data-settings-company-status>N&atilde;o cadastrado</span></dd></div>
+                      <div><dt>Porte</dt><dd>MEI</dd></div>
+                      <div><dt>Capital Social</dt><dd data-settings-capital>N&atilde;o cadastrado</dd></div>
+                    </dl>
+                    <dl>
+                      <div><dt>Atividade Principal (CNAE)</dt><dd data-settings-main-activity>N&atilde;o cadastrado</dd></div>
+                      <div><dt>Atividades Secund&aacute;rias (CNAEs)</dt><dd data-settings-secondary-activity>N&atilde;o cadastrado</dd></div>
+                      <div><dt>Endere&ccedil;o</dt><dd data-settings-address>N&atilde;o cadastrado</dd></div>
+                      <div><dt>Telefone</dt><dd data-settings-phone>N&atilde;o cadastrado</dd></div>
+                      <div><dt>E-mail</dt><dd data-settings-email>N&atilde;o cadastrado</dd></div>
+                    </dl>
+                  </div>
+                </article>
+
+                <aside class="settings-side-stack">
+                  <article class="settings-card">
+                    <h3>&#128205; Endere&ccedil;o da Empresa</h3>
+                    <div class="settings-address-grid">
+                      <div><span>CEP</span><strong data-settings-cep>N&atilde;o cadastrado</strong></div>
+                      <div><span>Logradouro</span><strong data-settings-street>N&atilde;o cadastrado</strong></div>
+                      <div><span>N&uacute;mero</span><strong data-settings-number>N&atilde;o cadastrado</strong></div>
+                      <div><span>Complemento</span><strong data-settings-complement>N&atilde;o cadastrado</strong></div>
+                      <div><span>Bairro</span><strong data-settings-district>N&atilde;o cadastrado</strong></div>
+                      <div><span>Cidade / UF</span><strong data-settings-city>N&atilde;o cadastrado</strong></div>
+                    </div>
+                  </article>
+
+                  <article class="settings-card">
+                    <h3>&#127974; Dados Banc&aacute;rios</h3>
+                    <div class="settings-address-grid">
+                      <div><span>Banco</span><strong data-settings-bank>N&atilde;o cadastrado</strong></div>
+                      <div><span>Ag&ecirc;ncia</span><strong data-settings-agency>N&atilde;o cadastrado</strong></div>
+                      <div><span>Conta</span><strong data-settings-account>N&atilde;o cadastrado</strong></div>
+                      <div><span>Tipo de Conta</span><strong data-settings-account-type>N&atilde;o cadastrado</strong></div>
+                    </div>
+                    <a class="settings-outline-action" href="https://wa.me/5567992230801?text=Ol%C3%A1,%20preciso%20atualizar%20meus%20dados%20banc%C3%A1rios." target="_blank" rel="noopener">&#9998; Editar dados banc&aacute;rios</a>
+                  </article>
+                </aside>
               </div>
-              <div class="card-list" data-contracts-list></div>
-            </section>
+
+              <article class="settings-card">
+                <h3>&#8505; Outras Informa&ccedil;&otilde;es</h3>
+                <div class="settings-info-grid">
+                  <div><span>&#128196;</span><strong>Inscri&ccedil;&atilde;o Municipal</strong><small data-settings-municipal-registration>N&atilde;o cadastrado</small></div>
+                  <div><span>IE</span><strong>Inscri&ccedil;&atilde;o Estadual</strong><small data-settings-state-registration>N&atilde;o cadastrado</small></div>
+                  <div><span>%</span><strong>Tipo de Tributa&ccedil;&atilde;o</strong><small>Simples Nacional - MEI</small></div>
+                  <div><span>&#9989;</span><strong>Alvar&aacute; de Funcionamento</strong><small data-settings-license>N&atilde;o cadastrado</small></div>
+                  <div><span>&#128197;</span><strong>Data de Emiss&atilde;o do CCMEI</strong><small data-settings-ccmei-date>N&atilde;o cadastrado</small></div>
+                  <div><span>&#128737;</span><strong>Certificado Digital</strong><small data-settings-certificate>N&atilde;o cadastrado</small></div>
+                </div>
+              </article>
+
+              <article class="settings-card">
+                <h3>&#128736; A&ccedil;&otilde;es da Empresa</h3>
+                <div class="settings-action-grid">
+                  <a href="https://wa.me/5567992230801?text=Ol%C3%A1,%20preciso%20alterar%20dados%20cadastrais%20do%20meu%20MEI." target="_blank" rel="noopener"><span>&#9998;</span><strong>Alterar Dados Cadastrais</strong><b>&rarr;</b></a>
+                  <a href="https://wa.me/5567992230801?text=Ol%C3%A1,%20preciso%20encerrar%20meu%20MEI." target="_blank" rel="noopener"><span>&#128100;</span><strong>Encerrar MEI</strong><b>&rarr;</b></a>
+                  <a href="#documentos" data-go-page="documentos"><span>&#11015;</span><strong>Baixar CCMEI Atualizado</strong><b>&rarr;</b></a>
+                  <a href="https://wa.me/5567992230801?text=Ol%C3%A1,%20preciso%20atualizar%20o%20endere%C3%A7o%20do%20meu%20MEI." target="_blank" rel="noopener"><span>&#128205;</span><strong>Atualizar Endere&ccedil;o</strong><b>&rarr;</b></a>
+                  <a href="#documentos" data-go-page="documentos"><span>&#128339;</span><strong>Hist&oacute;rico de Altera&ccedil;&otilde;es</strong><b>&rarr;</b></a>
+                </div>
+              </article>
+            </div>
+
+            <div class="settings-tab-panel" data-settings-panel="conta">
+              <div class="settings-grid">
+                <article class="settings-card">
+                  <h3>&#128100; Dados da Conta</h3>
+                  <div class="settings-account-grid">
+                    <div><span>Nome</span><strong data-settings-account-name>N&atilde;o cadastrado</strong></div>
+                    <div><span>E-mail de acesso</span><strong data-settings-account-email>N&atilde;o cadastrado</strong></div>
+                    <div><span>Telefone</span><strong data-settings-account-phone>N&atilde;o cadastrado</strong></div>
+                    <div><span>WhatsApp</span><strong data-settings-account-whatsapp>N&atilde;o cadastrado</strong></div>
+                    <div><span>Documento</span><strong data-settings-account-document>N&atilde;o cadastrado</strong></div>
+                    <div><span>Status do acesso</span><strong data-settings-account-status>N&atilde;o cadastrado</strong></div>
+                    <div><span>Cliente desde</span><strong data-settings-account-created>N&atilde;o cadastrado</strong></div>
+                    <div><span>Plano atual</span><strong data-settings-account-plan>N&atilde;o cadastrado</strong></div>
+                  </div>
+                </article>
+
+                <article class="settings-card">
+                  <h3>&#128179; Assinatura e Pagamentos</h3>
+                  <div class="settings-account-grid">
+                    <div><span>Status da assinatura</span><strong data-settings-subscription-status>N&atilde;o cadastrado</strong></div>
+                    <div><span>Valor mensal</span><strong data-settings-subscription-value>N&atilde;o cadastrado</strong></div>
+                    <div><span>M&eacute;todo de pagamento</span><strong data-settings-payment-method>N&atilde;o cadastrado</strong></div>
+                    <div><span>Pr&oacute;xima cobran&ccedil;a</span><strong data-settings-next-charge>N&atilde;o cadastrado</strong></div>
+                  </div>
+                  <a class="settings-outline-action" href="https://wa.me/5567992230801?text=Ol%C3%A1,%20preciso%20alterar%20dados%20da%20minha%20conta%20Facilita%20MEI." target="_blank" rel="noopener">Solicitar altera&ccedil;&atilde;o</a>
+                </article>
+              </div>
+            </div>
+
+            <div class="settings-tab-panel" data-settings-panel="notificacoes">
+              <article class="settings-card">
+                <h3>&#128276; Prefer&ecirc;ncias de Notifica&ccedil;&otilde;es</h3>
+                <div class="settings-notification-list">
+                  <div><span>&#128241;</span><strong>WhatsApp</strong><small>Alertas de vencimento, documentos e atendimento.</small><b>Ativo</b></div>
+                  <div><span>&#9993;</span><strong>E-mail</strong><small>Resumo de pagamentos, contratos e documentos cadastrados.</small><b>Ativo</b></div>
+                  <div><span>&#128276;</span><strong>Lembretes importantes</strong><small>Notifica&ccedil;&otilde;es sobre DAS, declara&ccedil;&atilde;o anual e pend&ecirc;ncias.</small><b>Ativo</b></div>
+                </div>
+                <a class="settings-outline-action" href="https://wa.me/5567992230801?text=Ol%C3%A1,%20quero%20ajustar%20minhas%20notifica%C3%A7%C3%B5es%20da%20%C3%A1rea%20do%20cliente." target="_blank" rel="noopener">Falar com atendimento</a>
+              </article>
+            </div>
           </section>
         </section>
       </section>
     </main>
 
     <script src="../config.js?v=20260606-railway"></script>
-    <script src="./cliente.js?v=20260627-client-support"></script>
+    <script src="./cliente.js?v=20260627-client-settings"></script>
   </body>
 </html>
