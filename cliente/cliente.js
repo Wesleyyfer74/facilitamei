@@ -92,6 +92,14 @@ const settingsFields = {
   paymentMethod: document.querySelector("[data-settings-payment-method]"),
   nextCharge: document.querySelector("[data-settings-next-charge]"),
 };
+const supportFields = {
+  name: document.querySelector("[data-support-client-name]"),
+  email: document.querySelector("[data-support-client-email]"),
+  whatsapp: document.querySelector("[data-support-client-whatsapp]"),
+  plan: document.querySelector("[data-support-client-plan]"),
+  status: document.querySelector("[data-support-client-status]"),
+  nextCharge: document.querySelector("[data-support-client-next-charge]"),
+};
 
 const configuredApiBase = String(window.FACILITA_API_BASE || "").replace(/\/$/, "");
 const isLocalFile = window.location.protocol === "file:";
@@ -270,7 +278,7 @@ function showClientPage(page = "dashboard", updateHash = true) {
   const targetPage = document.querySelector(`[data-client-page="${page}"]`) ? page : "dashboard";
   clientPages.forEach((item) => item.classList.toggle("is-active", item.dataset.clientPage === targetPage));
   routeButtons.forEach((item) => item.classList.toggle("is-active", item.dataset.clientRoute === targetPage));
-  if (updateHash) history.replaceState(null, "", `#${targetPage === "servicos" ? "servicos-rapidos" : targetPage}`);
+  if (updateHash) history.replaceState(null, "", `#${targetPage}`);
   window.scrollTo({ top: 0, behavior: "auto" });
 }
 
@@ -558,6 +566,18 @@ function renderSettings(data) {
   setText(settingsFields.nextCharge, subscription.data_proxima_cobranca ? formatDate(subscription.data_proxima_cobranca) : "");
 }
 
+function renderSupport(data) {
+  const client = data.client || {};
+  const subscription = data.activeSubscription || {};
+
+  setText(supportFields.name, client.nome);
+  setText(supportFields.email, client.email);
+  setText(supportFields.whatsapp, client.whatsapp || client.telefone);
+  setText(supportFields.plan, subscription.plan_name);
+  setText(supportFields.status, statusLabel(subscription.status || client.status));
+  setText(supportFields.nextCharge, subscription.data_proxima_cobranca ? formatDate(subscription.data_proxima_cobranca) : "");
+}
+
 function renderDashboard(data) {
   currentDashboardData = data;
   const client = data.client || {};
@@ -618,6 +638,7 @@ function renderDashboard(data) {
   renderCards(contractsList, data.contracts || [], "Nenhum contrato registrado ainda.", "contrato");
   renderDocuments(data.documents || []);
   renderSettings(data);
+  renderSupport(data);
   renderNotifications(data);
 }
 
@@ -632,8 +653,6 @@ function pageFromHash() {
   const map = {
     dashboard: "dashboard",
     documentos: "documentos",
-    "servicos-rapidos": "servicos",
-    servicos: "servicos",
     suporte: "suporte",
     configuracoes: "configuracoes",
   };
