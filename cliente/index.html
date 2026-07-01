@@ -367,7 +367,6 @@
                 <article class="settings-card settings-company-card">
                   <div class="settings-card-header">
                     <h3>&#127970; Dados da Empresa</h3>
-                    <button type="button" data-open-settings-modal="company">&#9998; Editar dados</button>
                   </div>
                   <div class="settings-data-columns">
                     <dl>
@@ -476,46 +475,6 @@
       </section>
     </main>
 
-    <div class="client-modal" data-settings-modal="company" hidden>
-      <div class="client-modal-backdrop" data-close-settings-modal></div>
-      <section class="client-modal-card client-modal-card-wide">
-        <button class="client-modal-close" type="button" data-close-settings-modal>&times;</button>
-        <p class="eyebrow">Minha empresa</p>
-        <h2>Editar dados da empresa</h2>
-        <form class="settings-edit-form" data-company-form>
-          <div class="form-row">
-            <label>Nome empresarial<input name="razao_social" maxlength="180" autocomplete="organization" /></label>
-            <label>Nome fantasia<input name="nome_fantasia" maxlength="160" /></label>
-          </div>
-          <div class="form-row">
-            <label>Telefone / WhatsApp<input name="telefone" inputmode="numeric" maxlength="30" autocomplete="tel" /></label>
-            <label>E-mail<input name="email" type="email" maxlength="180" autocomplete="email" /></label>
-          </div>
-          <div class="form-row">
-            <label>CNAE principal - c&oacute;digo<input name="cnae_principal_codigo" maxlength="20" /></label>
-            <label>CNAE principal - descri&ccedil;&atilde;o<input name="cnae_principal_descricao" maxlength="255" /></label>
-          </div>
-          <div class="form-row">
-            <label>CNAE secund&aacute;rio - c&oacute;digo<input name="cnae_secundario_codigo" maxlength="80" /></label>
-            <label>CNAE secund&aacute;rio - descri&ccedil;&atilde;o<input name="cnae_secundario_descricao" maxlength="255" /></label>
-          </div>
-          <div class="form-row">
-            <label>Capital social<input name="capital_social" inputmode="decimal" maxlength="20" /></label>
-            <label>Alvar&aacute; de funcionamento<input name="alvara_status" maxlength="80" /></label>
-          </div>
-          <div class="form-row">
-            <label>Inscri&ccedil;&atilde;o municipal<input name="inscricao_municipal" maxlength="60" /></label>
-            <label>Inscri&ccedil;&atilde;o estadual<input name="inscricao_estadual" maxlength="60" /></label>
-          </div>
-          <p class="settings-form-note">CNPJ, situa&ccedil;&atilde;o cadastral, data de abertura e dados da assinatura continuam protegidos.</p>
-          <div class="modal-actions">
-            <button class="ghost-button" type="button" data-close-settings-modal>Cancelar</button>
-            <button class="gold-button" type="submit">Salvar dados</button>
-          </div>
-        </form>
-      </section>
-    </div>
-
     <div class="client-modal" data-settings-modal="address" hidden>
       <div class="client-modal-backdrop" data-close-settings-modal></div>
       <section class="client-modal-card">
@@ -572,6 +531,6 @@
     </div>
 
     <script src="../config.js?v=20260606-railway"></script>
-    <script src="./cliente.js?v=20260627-client-notifications"></script>
+    <script src="./cliente.js?v=20260701-company-public-cnpj"></script>
   </body>
 </html>

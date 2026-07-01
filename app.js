@@ -37,6 +37,9 @@ const resultKicker = document.querySelector("[data-result-kicker]");
 const resultPlan = document.querySelector("[data-result-plan]");
 const resultStatus = document.querySelector("[data-result-status]");
 const subscriptionMessage = document.querySelector("[data-subscription-message]");
+const cnpjLinkForm = document.querySelector("[data-cnpj-link-form]");
+const cnpjLinkStatus = document.querySelector("[data-cnpj-link-status]");
+const postSubscriptionActions = document.querySelector("[data-post-subscription-actions]");
 const backToPaymentButton = document.querySelector("[data-back-to-payment]");
 const whatsappAttendance = document.querySelector("[data-whatsapp-attendance]");
 const planButtons = document.querySelectorAll("[data-plan-id]");
@@ -46,6 +49,7 @@ const heroParticlesCanvas = document.querySelector("[data-hero-particles]");
 const pageLoader = document.querySelector("[data-page-loader]");
 
 const loaderStartedAt = performance.now();
+let lastSubscriptionContext = null;
 
 function preloadImage(src) {
   return new Promise((resolve) => {
@@ -545,11 +549,19 @@ async function loadPlansFromBackend() {
 function resetPaymentResult() {
   window.clearInterval(statusPollingId);
   statusPollingId = null;
+  lastSubscriptionContext = null;
 
   if (paymentResult) paymentResult.hidden = true;
   if (resultKicker) resultKicker.textContent = "Assinatura";
   if (resultStatus) resultStatus.textContent = "Aguardando pagamento";
   if (subscriptionMessage) subscriptionMessage.textContent = "";
+  if (cnpjLinkForm) {
+    cnpjLinkForm.hidden = false;
+    cnpjLinkForm.reset();
+    cnpjLinkForm.classList.remove("is-processing");
+  }
+  if (cnpjLinkStatus) cnpjLinkStatus.textContent = "";
+  if (postSubscriptionActions) postSubscriptionActions.hidden = true;
 }
 
 function openCheckout(planName) {
@@ -1096,19 +1108,93 @@ document.querySelector("#form-checkout__identificationNumber")?.addEventListener
   syncIdentificationType(event.target.value);
 });
 
+cnpjLinkForm?.querySelector("input")?.addEventListener("input", (event) => {
+  const digits = event.target.value.replace(/\D/g, "").slice(0, 14);
+  event.target.value = digits
+    .replace(/^(\d{2})(\d)/, "$1.$2")
+    .replace(/^(\d{2})\.(\d{3})(\d)/, "$1.$2.$3")
+    .replace(/\.(\d{3})(\d)/, ".$1/$2")
+    .replace(/(\d{4})(\d)/, "$1-$2");
+});
+
+cnpjLinkForm?.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const cnpj = cnpjLinkForm.elements.cnpj?.value || "";
+  const digits = cnpj.replace(/\D/g, "");
+  const submitButton = cnpjLinkForm.querySelector("[type='submit']");
+
+  if (digits.length !== 14) {
+    if (cnpjLinkStatus) cnpjLinkStatus.textContent = "Informe um CNPJ valido com 14 digitos.";
+    return;
+  }
+
+  if (!lastSubscriptionContext?.customerId || !lastSubscriptionContext?.subscriptionId) {
+    if (cnpjLinkStatus) cnpjLinkStatus.textContent = "Nao encontrei os dados da assinatura. Tente assinar novamente ou fale com o atendimento.";
+    return;
+  }
+
+  submitButton.disabled = true;
+  cnpjLinkForm.classList.add("is-processing");
+  if (cnpjLinkStatus) cnpjLinkStatus.textContent = "Consultando CNPJ e preenchendo os dados da empresa...";
+
+  try {
+    const response = await fetch(`${API_BASE}/api/customers/cnpj`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        customerId: lastSubscriptionContext.customerId,
+        subscriptionId: lastSubscriptionContext.subscriptionId,
+        email: lastSubscriptionContext.customer?.email,
+        cnpj: digits,
+      }),
+    });
+    const data = await parseJsonResponse(response, "Nao foi possivel consultar o CNPJ agora.");
+
+    if (!response.ok) {
+      throw new Error(data.error || "Nao foi possivel vincular este CNPJ.");
+    }
+
+    if (resultStatus) resultStatus.textContent = "Dados do CNPJ salvos com sucesso.";
+    if (subscriptionMessage) {
+      subscriptionMessage.textContent = "Pronto. Agora voce pode criar o acesso do cliente ou falar com o atendimento.";
+    }
+    if (cnpjLinkStatus) cnpjLinkStatus.textContent = data.company?.razaoSocial || "Dados publicos preenchidos.";
+    cnpjLinkForm.hidden = true;
+    if (postSubscriptionActions) postSubscriptionActions.hidden = false;
+  } catch (error) {
+    if (cnpjLinkStatus) cnpjLinkStatus.textContent = error.message;
+  } finally {
+    submitButton.disabled = false;
+    cnpjLinkForm.classList.remove("is-processing");
+  }
+});
+
 function renderSubscription(data, planId, customer) {
   const details = planDetails[planId] || planDetails["start-mei"];
   if (!paymentResult) return;
 
+  lastSubscriptionContext = {
+    customerId: data.customerId,
+    subscriptionId: data.localSubscriptionId,
+    planId,
+    customer,
+  };
   paymentResult.hidden = false;
   if (checkoutForm) checkoutForm.hidden = true;
   if (resultKicker) resultKicker.textContent = "Assinatura concluida";
   if (resultPlan) resultPlan.textContent = details.title;
   if (resultStatus) resultStatus.textContent = data.message || "Plano assinado com sucesso.";
   if (subscriptionMessage) {
-    subscriptionMessage.textContent = "Agora crie sua senha na area do cliente ou fale com o atendimento para continuar o processo.";
+    subscriptionMessage.textContent = "Informe o CNPJ da empresa para preencher os dados publicos automaticamente na area do cliente.";
   }
   if (whatsappAttendance) whatsappAttendance.href = getAttendanceUrl({ planId, customer });
+  if (cnpjLinkForm) {
+    cnpjLinkForm.hidden = false;
+    cnpjLinkForm.querySelector("input")?.focus();
+  }
+  if (postSubscriptionActions) postSubscriptionActions.hidden = true;
 
   checkoutForm?.classList.remove("is-processing");
 }

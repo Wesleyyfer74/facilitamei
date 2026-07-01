@@ -369,6 +369,173 @@ function cleanDecimal(value) {
   return Number.isFinite(number) ? number : null;
 }
 
+function cleanDate(value = "") {
+  const date = String(value || "").trim();
+  return /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : null;
+}
+
+function getOpenCnpjAddress(data = {}) {
+  const rawStreet = cleanText(data.logradouro, 180);
+  const rawNumber = cleanText(data.numero, 30);
+  const streetWithoutNumber = rawNumber
+    ? rawStreet.replace(new RegExp(`,?\\s*${rawNumber.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`), "").trim()
+    : rawStreet;
+
+  return {
+    logradouro: streetWithoutNumber || rawStreet,
+    numero: rawNumber,
+  };
+}
+
+function normalizeOpenCnpjPayload(payload = {}, fallbackCnpj = "") {
+  const data = payload.data || payload;
+  const cnpj = normalizeDigits(data.cnpj || fallbackCnpj);
+  const address = getOpenCnpjAddress(data);
+
+  return {
+    cnpj,
+    razaoSocial: cleanText(data.razaoSocial || data.razao_social, 180),
+    nomeFantasia: cleanText(data.nomeFantasia || data.nome_fantasia, 160),
+    situacaoCadastral: cleanText(data.situacaoCadastral || data.situacao_cadastral, 80),
+    dataAbertura: cleanDate(data.dataInicioAtividades || data.data_inicio_atividades),
+    capitalSocial: Number.isFinite(Number(data.capitalSocial)) ? Number(data.capitalSocial) : cleanDecimal(data.capital_social),
+    telefone: normalizeDigits(data.telefone || "").slice(0, 30) || null,
+    logradouro: address.logradouro,
+    numero: address.numero,
+    complemento: cleanText(data.complemento, 120),
+    bairro: cleanText(data.bairro, 120),
+    municipio: cleanText(data.municipio, 120),
+    uf: cleanUf(data.uf),
+    cep: normalizeDigits(data.cep || "").slice(0, 8) || null,
+  };
+}
+
+async function consultarOpenCnpj(cnpj) {
+  const cleanCnpj = normalizeDigits(cnpj);
+
+  if (cleanCnpj.length !== 14) {
+    const error = new Error("Informe um CNPJ valido com 14 digitos.");
+    error.status = 400;
+    throw error;
+  }
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 9000);
+
+  try {
+    const openCnpjResponse = await fetch(`https://kitana.opencnpj.com/cnpj/${cleanCnpj}`, {
+      signal: controller.signal,
+      headers: { Accept: "application/json" },
+    });
+    const text = await openCnpjResponse.text();
+    let data = {};
+
+    try {
+      data = text ? JSON.parse(text) : {};
+    } catch {
+      const error = new Error("OpenCNPJ retornou uma resposta invalida.");
+      error.status = 502;
+      throw error;
+    }
+
+    if (!openCnpjResponse.ok || data.success === false) {
+      const error = new Error(data.message || "Nao foi possivel consultar este CNPJ no OpenCNPJ.");
+      error.status = openCnpjResponse.status || 502;
+      throw error;
+    }
+
+    const normalized = normalizeOpenCnpjPayload(data, cleanCnpj);
+
+    if (!normalized.razaoSocial) {
+      const error = new Error("O OpenCNPJ nao retornou razao social para este CNPJ.");
+      error.status = 422;
+      throw error;
+    }
+
+    return normalized;
+  } catch (error) {
+    if (error.name === "AbortError") {
+      const timeoutError = new Error("Tempo esgotado ao consultar o OpenCNPJ.");
+      timeoutError.status = 504;
+      throw timeoutError;
+    }
+
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function vincularCnpjAoCliente({ customerId, subscriptionId, email, cnpj }) {
+  const cleanEmailValue = cleanEmail(email);
+  const cleanCnpj = normalizeDigits(cnpj);
+
+  if (!customerId || !subscriptionId || !cleanEmailValue) {
+    const error = new Error("Cliente, assinatura e e-mail sao obrigatorios para vincular o CNPJ.");
+    error.status = 400;
+    throw error;
+  }
+
+  const [rows] = await dbPool.execute(
+    `SELECT u.id, u.email, u.telefone, u.whatsapp
+     FROM users u
+     JOIN subscriptions s ON s.user_id = u.id
+     WHERE u.id = :customerId
+       AND s.id = :subscriptionId
+       AND LOWER(u.email) = :email
+     LIMIT 1`,
+    { customerId, subscriptionId, email: cleanEmailValue },
+  );
+
+  const user = rows[0];
+  if (!user) {
+    const error = new Error("Nao foi possivel confirmar a assinatura para este cliente.");
+    error.status = 404;
+    throw error;
+  }
+
+  const cnpjData = await consultarOpenCnpj(cleanCnpj);
+  const telefone = cnpjData.telefone || user.whatsapp || user.telefone || null;
+
+  await dbPool.execute(
+    `UPDATE users
+     SET cnpj = :cnpj,
+         razao_social = :razaoSocial,
+         nome_fantasia = :nomeFantasia,
+         data_abertura = :dataAbertura,
+         cep = :cep,
+         logradouro = :logradouro,
+         numero = :numero,
+         complemento = :complemento,
+         bairro = :bairro,
+         municipio = :municipio,
+         uf = :uf,
+         capital_social = :capitalSocial,
+         telefone = :telefone,
+         whatsapp = COALESCE(whatsapp, :telefone),
+         updated_at = CURRENT_TIMESTAMP
+     WHERE id = :customerId`,
+    {
+      customerId,
+      cnpj: cnpjData.cnpj,
+      razaoSocial: cnpjData.razaoSocial,
+      nomeFantasia: cnpjData.nomeFantasia,
+      dataAbertura: cnpjData.dataAbertura,
+      cep: cnpjData.cep,
+      logradouro: cnpjData.logradouro,
+      numero: cnpjData.numero,
+      complemento: cnpjData.complemento,
+      bairro: cnpjData.bairro,
+      municipio: cnpjData.municipio,
+      uf: cnpjData.uf,
+      capitalSocial: cnpjData.capitalSocial,
+      telefone,
+    },
+  );
+
+  return cnpjData;
+}
+
 function getAccessTokenOrThrow() {
   const accessToken = process.env.MERCADO_PAGO_ACCESS_TOKEN;
 
@@ -512,6 +679,26 @@ app.get("/api/nfse/certificado/arquivo", (_request, response) => {
     path: certificatePath,
     arquivoExiste,
   });
+});
+
+app.post("/api/customers/cnpj", async (request, response) => {
+  try {
+    const body = request.body || {};
+    const customerId = Number(body.customerId || body.userId);
+    const subscriptionId = Number(body.subscriptionId || body.localSubscriptionId);
+    const email = body.email;
+    const cnpj = body.cnpj;
+    const cnpjData = await vincularCnpjAoCliente({ customerId, subscriptionId, email, cnpj });
+
+    response.json({
+      ok: true,
+      message: "CNPJ vinculado e dados publicos salvos com sucesso.",
+      company: cnpjData,
+    });
+  } catch (error) {
+    console.error("Erro ao vincular CNPJ:", error.message);
+    response.status(error.status || 500).json({ error: error.message || "Erro ao consultar CNPJ." });
+  }
 });
 
 app.post("/api/client/auth/setup", async (request, response) => {
@@ -708,70 +895,6 @@ app.patch("/api/client/settings/bank", requireClientSession, async (request, res
   } catch (error) {
     console.error(error);
     response.status(500).json({ error: "Erro ao salvar dados bancarios do cliente." });
-  }
-});
-
-app.patch("/api/client/settings/company", requireClientSession, async (request, response) => {
-  try {
-    const userId = request.clientSession.userId;
-    const email = cleanEmail(request.body?.email);
-    const telefone = normalizeDigits(request.body?.telefone || request.body?.whatsapp || "").slice(0, 30) || null;
-
-    if (!email) {
-      return response.status(400).json({ error: "E-mail e obrigatorio para manter o acesso do cliente." });
-    }
-
-    if (email) {
-      const [emailRows] = await dbPool.execute(
-        "SELECT id FROM users WHERE LOWER(email) = :email AND id <> :userId LIMIT 1",
-        { email, userId },
-      );
-      if (emailRows[0]) {
-        return response.status(409).json({ error: "Este e-mail ja esta cadastrado para outro cliente." });
-      }
-    }
-
-    const payload = {
-      razaoSocial: cleanText(request.body?.razao_social || request.body?.razaoSocial, 180),
-      nomeFantasia: cleanText(request.body?.nome_fantasia || request.body?.nomeFantasia, 160),
-      telefone,
-      whatsapp: telefone,
-      email,
-      cnaePrincipalCodigo: cleanText(request.body?.cnae_principal_codigo || request.body?.cnaePrincipalCodigo, 20),
-      cnaePrincipalDescricao: cleanText(request.body?.cnae_principal_descricao || request.body?.cnaePrincipalDescricao, 255),
-      cnaeSecundarioCodigo: cleanText(request.body?.cnae_secundario_codigo || request.body?.cnaeSecundarioCodigo, 80),
-      cnaeSecundarioDescricao: cleanText(request.body?.cnae_secundario_descricao || request.body?.cnaeSecundarioDescricao, 255),
-      capitalSocial: cleanDecimal(request.body?.capital_social || request.body?.capitalSocial),
-      inscricaoMunicipal: cleanText(request.body?.inscricao_municipal || request.body?.inscricaoMunicipal, 60),
-      inscricaoEstadual: cleanText(request.body?.inscricao_estadual || request.body?.inscricaoEstadual, 60),
-      alvaraStatus: cleanText(request.body?.alvara_status || request.body?.alvaraStatus, 80),
-      userId,
-    };
-
-    await dbPool.execute(
-      `UPDATE users
-       SET razao_social = :razaoSocial,
-           nome_fantasia = :nomeFantasia,
-           telefone = :telefone,
-           whatsapp = :whatsapp,
-           email = :email,
-           cnae_principal_codigo = :cnaePrincipalCodigo,
-           cnae_principal_descricao = :cnaePrincipalDescricao,
-           cnae_secundario_codigo = :cnaeSecundarioCodigo,
-           cnae_secundario_descricao = :cnaeSecundarioDescricao,
-           capital_social = :capitalSocial,
-           inscricao_municipal = :inscricaoMunicipal,
-           inscricao_estadual = :inscricaoEstadual,
-           alvara_status = :alvaraStatus,
-           updated_at = CURRENT_TIMESTAMP
-       WHERE id = :userId`,
-      payload,
-    );
-
-    response.json({ ok: true, message: "Dados da empresa atualizados com sucesso." });
-  } catch (error) {
-    console.error(error);
-    response.status(500).json({ error: "Erro ao salvar dados da empresa." });
   }
 });
 
@@ -3104,9 +3227,11 @@ app.post("/api/subscriptions/card", async (request, response) => {
     }
 
     const customerId = await upsertCustomer({ userId, name, email, phone, document });
-    await saveSubscriptionRecord({ customerId, plan, subscriptionData: data, paymentMethod: "card" });
+    const localSubscriptionId = await saveSubscriptionRecord({ customerId, plan, subscriptionData: data, paymentMethod: "card" });
 
     response.json({
+      customerId,
+      localSubscriptionId,
       subscriptionId: data.id,
       status: data.status,
       message: getSubscriptionMessage(data.status),
@@ -3192,9 +3317,11 @@ app.post("/api/subscriptions/pix-auto", async (request, response) => {
     }
 
     const customerId = await upsertCustomer({ userId, name, email, phone, document });
-    await saveSubscriptionRecord({ customerId, plan, subscriptionData: data, paymentMethod: "pix_auto" });
+    const localSubscriptionId = await saveSubscriptionRecord({ customerId, plan, subscriptionData: data, paymentMethod: "pix_auto" });
 
     response.json({
+      customerId,
+      localSubscriptionId,
       subscriptionId: data.id,
       status: data.status,
       message: getSubscriptionMessage(data.status),

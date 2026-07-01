@@ -2708,6 +2708,42 @@ select option {
   width: min(100%, 360px);
 }
 
+.cnpj-link-form,
+.post-subscription-actions {
+  display: grid;
+  gap: 12px;
+  width: min(100%, 420px);
+  margin-top: 14px;
+}
+
+.cnpj-link-form[hidden],
+.post-subscription-actions[hidden] {
+  display: none;
+}
+
+.cnpj-link-form label {
+  display: grid;
+  gap: 7px;
+  color: var(--muted);
+  font-weight: 800;
+  text-align: left;
+}
+
+.cnpj-link-form input {
+  width: 100%;
+  min-height: 52px;
+  padding: 0 16px;
+  color: var(--text);
+  border: 1px solid rgba(240, 191, 90, 0.36);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.cnpj-link-form.is-processing {
+  opacity: 0.72;
+  pointer-events: none;
+}
+
 .payment-methods {
   display: grid;
   grid-template-columns: 1fr;

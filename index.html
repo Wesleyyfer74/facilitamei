@@ -792,6 +792,15 @@
               <p data-result-status>Aguardando confirmacao</p>
             </div>
             <p class="form-status" role="status" data-subscription-message></p>
+            <form class="cnpj-link-form" data-cnpj-link-form>
+              <label>
+                CNPJ da empresa
+                <input name="cnpj" inputmode="numeric" autocomplete="off" placeholder="00.000.000/0000-00" required />
+              </label>
+              <button class="button primary" type="submit">Puxar dados do CNPJ</button>
+              <p class="form-status" role="status" data-cnpj-link-status></p>
+            </form>
+            <div class="post-subscription-actions" data-post-subscription-actions hidden>
             <a
               class="button primary attendance-button"
               href="https://wa.me/5567996750853?text=Ola%2C%20acabei%20de%20assinar%20um%20plano."
@@ -801,6 +810,7 @@
             >Ir para o atendimento</a>
             <a class="button secondary" href="./cliente/">Criar acesso do cliente</a>
             <button class="button secondary" type="button" data-back-to-payment>Voltar ao checkout</button>
+            </div>
           </div>
         </section>
       </div>
@@ -849,6 +859,6 @@
     <script src="./config.js?v=20260606-railway"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
-    <script src="./app.js?v=20260622-loader-reload"></script>
+    <script src="./app.js?v=20260701-cnpj-opencnpj"></script>
   </body>
 </html>
