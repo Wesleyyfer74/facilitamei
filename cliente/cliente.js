@@ -23,6 +23,8 @@ const companyCnpj = document.querySelector("[data-company-cnpj]");
 const companyStatus = document.querySelector("[data-company-status]");
 const companyCnpjCopy = document.querySelector("[data-company-cnpj-copy]");
 const companyStatusCopy = document.querySelector("[data-company-status-copy]");
+const companyCnpjActions = document.querySelector("[data-company-cnpj-actions]");
+const companyStatusActions = document.querySelector("[data-company-status-actions]");
 const companyCnpjSupport = document.querySelector("[data-company-cnpj-support]");
 const companyStatusSupport = document.querySelector("[data-company-status-support]");
 const companyCnpjSettings = document.querySelector("[data-company-cnpj-settings]");
@@ -607,6 +609,11 @@ function renderDashboard(data) {
     companyStatusCopy.textContent = companyStatus.textContent;
     companyStatusCopy.classList.toggle("is-regular", Boolean(summary.company?.regular));
   }
+  if (companyCnpjActions) companyCnpjActions.textContent = companyCnpj.textContent;
+  if (companyStatusActions) {
+    companyStatusActions.textContent = companyStatus.textContent;
+    companyStatusActions.classList.toggle("is-regular", Boolean(summary.company?.regular));
+  }
   if (companyCnpjSupport) companyCnpjSupport.textContent = companyCnpj.textContent;
   if (companyStatusSupport) {
     companyStatusSupport.textContent = companyStatus.textContent;
@@ -653,6 +660,8 @@ function pageFromHash() {
   const map = {
     dashboard: "dashboard",
     documentos: "documentos",
+    "acoes-rapidas": "acoes",
+    acoes: "acoes",
     suporte: "suporte",
     configuracoes: "configuracoes",
   };
