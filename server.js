@@ -349,9 +349,24 @@ function cleanText(value = "", maxLength = 180) {
   return String(value || "").trim().slice(0, maxLength) || null;
 }
 
+function cleanEmail(value = "") {
+  const email = String(value || "").trim().toLowerCase().slice(0, 180);
+  return email || null;
+}
+
 function cleanUf(value = "") {
   const uf = String(value || "").replace(/[^a-z]/gi, "").toUpperCase().slice(0, 2);
   return uf || null;
+}
+
+function cleanDecimal(value) {
+  const normalized = String(value ?? "")
+    .replace(/[^\d,.-]/g, "")
+    .replace(/\./g, "")
+    .replace(",", ".");
+  if (!normalized) return null;
+  const number = Number(normalized);
+  return Number.isFinite(number) ? number : null;
 }
 
 function getAccessTokenOrThrow() {
@@ -693,6 +708,70 @@ app.patch("/api/client/settings/bank", requireClientSession, async (request, res
   } catch (error) {
     console.error(error);
     response.status(500).json({ error: "Erro ao salvar dados bancarios do cliente." });
+  }
+});
+
+app.patch("/api/client/settings/company", requireClientSession, async (request, response) => {
+  try {
+    const userId = request.clientSession.userId;
+    const email = cleanEmail(request.body?.email);
+    const telefone = normalizeDigits(request.body?.telefone || request.body?.whatsapp || "").slice(0, 30) || null;
+
+    if (!email) {
+      return response.status(400).json({ error: "E-mail e obrigatorio para manter o acesso do cliente." });
+    }
+
+    if (email) {
+      const [emailRows] = await dbPool.execute(
+        "SELECT id FROM users WHERE LOWER(email) = :email AND id <> :userId LIMIT 1",
+        { email, userId },
+      );
+      if (emailRows[0]) {
+        return response.status(409).json({ error: "Este e-mail ja esta cadastrado para outro cliente." });
+      }
+    }
+
+    const payload = {
+      razaoSocial: cleanText(request.body?.razao_social || request.body?.razaoSocial, 180),
+      nomeFantasia: cleanText(request.body?.nome_fantasia || request.body?.nomeFantasia, 160),
+      telefone,
+      whatsapp: telefone,
+      email,
+      cnaePrincipalCodigo: cleanText(request.body?.cnae_principal_codigo || request.body?.cnaePrincipalCodigo, 20),
+      cnaePrincipalDescricao: cleanText(request.body?.cnae_principal_descricao || request.body?.cnaePrincipalDescricao, 255),
+      cnaeSecundarioCodigo: cleanText(request.body?.cnae_secundario_codigo || request.body?.cnaeSecundarioCodigo, 80),
+      cnaeSecundarioDescricao: cleanText(request.body?.cnae_secundario_descricao || request.body?.cnaeSecundarioDescricao, 255),
+      capitalSocial: cleanDecimal(request.body?.capital_social || request.body?.capitalSocial),
+      inscricaoMunicipal: cleanText(request.body?.inscricao_municipal || request.body?.inscricaoMunicipal, 60),
+      inscricaoEstadual: cleanText(request.body?.inscricao_estadual || request.body?.inscricaoEstadual, 60),
+      alvaraStatus: cleanText(request.body?.alvara_status || request.body?.alvaraStatus, 80),
+      userId,
+    };
+
+    await dbPool.execute(
+      `UPDATE users
+       SET razao_social = :razaoSocial,
+           nome_fantasia = :nomeFantasia,
+           telefone = :telefone,
+           whatsapp = :whatsapp,
+           email = :email,
+           cnae_principal_codigo = :cnaePrincipalCodigo,
+           cnae_principal_descricao = :cnaePrincipalDescricao,
+           cnae_secundario_codigo = :cnaeSecundarioCodigo,
+           cnae_secundario_descricao = :cnaeSecundarioDescricao,
+           capital_social = :capitalSocial,
+           inscricao_municipal = :inscricaoMunicipal,
+           inscricao_estadual = :inscricaoEstadual,
+           alvara_status = :alvaraStatus,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE id = :userId`,
+      payload,
+    );
+
+    response.json({ ok: true, message: "Dados da empresa atualizados com sucesso." });
+  } catch (error) {
+    console.error(error);
+    response.status(500).json({ error: "Erro ao salvar dados da empresa." });
   }
 });
 

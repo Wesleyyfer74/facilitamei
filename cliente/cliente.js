@@ -12,6 +12,7 @@ const settingsPanels = document.querySelectorAll("[data-settings-panel]");
 const settingsModalButtons = document.querySelectorAll("[data-open-settings-modal]");
 const settingsModals = document.querySelectorAll("[data-settings-modal]");
 const closeSettingsModalButtons = document.querySelectorAll("[data-close-settings-modal]");
+const companyForm = document.querySelector("[data-company-form]");
 const addressForm = document.querySelector("[data-address-form]");
 const bankForm = document.querySelector("[data-bank-form]");
 const clientName = document.querySelector("[data-client-name]");
@@ -205,6 +206,22 @@ function setFormValue(form, name, value = "") {
   if (field) field.value = value || "";
 }
 
+function fillCompanyForm() {
+  const client = currentDashboardData?.client || {};
+  setFormValue(companyForm, "razao_social", client.razao_social || client.nome);
+  setFormValue(companyForm, "nome_fantasia", client.nome_fantasia);
+  setFormValue(companyForm, "telefone", client.whatsapp || client.telefone);
+  setFormValue(companyForm, "email", client.email);
+  setFormValue(companyForm, "cnae_principal_codigo", client.cnae_principal_codigo);
+  setFormValue(companyForm, "cnae_principal_descricao", client.cnae_principal_descricao);
+  setFormValue(companyForm, "cnae_secundario_codigo", client.cnae_secundario_codigo);
+  setFormValue(companyForm, "cnae_secundario_descricao", client.cnae_secundario_descricao);
+  setFormValue(companyForm, "capital_social", client.capital_social);
+  setFormValue(companyForm, "alvara_status", client.alvara_status);
+  setFormValue(companyForm, "inscricao_municipal", client.inscricao_municipal);
+  setFormValue(companyForm, "inscricao_estadual", client.inscricao_estadual);
+}
+
 function fillAddressForm() {
   const client = currentDashboardData?.client || {};
   setFormValue(addressForm, "cep", client.cep);
@@ -225,6 +242,7 @@ function fillBankForm() {
 }
 
 function openSettingsModal(type) {
+  if (type === "company") fillCompanyForm();
   if (type === "address") fillAddressForm();
   if (type === "bank") fillBankForm();
   settingsModals.forEach((modal) => {
@@ -746,6 +764,26 @@ document.addEventListener("click", (event) => {
   if (!notificationMenu || notificationMenu.hidden) return;
   if (event.target instanceof Node && !notificationMenu.contains(event.target) && !notificationToggle?.contains(event.target)) {
     closeNotificationMenu();
+  }
+});
+
+companyForm?.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const submitButton = companyForm.querySelector("[type='submit']");
+  submitButton.disabled = true;
+  try {
+    const payload = Object.fromEntries(new FormData(companyForm).entries());
+    await apiRequest("/api/client/settings/company", {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    });
+    closeSettingsModals();
+    await loadDashboard();
+    showClientPage("configuracoes", false);
+  } catch (error) {
+    alert(error.message);
+  } finally {
+    submitButton.disabled = false;
   }
 });
 

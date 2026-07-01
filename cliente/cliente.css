@@ -1382,6 +1382,7 @@ th {
 }
 
 .settings-card-header a,
+.settings-card-header button,
 .settings-outline-action {
   min-height: 40px;
   display: inline-flex;
@@ -1394,6 +1395,7 @@ th {
   color: var(--gold-strong);
   background: rgba(240, 191, 90, 0.06);
   font-weight: 900;
+  cursor: pointer;
 }
 
 .settings-data-columns {
@@ -1579,6 +1581,10 @@ button.settings-outline-action {
   box-shadow: 0 30px 120px rgba(0, 0, 0, 0.58);
 }
 
+.client-modal-card-wide {
+  width: min(880px, 100%);
+}
+
 .client-modal-card h2 {
   margin-bottom: 20px;
   font-size: clamp(1.8rem, 4vw, 2.7rem);
@@ -1602,6 +1608,13 @@ button.settings-outline-action {
 .settings-edit-form {
   display: grid;
   gap: 14px;
+}
+
+.settings-form-note {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+  line-height: 1.45;
 }
 
 .form-row {
