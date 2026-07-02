@@ -8,6 +8,7 @@ import dotenv from "dotenv";
 import mysql from "mysql2/promise";
 import { MercadoPagoConfig, Preference, Payment } from "mercadopago";
 import { DAS_MEI_FACILITA_CNPJ, montarPayloadGerarDasMei } from "./src/services/dasMeiService.js";
+import { gerarTokenSerpro } from "./src/services/serproAuthService.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -693,6 +694,25 @@ app.post("/api/das-mei/montar-payload", (request, response) => {
     response.json({ ok: true, payload });
   } catch (error) {
     response.status(400).json({ ok: false, erro: error.message || "Nao foi possivel montar o payload DAS-MEI." });
+  }
+});
+
+app.get("/api/serpro/token/teste", async (_request, response) => {
+  try {
+    const tokenData = await gerarTokenSerpro();
+    const accessToken = String(tokenData.access_token || "");
+
+    response.json({
+      ok: true,
+      token_type: tokenData.token_type,
+      expires_in: tokenData.expires_in,
+      access_token_preview: accessToken ? `${accessToken.slice(0, 20)}...` : "",
+    });
+  } catch (error) {
+    response.status(error.status || 500).json({
+      ok: false,
+      erro: error.message || "Nao foi possivel gerar token Serpro.",
+    });
   }
 });
 
