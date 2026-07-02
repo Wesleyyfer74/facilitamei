@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 import dotenv from "dotenv";
 import mysql from "mysql2/promise";
 import { MercadoPagoConfig, Preference, Payment } from "mercadopago";
+import { DAS_MEI_FACILITA_CNPJ, montarPayloadGerarDasMei } from "./src/services/dasMeiService.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -679,6 +680,20 @@ app.get("/api/nfse/certificado/arquivo", (_request, response) => {
     path: certificatePath,
     arquivoExiste,
   });
+});
+
+app.post("/api/das-mei/montar-payload", (request, response) => {
+  try {
+    const payload = montarPayloadGerarDasMei({
+      cnpjContratante: DAS_MEI_FACILITA_CNPJ,
+      cnpjContribuinte: request.body?.cnpjContribuinte,
+      periodoApuracao: request.body?.periodoApuracao,
+    });
+
+    response.json({ ok: true, payload });
+  } catch (error) {
+    response.status(400).json({ ok: false, erro: error.message || "Nao foi possivel montar o payload DAS-MEI." });
+  }
 });
 
 app.post("/api/customers/cnpj", async (request, response) => {
