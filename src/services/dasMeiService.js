@@ -1,6 +1,9 @@
+import { gerarTokenSerpro } from "./serproAuthService.js";
+
 const FACILITA_CNPJ = "41952830000104";
 const CNPJ_LENGTH = 14;
 const PERIODO_APURACAO_PATTERN = /^\d{6}$/;
+const DEFAULT_SERPRO_INTEGRA_CONTADOR_URL = "https://gateway.apiserpro.serpro.gov.br/integra-contador";
 
 function limparCnpj(cnpj) {
   return String(cnpj || "").replace(/\D/g, "");
@@ -55,6 +58,43 @@ export function montarPayloadGerarDasMei({ cnpjContratante = FACILITA_CNPJ, cnpj
       dados: JSON.stringify({ periodoApuracao: periodo }),
     },
   };
+}
+
+async function parseSerproResponse(response) {
+  const text = await response.text();
+
+  if (!text) return null;
+
+  try {
+    return JSON.parse(text);
+  } catch {
+    return text;
+  }
+}
+
+export async function gerarDasMei({ cnpjContribuinte, periodoApuracao }) {
+  const tokenData = await gerarTokenSerpro();
+  const payload = montarPayloadGerarDasMei({ cnpjContratante: FACILITA_CNPJ, cnpjContribuinte, periodoApuracao });
+  const serviceUrl = process.env.SERPRO_INTEGRA_CONTADOR_URL || DEFAULT_SERPRO_INTEGRA_CONTADOR_URL;
+  const response = await fetch(serviceUrl, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${tokenData.access_token}`,
+      "Content-Type": "application/json",
+      Accept: "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+  const data = await parseSerproResponse(response);
+
+  if (!response.ok) {
+    const error = new Error("Erro ao gerar DAS-MEI no Integra Contador.");
+    error.status = response.status;
+    error.details = data;
+    throw error;
+  }
+
+  return data;
 }
 
 export const DAS_MEI_FACILITA_CNPJ = FACILITA_CNPJ;

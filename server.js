@@ -7,7 +7,7 @@ import { fileURLToPath } from "node:url";
 import dotenv from "dotenv";
 import mysql from "mysql2/promise";
 import { MercadoPagoConfig, Preference, Payment } from "mercadopago";
-import { DAS_MEI_FACILITA_CNPJ, montarPayloadGerarDasMei } from "./src/services/dasMeiService.js";
+import { DAS_MEI_FACILITA_CNPJ, gerarDasMei, montarPayloadGerarDasMei } from "./src/services/dasMeiService.js";
 import { gerarTokenSerpro } from "./src/services/serproAuthService.js";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -694,6 +694,33 @@ app.post("/api/das-mei/montar-payload", (request, response) => {
     response.json({ ok: true, payload });
   } catch (error) {
     response.status(400).json({ ok: false, erro: error.message || "Nao foi possivel montar o payload DAS-MEI." });
+  }
+});
+
+function getSerproDasErrorMessage(status) {
+  if (status === 401) return "token invalido ou credenciais Serpro incorretas";
+  if (status === 403) return "sem permissao para esse contribuinte ou servico";
+  if (status === 404) return "URL do servico Integra Contador pode estar incorreta";
+  return "Erro ao gerar DAS-MEI no Integra Contador";
+}
+
+app.post("/api/das-mei/gerar", async (request, response) => {
+  try {
+    const resposta = await gerarDasMei({
+      cnpjContribuinte: request.body?.cnpjContribuinte,
+      periodoApuracao: request.body?.periodoApuracao,
+    });
+
+    response.json({ ok: true, resposta });
+  } catch (error) {
+    const status = error.status || 500;
+
+    response.status(status).json({
+      ok: false,
+      status,
+      mensagem: getSerproDasErrorMessage(status),
+      erro: error.details || error.message || "Erro desconhecido ao gerar DAS-MEI.",
+    });
   }
 });
 
