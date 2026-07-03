@@ -212,6 +212,63 @@ function openPdfFromBase64(base64, fileName = "DAS-MEI.pdf") {
   setTimeout(() => URL.revokeObjectURL(url), 30000);
 }
 
+function downloadBlob(blob, fileName = "documento.pdf") {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+
+  link.href = url;
+  link.download = fileName;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+
+  setTimeout(() => URL.revokeObjectURL(url), 30000);
+}
+
+function getFileNameFromResponse(response, fallback = "documento.pdf") {
+  const disposition = response.headers.get("content-disposition") || "";
+  const utf8Match = disposition.match(/filename\*=UTF-8''([^;]+)/i);
+  const asciiMatch = disposition.match(/filename="?([^";]+)"?/i);
+
+  if (utf8Match?.[1]) return decodeURIComponent(utf8Match[1]);
+  if (asciiMatch?.[1]) return asciiMatch[1];
+  return fallback;
+}
+
+async function downloadProtectedDocument(fileUrl, fallbackFileName = "documento.pdf") {
+  if (!fileUrl) return;
+  const apiPath = fileUrl.startsWith(`${API_BASE}/api/`) ? fileUrl.slice(API_BASE.length) : fileUrl;
+
+  if (!apiPath.startsWith("/api/")) {
+    window.open(resolveFileUrl(fileUrl), "_blank", "noopener");
+    return;
+  }
+
+  const token = getToken();
+  const response = await fetch(`${API_BASE}${apiPath}`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+
+  if (response.status === 401) {
+    clearToken();
+    showAccess();
+    throw new Error("Sessao do cliente expirada. Faca login novamente.");
+  }
+
+  if (!response.ok) {
+    let data = {};
+    try {
+      data = await response.json();
+    } catch {
+      data = {};
+    }
+    throw new Error(data.error || "Nao foi possivel baixar o documento.");
+  }
+
+  const blob = await response.blob();
+  downloadBlob(blob, getFileNameFromResponse(response, fallbackFileName));
+}
+
 function resolveFileUrl(fileUrl = "") {
   if (!fileUrl) return "";
   if (/^https?:\/\//i.test(fileUrl) || fileUrl.startsWith("data:")) return fileUrl;
@@ -401,9 +458,9 @@ function renderDocuments(documents = []) {
   const cards = sortedDocuments
     .slice(0, 3)
     .map((document) => {
-      const fileUrl = resolveFileUrl(document.arquivo_url || "");
+      const fileUrl = document.arquivo_url || "";
       const action = fileUrl
-        ? `<a href="${escapeHtml(fileUrl)}" target="_blank" rel="noopener">Baixar PDF</a>`
+        ? `<button type="button" data-download-document="${escapeHtml(fileUrl)}" data-download-name="${escapeHtml(document.titulo || "documento")}">Baixar PDF</button>`
         : `<button type="button" disabled>Sem arquivo</button>`;
 
       return `
@@ -427,13 +484,13 @@ function renderDocuments(documents = []) {
   documentsHistory.innerHTML = sortedDocuments.length
     ? sortedDocuments
         .map((document) => {
-          const fileUrl = resolveFileUrl(document.arquivo_url || "");
+          const fileUrl = document.arquivo_url || "";
           return `
             <tr>
               <td><span class="table-document-icon">${getDocumentIcon(document)}</span>${escapeHtml(document.titulo || document.tipo || "Documento")}</td>
               <td>${formatDate(document.data_emissao || document.created_at)}</td>
               <td><span class="status-pill">${escapeHtml(statusLabel(document.status))}</span></td>
-              <td>${fileUrl ? `<a href="${escapeHtml(fileUrl)}" target="_blank" rel="noopener">PDF</a>` : "-"}</td>
+              <td>${fileUrl ? `<button type="button" class="document-download-link" data-download-document="${escapeHtml(fileUrl)}" data-download-name="${escapeHtml(document.titulo || "documento")}">PDF</button>` : "-"}</td>
             </tr>
           `;
         })
@@ -834,6 +891,25 @@ notificationRefreshButton?.addEventListener("click", async () => {
 });
 
 document.addEventListener("click", (event) => {
+  const downloadButton = event.target.closest?.("[data-download-document]");
+  if (downloadButton) {
+    event.preventDefault();
+    const originalText = downloadButton.textContent;
+    downloadButton.disabled = true;
+    downloadButton.textContent = "Baixando...";
+
+    downloadProtectedDocument(
+      downloadButton.dataset.downloadDocument,
+      `${downloadButton.dataset.downloadName || "documento"}.pdf`,
+    )
+      .catch((error) => alert(error.message))
+      .finally(() => {
+        downloadButton.disabled = false;
+        downloadButton.textContent = originalText;
+      });
+    return;
+  }
+
   if (!notificationMenu || notificationMenu.hidden) return;
   if (event.target instanceof Node && !notificationMenu.contains(event.target) && !notificationToggle?.contains(event.target)) {
     closeNotificationMenu();

@@ -1935,9 +1935,22 @@ button.settings-outline-action {
   background: rgba(31, 129, 57, 0.35);
 }
 
-.documents-history td a {
+.documents-history td a,
+.documents-history td button {
   color: var(--gold-strong);
   font-weight: 900;
+}
+
+.documents-history td button {
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  padding: 0;
+}
+
+.documents-history td button:disabled {
+  opacity: 0.7;
+  cursor: wait;
 }
 
 @media (max-width: 1260px) {
