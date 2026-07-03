@@ -3,7 +3,7 @@ import { gerarTokenSerpro } from "./serproAuthService.js";
 const FACILITA_CNPJ = "41952830000104";
 const CNPJ_LENGTH = 14;
 const PERIODO_APURACAO_PATTERN = /^\d{6}$/;
-const DEFAULT_SERPRO_INTEGRA_CONTADOR_URL = "https://gateway.apiserpro.serpro.gov.br/integra-contador";
+const DEFAULT_SERPRO_INTEGRA_CONTADOR_URL = "https://gateway.apiserpro.serpro.gov.br/integra-contador/v1/Emitir";
 
 function limparCnpj(cnpj) {
   return String(cnpj || "").replace(/\D/g, "");
