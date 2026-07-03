@@ -19,7 +19,15 @@ function getBasicAuthToken(consumerKey, consumerSecret) {
 
 function getCertificateOptions() {
   const certificatePath = process.env.SERPRO_CERTIFICADO_PATH || "";
+  const certificateBase64 = process.env.SERPRO_CERTIFICADO_BASE64 || "";
   const passphrase = process.env.SERPRO_CERTIFICADO_PASSWORD || "";
+
+  if (certificateBase64) {
+    return {
+      pfx: Buffer.from(certificateBase64, "base64"),
+      passphrase,
+    };
+  }
 
   if (!certificatePath) return {};
 
