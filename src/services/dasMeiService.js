@@ -76,13 +76,20 @@ export async function gerarDasMei({ cnpjContribuinte, periodoApuracao }) {
   const tokenData = await gerarTokenSerpro();
   const payload = montarPayloadGerarDasMei({ cnpjContratante: FACILITA_CNPJ, cnpjContribuinte, periodoApuracao });
   const serviceUrl = process.env.SERPRO_INTEGRA_CONTADOR_URL || DEFAULT_SERPRO_INTEGRA_CONTADOR_URL;
+  const jwtToken = tokenData.jwt_token || process.env.SERPRO_JWT_TOKEN;
+  const headers = {
+    Authorization: `Bearer ${tokenData.access_token}`,
+    "Content-Type": "application/json",
+    Accept: "application/json",
+  };
+
+  if (jwtToken) {
+    headers.jwt_token = jwtToken;
+  }
+
   const response = await fetch(serviceUrl, {
     method: "POST",
-    headers: {
-      Authorization: `Bearer ${tokenData.access_token}`,
-      "Content-Type": "application/json",
-      Accept: "application/json",
-    },
+    headers,
     body: JSON.stringify(payload),
   });
   const data = await parseSerproResponse(response);

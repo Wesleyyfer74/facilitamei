@@ -31,6 +31,10 @@ const companyCnpjSettings = document.querySelector("[data-company-cnpj-settings]
 const companyStatusSettings = document.querySelector("[data-company-status-settings]");
 const dasDate = document.querySelector("[data-das-date]");
 const dasStatus = document.querySelector("[data-das-status]");
+const requestDasButton = document.querySelector("[data-request-das]");
+const dasLoadingModal = document.querySelector("[data-das-loading-modal]");
+const dasLoadingTitle = document.querySelector("[data-das-loading-title]");
+const dasLoadingText = document.querySelector("[data-das-loading-text]");
 const invoicesMonth = document.querySelector("[data-invoices-month]");
 const declarationLabel = document.querySelector("[data-declaration-label]");
 const declarationStatus = document.querySelector("[data-declaration-status]");
@@ -180,6 +184,50 @@ function money(value) {
 function formatDate(value) {
   if (!value) return "-";
   return new Date(value).toLocaleDateString("pt-BR");
+}
+
+function base64ToBlob(base64, contentType = "application/pdf") {
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index);
+  }
+
+  return new Blob([bytes], { type: contentType });
+}
+
+function openPdfFromBase64(base64, fileName = "DAS-MEI.pdf") {
+  const blob = base64ToBlob(base64);
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+
+  link.href = url;
+  link.download = fileName;
+  link.target = "_blank";
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+
+  setTimeout(() => URL.revokeObjectURL(url), 30000);
+}
+
+function resolveFileUrl(fileUrl = "") {
+  if (!fileUrl) return "";
+  if (/^https?:\/\//i.test(fileUrl) || fileUrl.startsWith("data:")) return fileUrl;
+  if (fileUrl.startsWith("/api/")) return `${API_BASE}${fileUrl}`;
+  return fileUrl;
+}
+
+function showDasLoadingModal(title = "Buscando seu DAS-MEI", text = "Estamos consultando o Serpro e preparando o PDF nos seus documentos.") {
+  if (!dasLoadingModal) return;
+  if (dasLoadingTitle) dasLoadingTitle.textContent = title;
+  if (dasLoadingText) dasLoadingText.textContent = text;
+  dasLoadingModal.hidden = false;
+}
+
+function hideDasLoadingModal() {
+  if (dasLoadingModal) dasLoadingModal.hidden = true;
 }
 
 function formatCnpj(value = "") {
@@ -353,7 +401,7 @@ function renderDocuments(documents = []) {
   const cards = sortedDocuments
     .slice(0, 3)
     .map((document) => {
-      const fileUrl = document.arquivo_url || "";
+      const fileUrl = resolveFileUrl(document.arquivo_url || "");
       const action = fileUrl
         ? `<a href="${escapeHtml(fileUrl)}" target="_blank" rel="noopener">Baixar PDF</a>`
         : `<button type="button" disabled>Sem arquivo</button>`;
@@ -379,7 +427,7 @@ function renderDocuments(documents = []) {
   documentsHistory.innerHTML = sortedDocuments.length
     ? sortedDocuments
         .map((document) => {
-          const fileUrl = document.arquivo_url || "";
+          const fileUrl = resolveFileUrl(document.arquivo_url || "");
           return `
             <tr>
               <td><span class="table-document-icon">${getDocumentIcon(document)}</span>${escapeHtml(document.titulo || document.tipo || "Documento")}</td>
@@ -731,6 +779,49 @@ async function refreshClientDashboard() {
   }
 }
 
+async function requestDasMei() {
+  if (!requestDasButton) return;
+  const originalText = requestDasButton.innerHTML;
+
+  requestDasButton.disabled = true;
+  requestDasButton.classList.add("is-loading");
+  requestDasButton.innerHTML = "Gerando DAS...";
+  showDasLoadingModal();
+
+  try {
+    const data = await apiRequest("/api/client/das-mei/gerar", {
+      method: "POST",
+      body: JSON.stringify({}),
+    });
+
+    showDasLoadingModal("DAS-MEI encontrado", "Salvamos o PDF em Meus Documentos. Abrindo a aba para voce consultar.");
+
+    if (data.pdfBase64) {
+      openPdfFromBase64(data.pdfBase64, data.fileName || "DAS-MEI.pdf");
+      if (dasStatus) dasStatus.textContent = "DAS gerado com sucesso";
+      return;
+    }
+
+    if (data.document) {
+      if (dasStatus) dasStatus.textContent = "DAS salvo em documentos";
+      await loadDashboard();
+      showClientPage("documentos", true);
+      return;
+    }
+
+    hideDasLoadingModal();
+    alert(data.mensagem || "A Serpro respondeu sem PDF para esta competencia.");
+  } catch (error) {
+    hideDasLoadingModal();
+    alert(error.message);
+  } finally {
+    requestDasButton.disabled = false;
+    requestDasButton.classList.remove("is-loading");
+    requestDasButton.innerHTML = originalText;
+    setTimeout(hideDasLoadingModal, 650);
+  }
+}
+
 notificationToggle?.addEventListener("click", (event) => {
   event.stopPropagation();
   const isOpening = notificationMenu?.hidden;
@@ -837,6 +928,10 @@ document.querySelector("[data-logout]").addEventListener("click", async () => {
 
 refreshDashboardButton?.addEventListener("click", async () => {
   await refreshClientDashboard();
+});
+
+requestDasButton?.addEventListener("click", async () => {
+  await requestDasMei();
 });
 
 (async function bootClientArea() {

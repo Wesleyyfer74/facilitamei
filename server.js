@@ -391,25 +391,52 @@ function getOpenCnpjAddress(data = {}) {
 
 function normalizeOpenCnpjPayload(payload = {}, fallbackCnpj = "") {
   const data = payload.data || payload;
+  const establishment = data.estabelecimento || {};
   const cnpj = normalizeDigits(data.cnpj || fallbackCnpj);
-  const address = getOpenCnpjAddress(data);
+  const address = getOpenCnpjAddress(establishment.cnpj ? establishment : data);
+  const phoneFromCnpjWs = `${establishment.ddd1 || ""}${establishment.telefone1 || ""}`;
 
   return {
-    cnpj,
+    cnpj: cnpj || normalizeDigits(establishment.cnpj || ""),
     razaoSocial: cleanText(data.razaoSocial || data.razao_social, 180),
-    nomeFantasia: cleanText(data.nomeFantasia || data.nome_fantasia, 160),
-    situacaoCadastral: cleanText(data.situacaoCadastral || data.situacao_cadastral, 80),
-    dataAbertura: cleanDate(data.dataInicioAtividades || data.data_inicio_atividades),
+    nomeFantasia: cleanText(data.nomeFantasia || data.nome_fantasia || establishment.nome_fantasia, 160),
+    situacaoCadastral: cleanText(data.situacaoCadastral || data.situacao_cadastral || establishment.situacao_cadastral, 80),
+    dataAbertura: cleanDate(data.dataInicioAtividades || data.data_inicio_atividades || establishment.data_inicio_atividade),
     capitalSocial: Number.isFinite(Number(data.capitalSocial)) ? Number(data.capitalSocial) : cleanDecimal(data.capital_social),
-    telefone: normalizeDigits(data.telefone || "").slice(0, 30) || null,
+    telefone: normalizeDigits(data.telefone || phoneFromCnpjWs).slice(0, 30) || null,
     logradouro: address.logradouro,
     numero: address.numero,
-    complemento: cleanText(data.complemento, 120),
-    bairro: cleanText(data.bairro, 120),
-    municipio: cleanText(data.municipio, 120),
-    uf: cleanUf(data.uf),
-    cep: normalizeDigits(data.cep || "").slice(0, 8) || null,
+    complemento: cleanText(data.complemento || establishment.complemento, 120),
+    bairro: cleanText(data.bairro || establishment.bairro, 120),
+    municipio: cleanText(data.municipio || establishment.cidade?.nome, 120),
+    uf: cleanUf(data.uf || establishment.estado?.sigla),
+    cep: normalizeDigits(data.cep || establishment.cep || "").slice(0, 8) || null,
   };
+}
+
+async function consultarCnpjWs(cnpj) {
+  const cleanCnpj = normalizeDigits(cnpj);
+  const response = await fetch(`https://publica.cnpj.ws/cnpj/${cleanCnpj}`, {
+    headers: { Accept: "application/json" },
+  });
+  const text = await response.text();
+  let data = {};
+
+  try {
+    data = text ? JSON.parse(text) : {};
+  } catch {
+    const error = new Error("CNPJ.ws retornou uma resposta invalida.");
+    error.status = 502;
+    throw error;
+  }
+
+  if (!response.ok) {
+    const error = new Error(data.detalhes || data.titulo || "Nao foi possivel consultar este CNPJ.");
+    error.status = response.status || 502;
+    throw error;
+  }
+
+  return normalizeOpenCnpjPayload(data, cleanCnpj);
 }
 
 async function consultarOpenCnpj(cnpj) {
@@ -438,6 +465,16 @@ async function consultarOpenCnpj(cnpj) {
       const error = new Error("OpenCNPJ retornou uma resposta invalida.");
       error.status = 502;
       throw error;
+    }
+
+    if (openCnpjResponse.status === 404 || data.message === "Nao encontrada." || data.message === "Não encontrada.") {
+      const fallback = await consultarCnpjWs(cleanCnpj);
+      if (!fallback.razaoSocial) {
+        const error = new Error("A consulta publica nao retornou razao social para este CNPJ.");
+        error.status = 422;
+        throw error;
+      }
+      return fallback;
     }
 
     if (!openCnpjResponse.ok || data.success === false) {
@@ -704,6 +741,145 @@ function getSerproDasErrorMessage(status) {
   return "Erro ao gerar DAS-MEI no Integra Contador";
 }
 
+function getDefaultDasPeriodoApuracao(date = new Date()) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  return `${year}${month}`;
+}
+
+function parseDasMeiDados(dados) {
+  if (!dados) return null;
+  if (Array.isArray(dados)) return dados[0] || null;
+  if (typeof dados === "object") return dados;
+
+  try {
+    const parsed = JSON.parse(dados);
+    return Array.isArray(parsed) ? parsed[0] || null : parsed;
+  } catch {
+    return null;
+  }
+}
+
+let customerDocumentFilesReady = false;
+
+async function ensureCustomerDocumentFilesTable() {
+  if (customerDocumentFilesReady) return;
+
+  await dbPool.execute(`
+    CREATE TABLE IF NOT EXISTS customer_document_files (
+      id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+      document_id BIGINT UNSIGNED NOT NULL,
+      file_name VARCHAR(180) NOT NULL,
+      mime_type VARCHAR(80) NOT NULL DEFAULT 'application/pdf',
+      base64_data MEDIUMTEXT NOT NULL,
+      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      UNIQUE KEY customer_document_files_document_unique (document_id),
+      CONSTRAINT customer_document_files_document_fk FOREIGN KEY (document_id) REFERENCES customer_documents(id) ON DELETE CASCADE
+    )
+  `);
+
+  customerDocumentFilesReady = true;
+}
+
+function formatDasCompetencia(periodoApuracao = "") {
+  const period = String(periodoApuracao || "");
+  if (!/^\d{6}$/.test(period)) return period || "DAS-MEI";
+  return `${period.slice(4, 6)}/${period.slice(0, 4)}`;
+}
+
+function parseSerproDate(value = "") {
+  const digits = normalizeDigits(value);
+  if (digits.length !== 8) return null;
+  return `${digits.slice(0, 4)}-${digits.slice(4, 6)}-${digits.slice(6, 8)}`;
+}
+
+async function saveDasDocumentForClient({ userId, periodoApuracao, cnpjContribuinte, dasData, pdfBase64 }) {
+  await ensureCustomerDocumentFilesTable();
+
+  const competenciaLabel = formatDasCompetencia(periodoApuracao);
+  const title = `DAS-MEI ${competenciaLabel}`;
+  const fileName = `DAS-MEI-${cnpjContribuinte}-${periodoApuracao}.pdf`;
+  const detalhe = Array.isArray(dasData?.detalhamento) ? dasData.detalhamento[0] : null;
+  const dueDate = parseSerproDate(detalhe?.dataVencimento);
+  const value = detalhe?.valores?.total ? Number(detalhe.valores.total).toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : "";
+  const noteParts = [`Competencia ${competenciaLabel}`];
+  if (dueDate) noteParts.push(`vencimento ${new Date(`${dueDate}T00:00:00`).toLocaleDateString("pt-BR")}`);
+  if (value) noteParts.push(`valor ${value}`);
+
+  const [existingRows] = await dbPool.execute(
+    `SELECT id FROM customer_documents
+     WHERE user_id = :userId
+       AND titulo = :title
+     LIMIT 1`,
+    { userId, title },
+  );
+
+  let documentId = existingRows[0]?.id;
+
+  if (!documentId) {
+    const [insertResult] = await dbPool.execute(
+      `INSERT INTO customer_documents (user_id, titulo, tipo, status, observacao, data_emissao)
+       VALUES (:userId, :title, 'documento', 'aprovado', :observacao, NOW())`,
+      {
+        userId,
+        title,
+        observacao: noteParts.join(" - "),
+      },
+    );
+    documentId = insertResult.insertId;
+  } else {
+    await dbPool.execute(
+      `UPDATE customer_documents
+       SET status = 'aprovado',
+           observacao = :observacao,
+           data_emissao = NOW(),
+           updated_at = CURRENT_TIMESTAMP
+       WHERE id = :documentId AND user_id = :userId`,
+      {
+        documentId,
+        userId,
+        observacao: noteParts.join(" - "),
+      },
+    );
+  }
+
+  const fileUrl = `/api/client/documents/${documentId}/download`;
+
+  await dbPool.execute(
+    `INSERT INTO customer_document_files (document_id, file_name, mime_type, base64_data)
+     VALUES (:documentId, :fileName, 'application/pdf', :pdfBase64)
+     ON DUPLICATE KEY UPDATE
+       file_name = VALUES(file_name),
+       mime_type = VALUES(mime_type),
+       base64_data = VALUES(base64_data),
+       updated_at = CURRENT_TIMESTAMP`,
+    {
+      documentId,
+      fileName,
+      pdfBase64,
+    },
+  );
+
+  await dbPool.execute(
+    `UPDATE customer_documents
+     SET arquivo_url = :fileUrl,
+         updated_at = CURRENT_TIMESTAMP
+     WHERE id = :documentId AND user_id = :userId`,
+    { documentId, userId, fileUrl },
+  );
+
+  return {
+    id: documentId,
+    titulo: title,
+    tipo: "documento",
+    status: "aprovado",
+    arquivo_url: fileUrl,
+    observacao: noteParts.join(" - "),
+    fileName,
+  };
+}
+
 app.post("/api/das-mei/gerar", async (request, response) => {
   try {
     const resposta = await gerarDasMei({
@@ -721,6 +897,100 @@ app.post("/api/das-mei/gerar", async (request, response) => {
       mensagem: getSerproDasErrorMessage(status),
       erro: error.details || error.message || "Erro desconhecido ao gerar DAS-MEI.",
     });
+  }
+});
+
+app.post("/api/client/das-mei/gerar", requireClientSession, async (request, response) => {
+  try {
+    const periodoApuracao = request.body?.periodoApuracao || getDefaultDasPeriodoApuracao();
+    const [rows] = await dbPool.execute(
+      `SELECT id, nome, cnpj, documento
+       FROM users
+       WHERE id = :userId
+       LIMIT 1`,
+      { userId: request.clientSession.userId },
+    );
+    const client = rows[0];
+    const cnpjContribuinte = normalizeDigits(client?.cnpj || client?.documento || "");
+
+    if (!client) return response.status(404).json({ error: "Cliente nao encontrado." });
+    if (cnpjContribuinte.length !== 14) {
+      return response.status(400).json({ error: "Cadastre um CNPJ valido antes de solicitar o DAS-MEI." });
+    }
+
+    const resposta = await gerarDasMei({ cnpjContribuinte, periodoApuracao });
+    const dasData = parseDasMeiDados(resposta?.dados);
+    const pdfBase64 = dasData?.pdf || "";
+
+    if (!pdfBase64) {
+      return response.json({
+        ok: true,
+        periodoApuracao,
+        cnpjContribuinte,
+        resposta,
+        mensagem: resposta?.mensagens?.[0]?.texto || "A Serpro respondeu sem PDF para esta competencia.",
+      });
+    }
+
+    const document = await saveDasDocumentForClient({
+      userId: request.clientSession.userId,
+      periodoApuracao,
+      cnpjContribuinte,
+      dasData,
+      pdfBase64,
+    });
+
+    response.json({
+      ok: true,
+      periodoApuracao,
+      cnpjContribuinte,
+      razaoSocial: dasData?.razaoSocial || client.nome,
+      document,
+      mensagens: resposta?.mensagens || [],
+    });
+  } catch (error) {
+    const status = error.status || 500;
+    response.status(status).json({
+      ok: false,
+      status,
+      error: getSerproDasErrorMessage(status),
+      details: error.details || error.message || "Erro desconhecido ao solicitar DAS-MEI.",
+    });
+  }
+});
+
+app.get("/api/client/documents/:documentId/download", requireClientSession, async (request, response) => {
+  try {
+    await ensureCustomerDocumentFilesTable();
+
+    const documentId = Number(request.params.documentId);
+    if (!Number.isFinite(documentId) || documentId <= 0) {
+      return response.status(400).json({ error: "Documento invalido." });
+    }
+
+    const [rows] = await dbPool.execute(
+      `SELECT d.id, d.user_id, d.titulo, f.file_name, f.mime_type, f.base64_data
+       FROM customer_documents d
+       JOIN customer_document_files f ON f.document_id = d.id
+       WHERE d.id = :documentId
+         AND d.user_id = :userId
+       LIMIT 1`,
+      {
+        documentId,
+        userId: request.clientSession.userId,
+      },
+    );
+
+    const document = rows[0];
+    if (!document) return response.status(404).json({ error: "Documento nao encontrado." });
+
+    const buffer = Buffer.from(String(document.base64_data || ""), "base64");
+    response.setHeader("Content-Type", document.mime_type || "application/pdf");
+    response.setHeader("Content-Disposition", `inline; filename="${String(document.file_name || "documento.pdf").replace(/"/g, "")}"`);
+    response.send(buffer);
+  } catch (error) {
+    console.error("Erro ao baixar documento do cliente:", error);
+    response.status(500).json({ error: "Erro ao baixar documento." });
   }
 });
 

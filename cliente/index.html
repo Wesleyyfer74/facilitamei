@@ -101,7 +101,7 @@
                 <p>Pr&oacute;xima cobran&ccedil;a</p>
                 <strong data-das-date>N&atilde;o cadastrada</strong>
                 <small data-das-status>Sem registro</small>
-                <a href="https://wa.me/5567992230801?text=Ol%C3%A1,%20preciso%20de%20ajuda%20com%20DAS-MEI." target="_blank" rel="noopener">Solicitar DAS <span>&rarr;</span></a>
+                <button type="button" data-request-das>Solicitar DAS <span>&rarr;</span></button>
               </article>
 
               <article class="client-kpi-card kpi-blue">
@@ -530,7 +530,21 @@
       </section>
     </div>
 
+    <div class="das-loading-modal" data-das-loading-modal hidden>
+      <div class="das-loading-backdrop"></div>
+      <section class="das-loading-card" role="status" aria-live="polite">
+        <div class="das-loader" aria-hidden="true">
+          <span></span>
+          <span></span>
+          <span></span>
+        </div>
+        <p class="eyebrow">DAS-MEI</p>
+        <h2 data-das-loading-title>Buscando seu DAS-MEI</h2>
+        <p data-das-loading-text>Estamos consultando o Serpro e preparando o PDF nos seus documentos.</p>
+      </section>
+    </div>
+
     <script src="../config.js?v=20260606-railway"></script>
-    <script src="./cliente.js?v=20260701-company-public-cnpj"></script>
+    <script src="./cliente.js?v=20260703-das-documentos"></script>
   </body>
 </html>

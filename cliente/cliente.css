@@ -831,6 +831,7 @@ th {
 }
 
 .client-kpi-card a,
+.client-kpi-card button,
 .outline-action {
   min-height: 52px;
   display: inline-flex;
@@ -844,21 +845,34 @@ th {
   font-weight: 900;
 }
 
-.kpi-green a {
+.client-kpi-card button {
+  border: 0;
+}
+
+.client-kpi-card button:disabled {
+  cursor: wait;
+  opacity: 0.78;
+}
+
+.kpi-green a,
+.kpi-green button {
   background: linear-gradient(135deg, #168f38, #23c45b);
 }
 
-.kpi-blue a {
+.kpi-blue a,
+.kpi-blue button {
   background: linear-gradient(135deg, #174aa8, #286fe8);
 }
 
 .kpi-gold a,
+.kpi-gold button,
 .outline-action {
   color: #171109;
   background: linear-gradient(135deg, #d89a18, var(--gold-strong));
 }
 
-.kpi-red a {
+.kpi-red a,
+.kpi-red button {
   background: linear-gradient(135deg, #a41e24, #ef4444);
 }
 
@@ -1633,6 +1647,112 @@ button.settings-outline-action {
 .modal-actions .ghost-button,
 .modal-actions .gold-button {
   min-width: 160px;
+}
+
+.das-loading-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 120;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+
+.das-loading-modal[hidden] {
+  display: none !important;
+}
+
+.das-loading-backdrop {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(circle at 50% 38%, rgba(240, 191, 90, 0.2), transparent 28%),
+    rgba(0, 0, 0, 0.78);
+  backdrop-filter: blur(12px);
+}
+
+.das-loading-card {
+  position: relative;
+  width: min(430px, 100%);
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+  padding: 34px 28px;
+  border: 1px solid rgba(255, 211, 105, 0.42);
+  border-radius: 18px;
+  text-align: center;
+  background:
+    radial-gradient(circle at 50% 0%, rgba(255, 211, 105, 0.2), transparent 42%),
+    linear-gradient(180deg, rgba(27, 22, 15, 0.98), rgba(6, 6, 5, 0.98));
+  box-shadow: 0 30px 120px rgba(0, 0, 0, 0.72), 0 0 42px rgba(240, 191, 90, 0.18);
+}
+
+.das-loading-card h2 {
+  margin: 0;
+  color: var(--text);
+  font-size: clamp(1.6rem, 5vw, 2.4rem);
+  line-height: 1;
+}
+
+.das-loading-card p:not(.eyebrow) {
+  max-width: 320px;
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.das-loader {
+  position: relative;
+  width: 104px;
+  height: 104px;
+  display: grid;
+  place-items: center;
+  margin-bottom: 4px;
+}
+
+.das-loader::after {
+  content: "F";
+  width: 54px;
+  height: 54px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  color: #0b0804;
+  font-weight: 900;
+  font-size: 1.8rem;
+  background: linear-gradient(135deg, #ffe7a4, #e4a520);
+  box-shadow: 0 0 28px rgba(255, 211, 105, 0.45);
+}
+
+.das-loader span {
+  position: absolute;
+  inset: 0;
+  border: 2px solid transparent;
+  border-top-color: rgba(255, 218, 126, 0.95);
+  border-right-color: rgba(228, 165, 32, 0.35);
+  border-radius: 38% 62% 58% 42%;
+  animation: dasSpin 1.35s linear infinite;
+}
+
+.das-loader span:nth-child(2) {
+  inset: 10px;
+  border-top-color: rgba(255, 238, 180, 0.85);
+  border-left-color: rgba(255, 211, 105, 0.35);
+  animation-duration: 1.9s;
+  animation-direction: reverse;
+}
+
+.das-loader span:nth-child(3) {
+  inset: 20px;
+  border-top-color: rgba(240, 191, 90, 0.95);
+  border-right-color: rgba(255, 238, 180, 0.3);
+  animation-duration: 2.5s;
+}
+
+@keyframes dasSpin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .compact-data {
