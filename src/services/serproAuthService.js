@@ -97,13 +97,14 @@ export async function gerarTokenSerpro() {
   const tokenUrl = process.env.SERPRO_TOKEN_URL || DEFAULT_SERPRO_TOKEN_URL;
   const consumerKey = getRequiredEnv("SERPRO_CONSUMER_KEY");
   const consumerSecret = getRequiredEnv("SERPRO_CONSUMER_SECRET");
+  const hasCertificate = Boolean(process.env.SERPRO_CERTIFICADO_PATH || process.env.SERPRO_CERTIFICADO_BASE64);
   const basicToken = getBasicAuthToken(consumerKey, consumerSecret);
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 15000);
 
   try {
     const body = "grant_type=client_credentials";
-    const response = process.env.SERPRO_CERTIFICADO_PATH
+    const response = hasCertificate
       ? await requestTokenWithCertificate({ tokenUrl, basicToken, body, signal: controller.signal })
       : await fetch(tokenUrl, {
           method: "POST",
