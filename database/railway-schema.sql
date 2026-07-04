@@ -198,6 +198,24 @@ CREATE TABLE IF NOT EXISTS whatsapp_settings (
   updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS email_settings (
+  id TINYINT UNSIGNED PRIMARY KEY DEFAULT 1,
+  remetente_email VARCHAR(160) NOT NULL DEFAULT 'Atendimento@facilitameibr.com.br',
+  remetente_nome VARCHAR(160) NOT NULL DEFAULT 'Facilita MEI',
+  smtp_host VARCHAR(160) NULL,
+  smtp_port INT NULL,
+  smtp_secure TINYINT(1) NOT NULL DEFAULT 1,
+  smtp_user VARCHAR(160) NULL,
+  smtp_pass_configurado TINYINT(1) NOT NULL DEFAULT 0,
+  enviar_certificados TINYINT(1) NOT NULL DEFAULT 1,
+  enviar_documentos TINYINT(1) NOT NULL DEFAULT 1,
+  enviar_avisos TINYINT(1) NOT NULL DEFAULT 1,
+  assinatura_padrao TEXT NULL,
+  aviso_rodape TEXT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
 CREATE TABLE IF NOT EXISTS customer_contract_events (
   id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   contract_id BIGINT UNSIGNED NULL,
@@ -250,6 +268,23 @@ INSERT INTO whatsapp_settings
   (id, suporte_numero, atendimento_numero, abrir_mei_numero, plataforma_numero, lembretes_ativos, lembretes_mensagem_padrao)
 VALUES
   (1, NULL, NULL, NULL, NULL, 0, 'Ola {{cliente_nome}}, passando para lembrar sobre sua assinatura Facilita MEI.')
+ON DUPLICATE KEY UPDATE
+  id = id;
+
+INSERT INTO email_settings
+  (id, remetente_email, remetente_nome, smtp_secure, enviar_certificados, enviar_documentos, enviar_avisos, assinatura_padrao, aviso_rodape)
+VALUES
+  (
+    1,
+    'Atendimento@facilitameibr.com.br',
+    'Facilita MEI',
+    1,
+    1,
+    1,
+    1,
+    'Atenciosamente,\nFACILITA ASSESSORIA E CONSULTORIA CONTABIL LTDA',
+    'Este e-mail foi enviado pela Facilita MEI para comunicacoes relacionadas aos servicos contratados.'
+  )
 ON DUPLICATE KEY UPDATE
   id = id;
 

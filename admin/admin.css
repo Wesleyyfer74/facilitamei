@@ -3179,6 +3179,61 @@ td small {
   justify-self: start;
 }
 
+.email-settings-form .panel {
+  display: grid;
+  gap: 16px;
+}
+
+.email-config-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.email-config-grid label small {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 600;
+  line-height: 1.45;
+}
+
+.email-purpose-grid {
+  display: grid;
+  gap: 10px;
+}
+
+.toggle-line {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: 4px 12px;
+  padding: 14px;
+  border: 1px solid rgba(240, 191, 90, 0.16);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.toggle-line input[type="checkbox"] {
+  width: 20px;
+  height: 20px;
+  min-height: 20px;
+  margin-top: 2px;
+  accent-color: var(--gold);
+}
+
+.toggle-line span {
+  color: var(--text);
+  font-weight: 900;
+}
+
+.toggle-line small {
+  grid-column: 2;
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
 .form-grid {
   display: grid;
   gap: 14px;

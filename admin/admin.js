@@ -1771,6 +1771,138 @@ async function saveWhatsappSettings(form) {
   }
 }
 
+function checkedAttribute(value) {
+  return Number(value) ? "checked" : "";
+}
+
+async function openEmailSettings() {
+  setStatus("Carregando configuracao de e-mail...");
+  const data = await apiRequest("/api/admin/settings/email");
+  const settings = data.settings || {};
+
+  openDrawer(`
+    <div class="drawer-content">
+      <div>
+        <p class="eyebrow">Comunicacao</p>
+        <h2>E-mail</h2>
+        <p>Configure o canal oficial para envio de certificados, documentos, contratos, avisos e comunicados aos clientes.</p>
+      </div>
+
+      <form class="form-grid email-settings-form" data-email-settings-form>
+        <article class="panel">
+          <h3>Remetente oficial</h3>
+          <div class="email-config-grid">
+            <label>
+              E-mail utilizado
+              <input name="remetente_email" type="email" autocomplete="email" value="${escapeHtml(settings.remetente_email || "Atendimento@facilitameibr.com.br")}" />
+              <small>Este sera o e-mail exibido nos envios da Facilita.</small>
+            </label>
+            <label>
+              Nome do remetente
+              <input name="remetente_nome" value="${escapeHtml(settings.remetente_nome || "Facilita MEI")}" />
+              <small>Nome que aparece para o cliente na caixa de entrada.</small>
+            </label>
+          </div>
+        </article>
+
+        <article class="panel">
+          <h3>Servidor SMTP</h3>
+          <div class="email-config-grid">
+            <label>
+              Host SMTP
+              <input name="smtp_host" placeholder="smtp.seudominio.com" value="${escapeHtml(settings.smtp_host || "")}" />
+            </label>
+            <label>
+              Porta
+              <input name="smtp_port" type="number" min="1" max="65535" placeholder="465 ou 587" value="${escapeHtml(settings.smtp_port || "")}" />
+            </label>
+            <label>
+              Usuario SMTP
+              <input name="smtp_user" autocomplete="username" placeholder="Atendimento@facilitameibr.com.br" value="${escapeHtml(settings.smtp_user || "")}" />
+            </label>
+            <label>
+              Seguranca
+              <select name="smtp_secure">
+                <option value="1" ${Number(settings.smtp_secure) ? "selected" : ""}>SSL/TLS ativo</option>
+                <option value="0" ${Number(settings.smtp_secure) ? "" : "selected"}>STARTTLS / sem SSL direto</option>
+              </select>
+            </label>
+          </div>
+          <div class="drawer-helper">
+            A senha SMTP nao sera salva no painel. Configure a senha com seguranca no Railway usando a variavel <strong>EMAIL_PASS</strong>.
+            Status atual: <strong>${settings.env_smtp_configurado ? "SMTP configurado no backend" : "SMTP ainda incompleto"}</strong>.
+          </div>
+        </article>
+
+        <article class="panel">
+          <h3>Finalidades de envio</h3>
+          <div class="email-purpose-grid">
+            <label class="toggle-line">
+              <input type="hidden" name="enviar_certificados" value="0" />
+              <input name="enviar_certificados" type="checkbox" value="1" ${checkedAttribute(settings.enviar_certificados)} />
+              <span>Certificados digitais</span>
+              <small>Envio de orientacoes, documentos e links relacionados a certificados.</small>
+            </label>
+            <label class="toggle-line">
+              <input type="hidden" name="enviar_documentos" value="0" />
+              <input name="enviar_documentos" type="checkbox" value="1" ${checkedAttribute(settings.enviar_documentos)} />
+              <span>Documentos</span>
+              <small>CCMEI, DAS, contratos, comprovantes e arquivos do cliente.</small>
+            </label>
+            <label class="toggle-line">
+              <input type="hidden" name="enviar_avisos" value="0" />
+              <input name="enviar_avisos" type="checkbox" value="1" ${checkedAttribute(settings.enviar_avisos)} />
+              <span>Avisos e lembretes</span>
+              <small>Comunicados de vencimento, pendencias e orientacoes importantes.</small>
+            </label>
+          </div>
+        </article>
+
+        <article class="panel">
+          <h3>Textos padrao</h3>
+          <label>
+            Assinatura padrao
+            <textarea name="assinatura_padrao" rows="5">${escapeHtml(settings.assinatura_padrao || "Atenciosamente,\nFACILITA ASSESSORIA E CONSULTORIA CONTABIL LTDA")}</textarea>
+          </label>
+          <label>
+            Rodape de aviso
+            <textarea name="aviso_rodape" rows="4">${escapeHtml(settings.aviso_rodape || "Este e-mail foi enviado pela Facilita MEI para comunicacoes relacionadas aos servicos contratados.")}</textarea>
+          </label>
+        </article>
+
+        <div class="drawer-helper">
+          Nesta etapa o painel prepara a configuracao. O envio automatico de documentos, certificados e avisos sera ligado quando a rotina de disparo for implementada.
+        </div>
+
+        <div class="drawer-actions">
+          <button class="gold-button" type="submit">Salvar e-mail</button>
+          <button class="ghost-button" type="button" data-close-drawer>Cancelar</button>
+        </div>
+      </form>
+    </div>
+  `);
+  setStatus("");
+}
+
+async function saveEmailSettings(form) {
+  const submitButton = form.querySelector("[type='submit']");
+  const payload = Object.fromEntries(new FormData(form).entries());
+  submitButton.disabled = true;
+  setStatus("Salvando configuracao de e-mail...");
+
+  try {
+    const data = await apiRequest("/api/admin/settings/email", {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    });
+    setStatus(data.message || "Configuracao de e-mail salva.");
+    closeDrawer();
+    await loadSettings();
+  } finally {
+    submitButton.disabled = false;
+  }
+}
+
 async function exportSettingsData() {
   setStatus("Exportando dados reais do banco...");
   const data = await apiRequest("/api/admin/settings/export-data");
@@ -2400,6 +2532,8 @@ document.addEventListener("click", (event) => {
       setStatus("Mercado Pago: consulte o setor de TI.");
     } else if (settingsActionButton.dataset.settingsAction === "WhatsApp") {
       openWhatsappSettings().catch((error) => setStatus(error.message, "error"));
+    } else if (settingsActionButton.dataset.settingsAction === "E-mail (SMTP)") {
+      openEmailSettings().catch((error) => setStatus(error.message, "error"));
     } else {
       setStatus(`${settingsActionButton.dataset.settingsAction}: configuracao detalhada sera conectada na proxima etapa.`);
     }
@@ -2421,6 +2555,7 @@ document.addEventListener("submit", (event) => {
   const contractTemplateForm = event.target.closest("[data-contract-template-form]");
   const contractReminderForm = event.target.closest("[data-contract-reminder-form]");
   const whatsappSettingsForm = event.target.closest("[data-whatsapp-settings-form]");
+  const emailSettingsForm = event.target.closest("[data-email-settings-form]");
 
   if (createCustomerForm) {
     event.preventDefault();
@@ -2460,6 +2595,11 @@ document.addEventListener("submit", (event) => {
   if (whatsappSettingsForm) {
     event.preventDefault();
     saveWhatsappSettings(whatsappSettingsForm).catch((error) => setStatus(error.message, "error"));
+  }
+
+  if (emailSettingsForm) {
+    event.preventDefault();
+    saveEmailSettings(emailSettingsForm).catch((error) => setStatus(error.message, "error"));
   }
 });
 

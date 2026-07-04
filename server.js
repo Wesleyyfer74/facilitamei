@@ -2185,6 +2185,7 @@ app.get("/api/admin/settings", requireAdminSession, async (_request, response) =
       ),
     ]);
     const whatsappSettings = await getWhatsappSettings();
+    const emailSettings = await getEmailSettings();
 
     const stats = statsRows[0] || {};
     const bytesUsed = Number(storageRows[0]?.bytes_used || 0);
@@ -2217,7 +2218,7 @@ app.get("/api/admin/settings", requireAdminSession, async (_request, response) =
           database: coreServicesOk,
           mercadoPago: hasValue(process.env.MERCADO_PAGO_ACCESS_TOKEN) && hasValue(process.env.MERCADO_PAGO_PUBLIC_KEY),
           webhooks: hasValue(process.env.MERCADO_PAGO_WEBHOOK_SECRET),
-          email: hasValue(process.env.EMAIL_HOST) && hasValue(process.env.EMAIL_USER),
+          email: hasValue(emailSettings.remetente_email),
         },
       },
       integrations: {
@@ -2229,10 +2230,11 @@ app.get("/api/admin/settings", requireAdminSession, async (_request, response) =
           hasValue(whatsappSettings.plataforma_numero) ||
           hasValue(process.env.WHATSAPP_PHONE) ||
           hasValue(process.env.WHATSAPP_URL),
-        email: hasValue(process.env.EMAIL_HOST) && hasValue(process.env.EMAIL_USER),
+        email: hasValue(emailSettings.remetente_email),
         webhooks: hasValue(process.env.MERCADO_PAGO_WEBHOOK_SECRET),
       },
       whatsapp: whatsappSettings,
+      email: emailSettings,
     });
   } catch (error) {
     console.error(error);
@@ -2349,6 +2351,177 @@ app.patch("/api/admin/settings/whatsapp", requireAdminSession, async (request, r
   } catch (error) {
     console.error(error);
     response.status(error.status || 500).json({ error: error.message || "Erro ao salvar configuracao de WhatsApp." });
+  }
+});
+
+let emailSettingsTableReady = false;
+
+async function ensureEmailSettingsTable() {
+  if (emailSettingsTableReady) return;
+
+  await dbPool.execute(`
+    CREATE TABLE IF NOT EXISTS email_settings (
+      id TINYINT UNSIGNED PRIMARY KEY DEFAULT 1,
+      remetente_email VARCHAR(160) NOT NULL DEFAULT 'Atendimento@facilitameibr.com.br',
+      remetente_nome VARCHAR(160) NOT NULL DEFAULT 'Facilita MEI',
+      smtp_host VARCHAR(160) NULL,
+      smtp_port INT NULL,
+      smtp_secure TINYINT(1) NOT NULL DEFAULT 1,
+      smtp_user VARCHAR(160) NULL,
+      smtp_pass_configurado TINYINT(1) NOT NULL DEFAULT 0,
+      enviar_certificados TINYINT(1) NOT NULL DEFAULT 1,
+      enviar_documentos TINYINT(1) NOT NULL DEFAULT 1,
+      enviar_avisos TINYINT(1) NOT NULL DEFAULT 1,
+      assinatura_padrao TEXT NULL,
+      aviso_rodape TEXT NULL,
+      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    )
+  `);
+
+  await dbPool.execute(
+    `INSERT INTO email_settings
+      (id, remetente_email, remetente_nome, smtp_secure, smtp_pass_configurado,
+       enviar_certificados, enviar_documentos, enviar_avisos, assinatura_padrao, aviso_rodape)
+     VALUES
+      (
+        1,
+        'Atendimento@facilitameibr.com.br',
+        'Facilita MEI',
+        1,
+        :smtpPassConfigurado,
+        1,
+        1,
+        1,
+        'Atenciosamente,\\nFACILITA ASSESSORIA E CONSULTORIA CONTABIL LTDA',
+        'Este e-mail foi enviado pela Facilita MEI para comunicacoes relacionadas aos servicos contratados.'
+      )
+     ON DUPLICATE KEY UPDATE id = id`,
+    { smtpPassConfigurado: process.env.EMAIL_PASS ? 1 : 0 },
+  );
+
+  emailSettingsTableReady = true;
+}
+
+async function getEmailSettings() {
+  await ensureEmailSettingsTable();
+  const [rows] = await dbPool.execute(
+    `SELECT id, remetente_email, remetente_nome, smtp_host, smtp_port, smtp_secure, smtp_user,
+            smtp_pass_configurado, enviar_certificados, enviar_documentos, enviar_avisos,
+            assinatura_padrao, aviso_rodape, updated_at
+     FROM email_settings
+     WHERE id = 1
+     LIMIT 1`,
+  );
+
+  const settings = rows[0] || {
+    id: 1,
+    remetente_email: "Atendimento@facilitameibr.com.br",
+    remetente_nome: "Facilita MEI",
+    smtp_host: null,
+    smtp_port: null,
+    smtp_secure: 1,
+    smtp_user: null,
+    smtp_pass_configurado: 0,
+    enviar_certificados: 1,
+    enviar_documentos: 1,
+    enviar_avisos: 1,
+    assinatura_padrao: "Atenciosamente,\nFACILITA ASSESSORIA E CONSULTORIA CONTABIL LTDA",
+    aviso_rodape: "Este e-mail foi enviado pela Facilita MEI para comunicacoes relacionadas aos servicos contratados.",
+    updated_at: null,
+  };
+
+  return {
+    ...settings,
+    smtp_pass_configurado: Number(settings.smtp_pass_configurado || 0) || (process.env.EMAIL_PASS ? 1 : 0),
+    env_smtp_configurado: Boolean(process.env.EMAIL_HOST && process.env.EMAIL_USER && process.env.EMAIL_PASS),
+  };
+}
+
+function normalizeOptionalText(value, maxLength = 160) {
+  const text = String(value || "").trim();
+  return text ? text.slice(0, maxLength) : null;
+}
+
+function normalizeEmailAddress(value, fallback = null) {
+  const email = String(value || "").trim();
+  if (!email) return fallback;
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    const error = new Error("Informe um e-mail valido.");
+    error.status = 400;
+    throw error;
+  }
+  return email;
+}
+
+app.get("/api/admin/settings/email", requireAdminSession, async (_request, response) => {
+  try {
+    response.json({ settings: await getEmailSettings() });
+  } catch (error) {
+    console.error(error);
+    response.status(500).json({ error: "Erro ao carregar configuracao de e-mail." });
+  }
+});
+
+app.patch("/api/admin/settings/email", requireAdminSession, async (request, response) => {
+  try {
+    await ensureEmailSettingsTable();
+    const body = request.body || {};
+    const smtpPort = body.smtp_port ? Number(body.smtp_port) : null;
+
+    if (smtpPort !== null && (!Number.isInteger(smtpPort) || smtpPort < 1 || smtpPort > 65535)) {
+      return response.status(400).json({ error: "Porta SMTP invalida." });
+    }
+
+    const settings = {
+      remetenteEmail: normalizeEmailAddress(body.remetente_email, "Atendimento@facilitameibr.com.br"),
+      remetenteNome: normalizeOptionalText(body.remetente_nome, 160) || "Facilita MEI",
+      smtpHost: normalizeOptionalText(body.smtp_host, 160),
+      smtpPort,
+      smtpSecure: body.smtp_secure === false || body.smtp_secure === "0" ? 0 : 1,
+      smtpUser: normalizeOptionalText(body.smtp_user, 160),
+      smtpPassConfigurado: process.env.EMAIL_PASS ? 1 : 0,
+      enviarCertificados: body.enviar_certificados === false || body.enviar_certificados === "0" ? 0 : 1,
+      enviarDocumentos: body.enviar_documentos === false || body.enviar_documentos === "0" ? 0 : 1,
+      enviarAvisos: body.enviar_avisos === false || body.enviar_avisos === "0" ? 0 : 1,
+      assinaturaPadrao: normalizeOptionalText(body.assinatura_padrao, 2000),
+      avisoRodape: normalizeOptionalText(body.aviso_rodape, 1000),
+    };
+
+    await dbPool.execute(
+      `INSERT INTO email_settings
+        (id, remetente_email, remetente_nome, smtp_host, smtp_port, smtp_secure, smtp_user,
+         smtp_pass_configurado, enviar_certificados, enviar_documentos, enviar_avisos,
+         assinatura_padrao, aviso_rodape)
+       VALUES
+        (1, :remetenteEmail, :remetenteNome, :smtpHost, :smtpPort, :smtpSecure, :smtpUser,
+         :smtpPassConfigurado, :enviarCertificados, :enviarDocumentos, :enviarAvisos,
+         :assinaturaPadrao, :avisoRodape)
+       ON DUPLICATE KEY UPDATE
+        remetente_email = VALUES(remetente_email),
+        remetente_nome = VALUES(remetente_nome),
+        smtp_host = VALUES(smtp_host),
+        smtp_port = VALUES(smtp_port),
+        smtp_secure = VALUES(smtp_secure),
+        smtp_user = VALUES(smtp_user),
+        smtp_pass_configurado = VALUES(smtp_pass_configurado),
+        enviar_certificados = VALUES(enviar_certificados),
+        enviar_documentos = VALUES(enviar_documentos),
+        enviar_avisos = VALUES(enviar_avisos),
+        assinatura_padrao = VALUES(assinatura_padrao),
+        aviso_rodape = VALUES(aviso_rodape),
+        updated_at = CURRENT_TIMESTAMP`,
+      settings,
+    );
+
+    response.json({
+      ok: true,
+      message: "Configuracao de e-mail salva.",
+      settings: await getEmailSettings(),
+    });
+  } catch (error) {
+    console.error(error);
+    response.status(error.status || 500).json({ error: error.message || "Erro ao salvar configuracao de e-mail." });
   }
 });
 
