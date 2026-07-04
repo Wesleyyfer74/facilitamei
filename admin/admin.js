@@ -2269,7 +2269,14 @@ document.addEventListener("click", (event) => {
   if (dynamicExportReportButton && dynamicExportReportButton !== exportReportButton) exportReportsCsv();
   if (settingsQuickButton) handleSettingsQuick(settingsQuickButton.dataset.settingsQuick).catch((error) => setStatus(error.message, "error"));
   if (notificationsButton) openNotifications().catch((error) => setStatus(error.message, "error"));
-  if (settingsActionButton) setStatus(`${settingsActionButton.dataset.settingsAction}: configuracao detalhada sera conectada na proxima etapa.`);
+  if (settingsActionButton) {
+    if (settingsActionButton.dataset.settingsAction === "Mercado Pago") {
+      window.alert("Consulte o setor de TI");
+      setStatus("Mercado Pago: consulte o setor de TI.");
+    } else {
+      setStatus(`${settingsActionButton.dataset.settingsAction}: configuracao detalhada sera conectada na proxima etapa.`);
+    }
+  }
   if (closeButton) closeDrawer();
   if (collapseButton && customerDetail) {
     selectedCustomerId = null;
