@@ -170,6 +170,37 @@ function setStatus(message = "", type = "info") {
   adminStatus.style.color = type === "error" ? "var(--danger)" : "var(--gold-strong)";
 }
 
+function showAdminNoticeModal({ title = "Aviso", message = "" } = {}) {
+  let modal = document.querySelector("[data-admin-notice-modal]");
+
+  if (!modal) {
+    modal = document.createElement("div");
+    modal.className = "admin-notice-modal";
+    modal.dataset.adminNoticeModal = "";
+    modal.innerHTML = `
+      <div class="admin-notice-backdrop" data-close-admin-notice></div>
+      <section class="admin-notice-card" role="dialog" aria-modal="true" aria-labelledby="admin-notice-title">
+        <button class="admin-notice-close" type="button" data-close-admin-notice aria-label="Fechar">&times;</button>
+        <span class="admin-notice-icon">${iconSvg("lock")}</span>
+        <p class="eyebrow">Acesso restrito</p>
+        <h3 id="admin-notice-title" data-admin-notice-title></h3>
+        <p data-admin-notice-message></p>
+        <button class="gold-button" type="button" data-close-admin-notice>Entendi</button>
+      </section>
+    `;
+    document.body.appendChild(modal);
+  }
+
+  modal.querySelector("[data-admin-notice-title]").textContent = title;
+  modal.querySelector("[data-admin-notice-message]").textContent = message;
+  modal.hidden = false;
+}
+
+function closeAdminNoticeModal() {
+  const modal = document.querySelector("[data-admin-notice-modal]");
+  if (modal) modal.hidden = true;
+}
+
 async function apiRequest(path, options = {}) {
   const headers = {
     "Content-Type": "application/json",
@@ -2241,8 +2272,10 @@ document.addEventListener("click", (event) => {
   const notificationsButton = event.target.closest("[data-notifications-button]");
   const dynamicViewButton = event.target.closest("[data-view-button]");
   const collapseButton = event.target.closest("[data-collapse-detail]");
+  const closeAdminNoticeButton = event.target.closest("[data-close-admin-notice]");
   const closeButton = event.target.closest("[data-close-drawer]");
 
+  if (closeAdminNoticeButton) closeAdminNoticeModal();
   if (dynamicViewButton && !Array.from(viewButtons).includes(dynamicViewButton)) {
     activateView(dynamicViewButton.dataset.viewButton);
   }
@@ -2271,7 +2304,10 @@ document.addEventListener("click", (event) => {
   if (notificationsButton) openNotifications().catch((error) => setStatus(error.message, "error"));
   if (settingsActionButton) {
     if (settingsActionButton.dataset.settingsAction === "Mercado Pago") {
-      window.alert("Consulte o setor de TI");
+      showAdminNoticeModal({
+        title: "Mercado Pago",
+        message: "Consulte o setor de TI.",
+      });
       setStatus("Mercado Pago: consulte o setor de TI.");
     } else {
       setStatus(`${settingsActionButton.dataset.settingsAction}: configuracao detalhada sera conectada na proxima etapa.`);

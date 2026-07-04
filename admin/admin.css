@@ -2981,6 +2981,101 @@ td small {
   display: none;
 }
 
+.admin-notice-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+
+.admin-notice-modal[hidden] {
+  display: none;
+}
+
+.admin-notice-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(3, 3, 2, 0.72);
+  backdrop-filter: blur(10px);
+}
+
+.admin-notice-card {
+  position: relative;
+  width: min(430px, 100%);
+  display: grid;
+  gap: 12px;
+  padding: 30px;
+  border: 1px solid rgba(240, 191, 90, 0.42);
+  border-radius: 18px;
+  background:
+    radial-gradient(circle at 82% 0%, rgba(240, 191, 90, 0.2), transparent 34%),
+    linear-gradient(180deg, rgba(21, 17, 12, 0.98), rgba(7, 7, 6, 0.98));
+  box-shadow: 0 34px 110px rgba(0, 0, 0, 0.58), 0 0 36px rgba(240, 191, 90, 0.12);
+  animation: admin-notice-in 220ms ease both;
+}
+
+@keyframes admin-notice-in {
+  from {
+    transform: translateY(12px) scale(0.98);
+    opacity: 0;
+  }
+
+  to {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
+}
+
+.admin-notice-close {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  font-size: 1.25rem;
+}
+
+.admin-notice-icon {
+  width: 56px;
+  height: 56px;
+  display: grid;
+  place-items: center;
+  color: var(--gold-strong);
+  border: 1px solid rgba(240, 191, 90, 0.36);
+  border-radius: 16px;
+  background: rgba(240, 191, 90, 0.08);
+  box-shadow: inset 0 1px 0 rgba(255, 232, 178, 0.12);
+}
+
+.admin-notice-icon .admin-svg-icon {
+  width: 28px;
+  height: 28px;
+}
+
+.admin-notice-card h3 {
+  margin: 0;
+  color: var(--text);
+  font-size: clamp(1.7rem, 4vw, 2.25rem);
+  line-height: 1.02;
+}
+
+.admin-notice-card p {
+  margin: 0;
+  color: var(--muted);
+}
+
+.admin-notice-card > .gold-button {
+  margin-top: 8px;
+}
+
 .drawer-backdrop {
   position: absolute;
   inset: 0;
