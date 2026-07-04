@@ -6,6 +6,7 @@ import crypto from "node:crypto";
 import { fileURLToPath } from "node:url";
 import dotenv from "dotenv";
 import mysql from "mysql2/promise";
+import nodemailer from "nodemailer";
 import { MercadoPagoConfig, Preference, Payment } from "mercadopago";
 import { DAS_MEI_FACILITA_CNPJ, gerarDasMei, montarPayloadGerarDasMei } from "./src/services/dasMeiService.js";
 import { gerarTokenSerpro } from "./src/services/serproAuthService.js";
@@ -2525,6 +2526,328 @@ app.patch("/api/admin/settings/email", requireAdminSession, async (request, resp
   }
 });
 
+let emailLogsTableReady = false;
+
+async function ensureEmailLogsTable() {
+  if (emailLogsTableReady) return;
+
+  await dbPool.execute(`
+    CREATE TABLE IF NOT EXISTS email_logs (
+      id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+      dedupe_key VARCHAR(190) NOT NULL,
+      user_id BIGINT UNSIGNED NULL,
+      subscription_id BIGINT UNSIGNED NULL,
+      payment_id BIGINT UNSIGNED NULL,
+      tipo VARCHAR(80) NOT NULL,
+      destinatario VARCHAR(180) NOT NULL,
+      assunto VARCHAR(180) NOT NULL,
+      status VARCHAR(40) NOT NULL DEFAULT 'preparando',
+      provider_message_id VARCHAR(180) NULL,
+      erro_mensagem TEXT NULL,
+      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      UNIQUE KEY email_logs_dedupe_unique (dedupe_key),
+      KEY email_logs_user_idx (user_id),
+      KEY email_logs_subscription_idx (subscription_id),
+      KEY email_logs_payment_idx (payment_id)
+    )
+  `);
+
+  emailLogsTableReady = true;
+}
+
+function escapeEmailHtml(value = "") {
+  return String(value || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function formatMoneyBR(value) {
+  return Number(value || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+}
+
+function getSmtpConfig(settings) {
+  const host = process.env.EMAIL_HOST || settings.smtp_host;
+  const port = Number(process.env.EMAIL_PORT || settings.smtp_port || 587);
+  const user = process.env.EMAIL_USER || settings.smtp_user;
+  const pass = process.env.EMAIL_PASS;
+  const secure =
+    process.env.EMAIL_SECURE !== undefined
+      ? ["1", "true", "yes"].includes(String(process.env.EMAIL_SECURE).toLowerCase())
+      : Boolean(Number(settings.smtp_secure || 0));
+
+  return { host, port, user, pass, secure };
+}
+
+async function marcarEmailLogErro(dedupeKey, erroMensagem) {
+  await ensureEmailLogsTable();
+  await dbPool.execute(
+    `UPDATE email_logs
+     SET status = 'erro',
+         erro_mensagem = :erroMensagem,
+         updated_at = CURRENT_TIMESTAMP
+     WHERE dedupe_key = :dedupeKey`,
+    { dedupeKey, erroMensagem: String(erroMensagem || "Erro ao enviar e-mail.").slice(0, 1200) },
+  );
+}
+
+async function enviarEmailSistema({ dedupeKey, tipo, userId = null, subscriptionId = null, paymentId = null, to, subject, text, html }) {
+  if (!to || !String(to).includes("@")) return { sent: false, reason: "destinatario_invalido" };
+
+  await ensureEmailLogsTable();
+
+  await dbPool.execute(
+    `INSERT INTO email_logs
+      (dedupe_key, user_id, subscription_id, payment_id, tipo, destinatario, assunto, status)
+     VALUES
+      (:dedupeKey, :userId, :subscriptionId, :paymentId, :tipo, :to, :subject, 'preparando')
+     ON DUPLICATE KEY UPDATE
+      destinatario = VALUES(destinatario),
+      assunto = VALUES(assunto),
+      updated_at = CURRENT_TIMESTAMP`,
+    { dedupeKey, userId, subscriptionId, paymentId, tipo, to, subject },
+  );
+
+  const [logRows] = await dbPool.execute("SELECT status FROM email_logs WHERE dedupe_key = :dedupeKey LIMIT 1", {
+    dedupeKey,
+  });
+  if (logRows[0]?.status === "enviado") return { sent: false, reason: "email_ja_enviado" };
+
+  const settings = await getEmailSettings();
+  const smtp = getSmtpConfig(settings);
+
+  if (!smtp.host || !smtp.user || !smtp.pass) {
+    await marcarEmailLogErro(
+      dedupeKey,
+      "SMTP incompleto. Configure EMAIL_HOST, EMAIL_USER e EMAIL_PASS no Railway.",
+    );
+    return { sent: false, reason: "smtp_incompleto" };
+  }
+
+  const transporter = nodemailer.createTransport({
+    host: smtp.host,
+    port: smtp.port,
+    secure: smtp.secure,
+    auth: {
+      user: smtp.user,
+      pass: smtp.pass,
+    },
+  });
+
+  try {
+    const result = await transporter.sendMail({
+      from: `"${settings.remetente_nome || "Facilita MEI"}" <${settings.remetente_email || "Atendimento@facilitameibr.com.br"}>`,
+      to,
+      subject,
+      text,
+      html,
+    });
+
+    await dbPool.execute(
+      `UPDATE email_logs
+       SET status = 'enviado',
+           provider_message_id = :messageId,
+           erro_mensagem = NULL,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE dedupe_key = :dedupeKey`,
+      { dedupeKey, messageId: result.messageId || null },
+    );
+
+    return { sent: true, messageId: result.messageId || null };
+  } catch (error) {
+    await marcarEmailLogErro(dedupeKey, error.message || "Erro ao enviar e-mail.");
+    console.error("Erro ao enviar e-mail automatico:", error);
+    return { sent: false, reason: "erro_envio", error: error.message };
+  }
+}
+
+async function buscarDadosAssinaturaParaEmail(subscriptionId) {
+  const [rows] = await dbPool.execute(
+    `SELECT
+       s.id AS subscription_id,
+       s.status AS subscription_status,
+       s.valor AS subscription_value,
+       s.metodo_pagamento,
+       s.data_inicio,
+       s.data_proxima_cobranca,
+       u.id AS user_id,
+       u.nome AS user_name,
+       u.email,
+       u.telefone,
+       p.id AS plan_id,
+       p.nome AS plan_name,
+       p.descricao AS plan_description,
+       p.valor AS plan_value
+     FROM subscriptions s
+     JOIN users u ON u.id = s.user_id
+     LEFT JOIN plans p ON p.id = s.plan_id
+     WHERE s.id = :subscriptionId
+     LIMIT 1`,
+    { subscriptionId },
+  );
+
+  return rows[0] || null;
+}
+
+function montarHtmlAssinatura({ nome, plano, valor, status, proximaCobranca, assinatura, avisoRodape }) {
+  return `
+    <div style="font-family:Arial,sans-serif;background:#080806;color:#fff8e8;padding:28px">
+      <div style="max-width:640px;margin:0 auto;border:1px solid #7a5a18;border-radius:16px;padding:28px;background:#14110b">
+        <h1 style="margin:0 0 12px;color:#ffd66b">Assinatura recebida</h1>
+        <p>Ola, <strong>${escapeEmailHtml(nome)}</strong>.</p>
+        <p>Sua assinatura na Facilita MEI foi registrada com sucesso.</p>
+        <div style="margin:22px 0;padding:18px;border-radius:12px;background:#211a10;border:1px solid #5f4615">
+          <p><strong>Plano:</strong> ${escapeEmailHtml(plano)}</p>
+          <p><strong>Valor:</strong> ${escapeEmailHtml(valor)}</p>
+          <p><strong>Status:</strong> ${escapeEmailHtml(status)}</p>
+          <p><strong>Proxima cobranca:</strong> ${escapeEmailHtml(proximaCobranca)}</p>
+        </div>
+        <p>Nossa equipe acompanhara seu cadastro e os proximos passos do atendimento.</p>
+        <p style="white-space:pre-line">${escapeEmailHtml(assinatura || "")}</p>
+        <p style="font-size:12px;color:#c8b98c">${escapeEmailHtml(avisoRodape || "")}</p>
+      </div>
+    </div>
+  `;
+}
+
+async function enviarEmailAssinaturaCriada(subscriptionId) {
+  const dados = await buscarDadosAssinaturaParaEmail(subscriptionId);
+  if (!dados?.email) return { sent: false, reason: "assinatura_sem_email" };
+
+  const settings = await getEmailSettings();
+  if (!Number(settings.enviar_avisos)) return { sent: false, reason: "avisos_desativados" };
+
+  const nome = dados.user_name || "cliente";
+  const plano = dados.plan_name || dados.plan_id || "Plano Facilita MEI";
+  const valor = formatMoneyBR(dados.subscription_value || dados.plan_value);
+  const proximaCobranca = dados.data_proxima_cobranca
+    ? new Date(dados.data_proxima_cobranca).toLocaleDateString("pt-BR")
+    : "Aguardando confirmacao";
+  const status = dados.subscription_status || "pending";
+  const subject = "Sua assinatura Facilita MEI foi recebida";
+  const text = [
+    `Ola, ${nome}.`,
+    "",
+    "Sua assinatura na Facilita MEI foi registrada com sucesso.",
+    "",
+    `Plano: ${plano}`,
+    `Valor: ${valor}`,
+    `Status: ${status}`,
+    `Proxima cobranca: ${proximaCobranca}`,
+    "",
+    "Nossa equipe acompanhara seu cadastro e os proximos passos do atendimento.",
+    "",
+    settings.assinatura_padrao || "Atenciosamente,\nFACILITA ASSESSORIA E CONSULTORIA CONTABIL LTDA",
+    "",
+    settings.aviso_rodape || "",
+  ].join("\n");
+
+  return enviarEmailSistema({
+    dedupeKey: `assinatura-criada:${subscriptionId}`,
+    tipo: "assinatura_criada",
+    userId: dados.user_id,
+    subscriptionId,
+    to: dados.email,
+    subject,
+    text,
+    html: montarHtmlAssinatura({
+      nome,
+      plano,
+      valor,
+      status,
+      proximaCobranca,
+      assinatura: settings.assinatura_padrao,
+      avisoRodape: settings.aviso_rodape,
+    }),
+  });
+}
+
+async function buscarDadosPagamentoParaEmail(paymentId) {
+  const [rows] = await dbPool.execute(
+    `SELECT
+       pay.id AS payment_id,
+       pay.status AS payment_status,
+       pay.valor AS payment_value,
+       pay.data_pagamento,
+       pay.gateway_payment_id,
+       s.id AS subscription_id,
+       s.status AS subscription_status,
+       s.data_proxima_cobranca,
+       u.id AS user_id,
+       u.nome AS user_name,
+       u.email,
+       p.id AS plan_id,
+       p.nome AS plan_name,
+       p.valor AS plan_value
+     FROM payments pay
+     LEFT JOIN subscriptions s ON s.id = pay.subscription_id
+     LEFT JOIN users u ON u.id = pay.user_id
+     LEFT JOIN plans p ON p.id = s.plan_id
+     WHERE pay.id = :paymentId
+     LIMIT 1`,
+    { paymentId },
+  );
+
+  return rows[0] || null;
+}
+
+async function enviarEmailPagamentoAprovado(paymentId) {
+  const dados = await buscarDadosPagamentoParaEmail(paymentId);
+  if (!dados?.email || dados.payment_status !== "approved") return { sent: false, reason: "pagamento_nao_aprovado" };
+
+  const settings = await getEmailSettings();
+  if (!Number(settings.enviar_avisos)) return { sent: false, reason: "avisos_desativados" };
+
+  const nome = dados.user_name || "cliente";
+  const plano = dados.plan_name || dados.plan_id || "Plano Facilita MEI";
+  const valor = formatMoneyBR(dados.payment_value || dados.plan_value);
+  const dataPagamento = dados.data_pagamento
+    ? new Date(dados.data_pagamento).toLocaleDateString("pt-BR")
+    : new Date().toLocaleDateString("pt-BR");
+  const subject = "Pagamento aprovado - Facilita MEI";
+  const text = [
+    `Ola, ${nome}.`,
+    "",
+    "Recebemos a confirmacao do seu pagamento.",
+    "",
+    `Plano: ${plano}`,
+    `Valor: ${valor}`,
+    `Data do pagamento: ${dataPagamento}`,
+    dados.gateway_payment_id ? `ID do pagamento: ${dados.gateway_payment_id}` : "",
+    "",
+    "Seu atendimento continuara normalmente pela equipe Facilita MEI.",
+    "",
+    settings.assinatura_padrao || "Atenciosamente,\nFACILITA ASSESSORIA E CONSULTORIA CONTABIL LTDA",
+    "",
+    settings.aviso_rodape || "",
+  ].filter(Boolean).join("\n");
+
+  return enviarEmailSistema({
+    dedupeKey: `pagamento-aprovado:${paymentId}`,
+    tipo: "pagamento_aprovado",
+    userId: dados.user_id,
+    subscriptionId: dados.subscription_id,
+    paymentId,
+    to: dados.email,
+    subject,
+    text,
+    html: montarHtmlAssinatura({
+      nome,
+      plano,
+      valor,
+      status: "Pagamento aprovado",
+      proximaCobranca: dados.data_proxima_cobranca
+        ? new Date(dados.data_proxima_cobranca).toLocaleDateString("pt-BR")
+        : "Conforme ciclo do plano",
+      assinatura: settings.assinatura_padrao,
+      avisoRodape: settings.aviso_rodape,
+    }),
+  });
+}
+
 app.get("/api/admin/settings/export-data", requireAdminSession, async (_request, response) => {
   try {
     const [
@@ -3854,6 +4177,9 @@ app.post("/api/subscriptions/card", async (request, response) => {
 
     const customerId = await upsertCustomer({ userId, name, email, phone, document });
     const localSubscriptionId = await saveSubscriptionRecord({ customerId, plan, subscriptionData: data, paymentMethod: "card" });
+    enviarEmailAssinaturaCriada(localSubscriptionId).catch((error) => {
+      console.error("Falha ao disparar e-mail de assinatura:", error);
+    });
 
     response.json({
       customerId,
@@ -3944,6 +4270,9 @@ app.post("/api/subscriptions/pix-auto", async (request, response) => {
 
     const customerId = await upsertCustomer({ userId, name, email, phone, document });
     const localSubscriptionId = await saveSubscriptionRecord({ customerId, plan, subscriptionData: data, paymentMethod: "pix_auto" });
+    enviarEmailAssinaturaCriada(localSubscriptionId).catch((error) => {
+      console.error("Falha ao disparar e-mail de assinatura:", error);
+    });
 
     response.json({
       customerId,
@@ -4119,7 +4448,10 @@ app.post("/api/subscription", async (request, response) => {
     }
 
     const customerId = await upsertCustomer({ userId: null, name, email, phone, document: "" });
-    await saveSubscriptionRecord({ customerId, plan, subscriptionData: data, paymentMethod: "mercado_pago" });
+    const localSubscriptionId = await saveSubscriptionRecord({ customerId, plan, subscriptionData: data, paymentMethod: "mercado_pago" });
+    enviarEmailAssinaturaCriada(localSubscriptionId).catch((error) => {
+      console.error("Falha ao disparar e-mail de assinatura:", error);
+    });
 
     response.json({
       subscriptionId: data.id,
@@ -4153,7 +4485,12 @@ app.post("/api/webhooks/mercadopago", async (request, response) => {
       const paymentData = await payment.get({ id: paymentId });
 
       storePayment(paymentData);
-      await updatePaymentStatus(paymentData);
+      const localPaymentId = await updatePaymentStatus(paymentData);
+      if (localPaymentId && paymentData.status === "approved") {
+        enviarEmailPagamentoAprovado(localPaymentId).catch((error) => {
+          console.error("Falha ao disparar e-mail de pagamento aprovado:", error);
+        });
+      }
 
       console.log("Pagamento Mercado Pago recebido:", {
         id: paymentData.id,

@@ -222,6 +222,29 @@ CREATE TABLE IF NOT EXISTS email_settings (
   updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS email_logs (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  dedupe_key VARCHAR(190) NOT NULL,
+  user_id BIGINT UNSIGNED NULL,
+  subscription_id BIGINT UNSIGNED NULL,
+  payment_id BIGINT UNSIGNED NULL,
+  tipo VARCHAR(80) NOT NULL,
+  destinatario VARCHAR(180) NOT NULL,
+  assunto VARCHAR(180) NOT NULL,
+  status VARCHAR(40) NOT NULL DEFAULT 'preparando',
+  provider_message_id VARCHAR(180) NULL,
+  erro_mensagem TEXT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY email_logs_dedupe_unique (dedupe_key),
+  KEY email_logs_user_idx (user_id),
+  KEY email_logs_subscription_idx (subscription_id),
+  KEY email_logs_payment_idx (payment_id),
+  CONSTRAINT email_logs_user_fk FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL,
+  CONSTRAINT email_logs_subscription_fk FOREIGN KEY (subscription_id) REFERENCES subscriptions(id) ON DELETE SET NULL,
+  CONSTRAINT email_logs_payment_fk FOREIGN KEY (payment_id) REFERENCES payments(id) ON DELETE SET NULL
+);
+
 CREATE TABLE IF NOT EXISTS customer_contract_events (
   id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   contract_id BIGINT UNSIGNED NULL,
