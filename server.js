@@ -2155,6 +2155,7 @@ app.get("/api/admin/reports", requireAdminSession, async (_request, response) =>
 app.get("/api/admin/settings", requireAdminSession, async (_request, response) => {
   try {
     await dbPool.query("SELECT 1");
+    await ensureWhatsappSettingsTable();
     const hasValue = (value) => Boolean(String(value || "").trim());
     const databaseName = process.env.DB_NAME || "facilita_modern";
     const storageQuotaMb = Number(process.env.DB_STORAGE_QUOTA_MB || 10240);
@@ -2183,6 +2184,7 @@ app.get("/api/admin/settings", requireAdminSession, async (_request, response) =
          WHERE table_schema = DATABASE()`,
       ),
     ]);
+    const whatsappSettings = await getWhatsappSettings();
 
     const stats = statsRows[0] || {};
     const bytesUsed = Number(storageRows[0]?.bytes_used || 0);
@@ -2220,14 +2222,133 @@ app.get("/api/admin/settings", requireAdminSession, async (_request, response) =
       },
       integrations: {
         mercadoPago: hasValue(process.env.MERCADO_PAGO_ACCESS_TOKEN) && hasValue(process.env.MERCADO_PAGO_PUBLIC_KEY),
-        whatsapp: hasValue(process.env.WHATSAPP_PHONE) || hasValue(process.env.WHATSAPP_URL),
+        whatsapp:
+          hasValue(whatsappSettings.suporte_numero) ||
+          hasValue(whatsappSettings.atendimento_numero) ||
+          hasValue(whatsappSettings.abrir_mei_numero) ||
+          hasValue(whatsappSettings.plataforma_numero) ||
+          hasValue(process.env.WHATSAPP_PHONE) ||
+          hasValue(process.env.WHATSAPP_URL),
         email: hasValue(process.env.EMAIL_HOST) && hasValue(process.env.EMAIL_USER),
         webhooks: hasValue(process.env.MERCADO_PAGO_WEBHOOK_SECRET),
       },
+      whatsapp: whatsappSettings,
     });
   } catch (error) {
     console.error(error);
     response.status(500).json({ error: "Erro ao carregar configuracoes." });
+  }
+});
+
+let whatsappSettingsTableReady = false;
+
+async function ensureWhatsappSettingsTable() {
+  if (whatsappSettingsTableReady) return;
+
+  await dbPool.execute(`
+    CREATE TABLE IF NOT EXISTS whatsapp_settings (
+      id TINYINT UNSIGNED PRIMARY KEY DEFAULT 1,
+      suporte_numero VARCHAR(30) NULL,
+      atendimento_numero VARCHAR(30) NULL,
+      abrir_mei_numero VARCHAR(30) NULL,
+      plataforma_numero VARCHAR(30) NULL,
+      lembretes_ativos TINYINT(1) NOT NULL DEFAULT 0,
+      lembretes_mensagem_padrao TEXT NULL,
+      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    )
+  `);
+
+  await dbPool.execute(
+    `INSERT INTO whatsapp_settings
+      (id, suporte_numero, atendimento_numero, abrir_mei_numero, plataforma_numero, lembretes_ativos, lembretes_mensagem_padrao)
+     VALUES
+      (1, NULL, NULL, NULL, NULL, 0, 'Ola {{cliente_nome}}, passando para lembrar sobre sua assinatura Facilita MEI.')
+     ON DUPLICATE KEY UPDATE id = id`,
+  );
+
+  whatsappSettingsTableReady = true;
+}
+
+async function getWhatsappSettings() {
+  await ensureWhatsappSettingsTable();
+  const [rows] = await dbPool.execute(
+    `SELECT id, suporte_numero, atendimento_numero, abrir_mei_numero, plataforma_numero,
+            lembretes_ativos, lembretes_mensagem_padrao, updated_at
+     FROM whatsapp_settings
+     WHERE id = 1
+     LIMIT 1`,
+  );
+
+  return rows[0] || {
+    id: 1,
+    suporte_numero: null,
+    atendimento_numero: null,
+    abrir_mei_numero: null,
+    plataforma_numero: null,
+    lembretes_ativos: 0,
+    lembretes_mensagem_padrao: null,
+    updated_at: null,
+  };
+}
+
+function normalizeOptionalPhone(value) {
+  const digits = normalizeDigits(value || "");
+  if (!digits) return null;
+  if (digits.length < 10 || digits.length > 13) {
+    const error = new Error("Informe numeros de WhatsApp com DDD. Use apenas numeros.");
+    error.status = 400;
+    throw error;
+  }
+  return digits;
+}
+
+app.get("/api/admin/settings/whatsapp", requireAdminSession, async (_request, response) => {
+  try {
+    response.json({ settings: await getWhatsappSettings() });
+  } catch (error) {
+    console.error(error);
+    response.status(500).json({ error: "Erro ao carregar configuracao de WhatsApp." });
+  }
+});
+
+app.patch("/api/admin/settings/whatsapp", requireAdminSession, async (request, response) => {
+  try {
+    await ensureWhatsappSettingsTable();
+    const body = request.body || {};
+    const settings = {
+      suporteNumero: normalizeOptionalPhone(body.suporte_numero),
+      atendimentoNumero: normalizeOptionalPhone(body.atendimento_numero),
+      abrirMeiNumero: normalizeOptionalPhone(body.abrir_mei_numero),
+      plataformaNumero: normalizeOptionalPhone(body.plataforma_numero),
+      lembretesAtivos: 0,
+      mensagemPadrao: String(body.lembretes_mensagem_padrao || "").trim() || null,
+    };
+
+    await dbPool.execute(
+      `INSERT INTO whatsapp_settings
+        (id, suporte_numero, atendimento_numero, abrir_mei_numero, plataforma_numero, lembretes_ativos, lembretes_mensagem_padrao)
+       VALUES
+        (1, :suporteNumero, :atendimentoNumero, :abrirMeiNumero, :plataformaNumero, :lembretesAtivos, :mensagemPadrao)
+       ON DUPLICATE KEY UPDATE
+        suporte_numero = VALUES(suporte_numero),
+        atendimento_numero = VALUES(atendimento_numero),
+        abrir_mei_numero = VALUES(abrir_mei_numero),
+        plataforma_numero = VALUES(plataforma_numero),
+        lembretes_ativos = VALUES(lembretes_ativos),
+        lembretes_mensagem_padrao = VALUES(lembretes_mensagem_padrao),
+        updated_at = CURRENT_TIMESTAMP`,
+      settings,
+    );
+
+    response.json({
+      ok: true,
+      message: "Configuracao de WhatsApp salva.",
+      settings: await getWhatsappSettings(),
+    });
+  } catch (error) {
+    console.error(error);
+    response.status(error.status || 500).json({ error: error.message || "Erro ao salvar configuracao de WhatsApp." });
   }
 });
 

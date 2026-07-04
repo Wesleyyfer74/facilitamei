@@ -3143,6 +3143,42 @@ td small {
   border-color: var(--gold-strong);
 }
 
+.drawer-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.whatsapp-settings-form .panel {
+  display: grid;
+  gap: 16px;
+}
+
+.whatsapp-config-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.whatsapp-config-grid label small {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 600;
+  line-height: 1.45;
+}
+
+.whatsapp-automation-panel {
+  position: relative;
+  border-style: dashed;
+  background:
+    radial-gradient(circle at 88% 0%, rgba(240, 191, 90, 0.12), transparent 32%),
+    rgba(255, 255, 255, 0.025);
+}
+
+.whatsapp-automation-panel > .settings-status {
+  justify-self: start;
+}
+
 .form-grid {
   display: grid;
   gap: 14px;

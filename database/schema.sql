@@ -192,6 +192,18 @@ CREATE TABLE IF NOT EXISTS contract_reminder_settings (
   updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS whatsapp_settings (
+  id TINYINT UNSIGNED PRIMARY KEY DEFAULT 1,
+  suporte_numero VARCHAR(30) NULL,
+  atendimento_numero VARCHAR(30) NULL,
+  abrir_mei_numero VARCHAR(30) NULL,
+  plataforma_numero VARCHAR(30) NULL,
+  lembretes_ativos TINYINT(1) NOT NULL DEFAULT 0,
+  lembretes_mensagem_padrao TEXT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
 CREATE TABLE IF NOT EXISTS customer_contract_events (
   id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   contract_id BIGINT UNSIGNED NULL,
@@ -239,6 +251,13 @@ ON DUPLICATE KEY UPDATE
   canal_email = VALUES(canal_email),
   canal_whatsapp = VALUES(canal_whatsapp),
   mensagem_padrao = VALUES(mensagem_padrao);
+
+INSERT INTO whatsapp_settings
+  (id, suporte_numero, atendimento_numero, abrir_mei_numero, plataforma_numero, lembretes_ativos, lembretes_mensagem_padrao)
+VALUES
+  (1, NULL, NULL, NULL, NULL, 0, 'Ola {{cliente_nome}}, passando para lembrar sobre sua assinatura Facilita MEI.')
+ON DUPLICATE KEY UPDATE
+  id = id;
 
 INSERT INTO plans
   (id, nome, descricao, valor, frequencia, tipo_frequencia, servico, mercado_pago_plan_id, tipo_cobranca, ativo, ordem)

@@ -1682,6 +1682,95 @@ async function loadSettings() {
   setStatus("");
 }
 
+function formatPhoneForInput(value = "") {
+  return String(value || "").replace(/\D/g, "");
+}
+
+async function openWhatsappSettings() {
+  setStatus("Carregando configuracao de WhatsApp...");
+  const data = await apiRequest("/api/admin/settings/whatsapp");
+  const settings = data.settings || {};
+
+  openDrawer(`
+    <div class="drawer-content">
+      <div>
+        <p class="eyebrow">Integracao</p>
+        <h2>WhatsApp</h2>
+        <p>Configure os numeros usados nos atendimentos da Facilita. Voce pode repetir o mesmo numero ou separar por finalidade.</p>
+      </div>
+
+      <form class="form-grid whatsapp-settings-form" data-whatsapp-settings-form>
+        <article class="panel">
+          <h3>Numeros de atendimento</h3>
+          <div class="whatsapp-config-grid">
+            <label>
+              Suporte
+              <input name="suporte_numero" inputmode="numeric" autocomplete="tel" placeholder="Ex: 5567999999999" value="${escapeHtml(formatPhoneForInput(settings.suporte_numero))}" />
+              <small>Usado para ajuda tecnica, documentos, DAS e demandas da area do cliente.</small>
+            </label>
+            <label>
+              Atendimento ao cliente
+              <input name="atendimento_numero" inputmode="numeric" autocomplete="tel" placeholder="Ex: 5567999999999" value="${escapeHtml(formatPhoneForInput(settings.atendimento_numero))}" />
+              <small>Canal principal de relacionamento com clientes da plataforma.</small>
+            </label>
+            <label>
+              Abrir MEI
+              <input name="abrir_mei_numero" inputmode="numeric" autocomplete="tel" placeholder="Ex: 5567999999999" value="${escapeHtml(formatPhoneForInput(settings.abrir_mei_numero))}" />
+              <small>Recebe os leads de quem clicou em abrir MEI no site.</small>
+            </label>
+            <label>
+              Plataforma
+              <input name="plataforma_numero" inputmode="numeric" autocomplete="tel" placeholder="Ex: 5567999999999" value="${escapeHtml(formatPhoneForInput(settings.plataforma_numero))}" />
+              <small>Canal geral para links e botoes internos da area do cliente.</small>
+            </label>
+          </div>
+        </article>
+
+        <article class="panel whatsapp-automation-panel">
+          <div>
+            <h3>Mensagens automaticas</h3>
+            <p>Estrutura preparada para lembretes responsaveis por cliente. O disparo automatico sera habilitado em uma etapa futura.</p>
+          </div>
+          <span class="settings-status warning">Em breve</span>
+          <label>
+            Mensagem padrao futura
+            <textarea name="lembretes_mensagem_padrao" rows="5" placeholder="Ex: Ola {{cliente_nome}}, passando para lembrar...">${escapeHtml(settings.lembretes_mensagem_padrao || "")}</textarea>
+          </label>
+        </article>
+
+        <div class="drawer-helper">
+          Por enquanto esta tela salva apenas os numeros oficiais. Nenhuma mensagem automatica sera enviada pelo sistema nesta etapa.
+        </div>
+
+        <div class="drawer-actions">
+          <button class="gold-button" type="submit">Salvar WhatsApp</button>
+          <button class="ghost-button" type="button" data-close-drawer>Cancelar</button>
+        </div>
+      </form>
+    </div>
+  `);
+  setStatus("");
+}
+
+async function saveWhatsappSettings(form) {
+  const submitButton = form.querySelector("[type='submit']");
+  const payload = Object.fromEntries(new FormData(form).entries());
+  submitButton.disabled = true;
+  setStatus("Salvando configuracao de WhatsApp...");
+
+  try {
+    const data = await apiRequest("/api/admin/settings/whatsapp", {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    });
+    setStatus(data.message || "Configuracao de WhatsApp salva.");
+    closeDrawer();
+    await loadSettings();
+  } finally {
+    submitButton.disabled = false;
+  }
+}
+
 async function exportSettingsData() {
   setStatus("Exportando dados reais do banco...");
   const data = await apiRequest("/api/admin/settings/export-data");
@@ -2309,6 +2398,8 @@ document.addEventListener("click", (event) => {
         message: "Consulte o setor de TI.",
       });
       setStatus("Mercado Pago: consulte o setor de TI.");
+    } else if (settingsActionButton.dataset.settingsAction === "WhatsApp") {
+      openWhatsappSettings().catch((error) => setStatus(error.message, "error"));
     } else {
       setStatus(`${settingsActionButton.dataset.settingsAction}: configuracao detalhada sera conectada na proxima etapa.`);
     }
@@ -2329,6 +2420,7 @@ document.addEventListener("submit", (event) => {
   const planForm = event.target.closest("[data-plan-form]");
   const contractTemplateForm = event.target.closest("[data-contract-template-form]");
   const contractReminderForm = event.target.closest("[data-contract-reminder-form]");
+  const whatsappSettingsForm = event.target.closest("[data-whatsapp-settings-form]");
 
   if (createCustomerForm) {
     event.preventDefault();
@@ -2363,6 +2455,11 @@ document.addEventListener("submit", (event) => {
   if (contractReminderForm) {
     event.preventDefault();
     saveContractReminders(contractReminderForm).catch((error) => setStatus(error.message, "error"));
+  }
+
+  if (whatsappSettingsForm) {
+    event.preventDefault();
+    saveWhatsappSettings(whatsappSettingsForm).catch((error) => setStatus(error.message, "error"));
   }
 });
 
