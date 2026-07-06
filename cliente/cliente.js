@@ -459,6 +459,7 @@ function renderDocuments(documents = []) {
     .slice(0, 3)
     .map((document) => {
       const fileUrl = document.arquivo_url || "";
+      const hasObservation = Boolean(String(document.observacao || "").trim());
       const action = fileUrl
         ? `<button type="button" data-download-document="${escapeHtml(fileUrl)}" data-download-name="${escapeHtml(document.titulo || "documento")}">Baixar PDF</button>`
         : `<button type="button" disabled>Sem arquivo</button>`;
@@ -467,6 +468,7 @@ function renderDocuments(documents = []) {
         <article class="document-card">
           <span class="document-icon">${getDocumentIcon(document)}</span>
           <h3>${escapeHtml(document.titulo || document.tipo || "Documento")}</h3>
+          ${hasObservation ? `<strong class="document-observation-badge">Documento com observacoes</strong>` : ""}
           <p>${escapeHtml(document.observacao || "Documento cadastrado no sistema da Facilita.")}</p>
           <div class="document-meta">
             <span>Emitido em</span>
@@ -487,7 +489,13 @@ function renderDocuments(documents = []) {
           const fileUrl = document.arquivo_url || "";
           return `
             <tr>
-              <td><span class="table-document-icon">${getDocumentIcon(document)}</span>${escapeHtml(document.titulo || document.tipo || "Documento")}</td>
+              <td>
+                <span class="table-document-icon">${getDocumentIcon(document)}</span>
+                <span>
+                  ${escapeHtml(document.titulo || document.tipo || "Documento")}
+                  ${String(document.observacao || "").trim() ? `<small class="document-observation-inline">Documento com observacoes</small>` : ""}
+                </span>
+              </td>
               <td>${formatDate(document.data_emissao || document.created_at)}</td>
               <td><span class="status-pill">${escapeHtml(statusLabel(document.status))}</span></td>
               <td>${fileUrl ? `<button type="button" class="document-download-link" data-download-document="${escapeHtml(fileUrl)}" data-download-name="${escapeHtml(document.titulo || "documento")}">PDF</button>` : "-"}</td>

@@ -2251,8 +2251,9 @@ function openUploadDocument(customerId) {
           <small>Limite de 12 MB. O arquivo ficara disponivel na aba Documentos do cliente.</small>
         </label>
         <label>
-          Observacao interna ou descricao para o cliente
-          <textarea name="observacao" rows="4" maxlength="1000" placeholder="Opcional"></textarea>
+          Observacao para o cliente
+          <textarea name="observacao" rows="4" maxlength="1000" placeholder="Opcional. Ex.: Documento atualizado, validade, orientacao ou proximo passo."></textarea>
+          <small>Se preencher, o cliente vera o aviso "Documento com observacoes" junto do arquivo.</small>
         </label>
         <div class="drawer-helper">
           O documento sera salvo no banco e aparecera automaticamente para o cliente baixar.

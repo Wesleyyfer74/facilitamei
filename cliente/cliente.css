@@ -1833,6 +1833,22 @@ button.settings-outline-action {
   line-height: 1.45;
 }
 
+.document-observation-badge {
+  width: max-content;
+  max-width: 100%;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 11px;
+  border: 1px solid rgba(255, 217, 120, 0.34);
+  border-radius: 999px;
+  color: var(--gold-strong);
+  background: rgba(240, 191, 90, 0.1);
+  font-size: 0.78rem;
+  line-height: 1;
+  box-shadow: 0 10px 28px rgba(240, 191, 90, 0.12);
+}
+
 .document-meta {
   display: grid;
   gap: 5px;
@@ -1923,6 +1939,17 @@ button.settings-outline-action {
   display: flex;
   align-items: center;
   gap: 10px;
+}
+
+.documents-history td:first-child > span:last-child {
+  display: grid;
+  gap: 3px;
+}
+
+.document-observation-inline {
+  color: var(--gold-strong);
+  font-size: 0.72rem;
+  font-weight: 800;
 }
 
 .table-document-icon {
