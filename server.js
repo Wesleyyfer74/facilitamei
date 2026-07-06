@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 import dotenv from "dotenv";
 import mysql from "mysql2/promise";
 import nodemailer from "nodemailer";
+import multer from "multer";
 import { MercadoPagoConfig, Preference, Payment } from "mercadopago";
 import { DAS_MEI_FACILITA_CNPJ, gerarDasMei, montarPayloadGerarDasMei } from "./src/services/dasMeiService.js";
 import { gerarTokenSerpro } from "./src/services/serproAuthService.js";
@@ -19,6 +20,25 @@ dotenv.config({ path: path.join(__dirname, ".env") });
 
 const app = express();
 const port = Number(process.env.PORT || 3000);
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 12 * 1024 * 1024 },
+  fileFilter: (_request, file, callback) => {
+    const allowedMimeTypes = new Set([
+      "application/pdf",
+      "image/jpeg",
+      "image/png",
+      "image/webp",
+      "application/msword",
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      "application/vnd.ms-excel",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    ]);
+
+    if (allowedMimeTypes.has(file.mimetype)) return callback(null, true);
+    return callback(new Error("Tipo de arquivo nao permitido. Envie PDF, imagem, DOCX ou XLSX."));
+  },
+});
 const localUrl = `http://localhost:${port}`;
 const railwayPublicUrl = process.env.RAILWAY_PUBLIC_DOMAIN ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}` : "";
 const frontendUrl = process.env.FRONTEND_URL || process.env.SITE_URL || localUrl;
@@ -761,10 +781,38 @@ function parseDasMeiDados(dados) {
   }
 }
 
+let customerDocumentsReady = false;
 let customerDocumentFilesReady = false;
+
+async function ensureCustomerDocumentsTable() {
+  if (customerDocumentsReady) return;
+
+  await dbPool.execute(`
+    CREATE TABLE IF NOT EXISTS customer_documents (
+      id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+      user_id BIGINT UNSIGNED NOT NULL,
+      titulo VARCHAR(160) NOT NULL,
+      tipo VARCHAR(80) NOT NULL DEFAULT 'documento',
+      status VARCHAR(40) NOT NULL DEFAULT 'pendente',
+      arquivo_url TEXT NULL,
+      observacao TEXT NULL,
+      data_emissao DATE NULL,
+      data_assinatura DATETIME NULL,
+      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      KEY customer_documents_user_idx (user_id),
+      KEY customer_documents_status_idx (status),
+      KEY customer_documents_tipo_idx (tipo),
+      CONSTRAINT customer_documents_user_fk FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    )
+  `);
+
+  customerDocumentsReady = true;
+}
 
 async function ensureCustomerDocumentFilesTable() {
   if (customerDocumentFilesReady) return;
+  await ensureCustomerDocumentsTable();
 
   await dbPool.execute(`
     CREATE TABLE IF NOT EXISTS customer_document_files (
@@ -787,6 +835,18 @@ function formatDasCompetencia(periodoApuracao = "") {
   const period = String(periodoApuracao || "");
   if (!/^\d{6}$/.test(period)) return period || "DAS-MEI";
   return `${period.slice(4, 6)}/${period.slice(0, 4)}`;
+}
+
+function sanitizeDownloadFileName(fileName = "documento") {
+  const cleaned = String(fileName || "documento")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-zA-Z0-9._-]+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "")
+    .slice(0, 140);
+
+  return cleaned || "documento";
 }
 
 function parseSerproDate(value = "") {
@@ -1624,6 +1684,7 @@ app.get("/api/admin/customers", requireAdminSession, async (request, response) =
 app.get("/api/admin/customers/:id", requireAdminSession, async (request, response) => {
   try {
     const userId = Number(request.params.id);
+    await ensureCustomerDocumentsTable();
     const [[users], [subscriptions], [payments]] = await Promise.all([
       dbPool.execute("SELECT * FROM users WHERE id = :userId LIMIT 1", { userId }),
       dbPool.execute(
@@ -1664,6 +1725,117 @@ app.get("/api/admin/customers/:id", requireAdminSession, async (request, respons
   } catch (error) {
     console.error(error);
     response.status(500).json({ error: "Erro ao carregar cliente." });
+  }
+});
+
+app.post(
+  "/api/admin/customers/:id/documents",
+  requireAdminSession,
+  upload.single("documento"),
+  async (request, response) => {
+    try {
+      await ensureCustomerDocumentFilesTable();
+
+      const userId = Number(request.params.id);
+      if (!Number.isFinite(userId) || userId <= 0) {
+        return response.status(400).json({ error: "Cliente invalido." });
+      }
+
+      const [userRows] = await dbPool.execute("SELECT id FROM users WHERE id = :userId LIMIT 1", { userId });
+      if (!userRows[0]) return response.status(404).json({ error: "Cliente nao encontrado." });
+
+      if (!request.file) {
+        return response.status(400).json({ error: "Selecione um arquivo para enviar." });
+      }
+
+      const titulo = String(request.body?.titulo || "").trim().slice(0, 160) || request.file.originalname || "Documento";
+      const tipo = String(request.body?.tipo || "documento").trim().slice(0, 80) || "documento";
+      const observacao = String(request.body?.observacao || "").trim().slice(0, 1000) || null;
+      const status = String(request.body?.status || "aprovado").trim().slice(0, 40) || "aprovado";
+      const fileName = sanitizeDownloadFileName(request.file.originalname || `${titulo}.pdf`);
+      const base64Data = request.file.buffer.toString("base64");
+
+      const [insertResult] = await dbPool.execute(
+        `INSERT INTO customer_documents
+          (user_id, titulo, tipo, status, arquivo_url, observacao, data_emissao)
+         VALUES
+          (:userId, :titulo, :tipo, :status, NULL, :observacao, CURDATE())`,
+        { userId, titulo, tipo, status, observacao },
+      );
+
+      const documentId = insertResult.insertId;
+      const fileUrl = `/api/client/documents/${documentId}/download`;
+
+      await dbPool.execute(
+        `INSERT INTO customer_document_files (document_id, file_name, mime_type, base64_data)
+         VALUES (:documentId, :fileName, :mimeType, :base64Data)`,
+        {
+          documentId,
+          fileName,
+          mimeType: request.file.mimetype || "application/octet-stream",
+          base64Data,
+        },
+      );
+
+      await dbPool.execute(
+        `UPDATE customer_documents
+         SET arquivo_url = :fileUrl,
+             updated_at = CURRENT_TIMESTAMP
+         WHERE id = :documentId`,
+        { documentId, fileUrl },
+      );
+
+      response.status(201).json({
+        ok: true,
+        document: {
+          id: documentId,
+          user_id: userId,
+          titulo,
+          tipo,
+          status,
+          arquivo_url: fileUrl,
+          observacao,
+          file_name: fileName,
+        },
+      });
+    } catch (error) {
+      console.error("Erro ao enviar documento do cliente:", error);
+      response.status(500).json({ error: error.message || "Erro ao enviar documento." });
+    }
+  },
+);
+
+app.get("/api/admin/documents/:documentId/download", requireAdminSession, async (request, response) => {
+  try {
+    await ensureCustomerDocumentFilesTable();
+
+    const documentId = Number(request.params.documentId);
+    if (!Number.isFinite(documentId) || documentId <= 0) {
+      return response.status(400).json({ error: "Documento invalido." });
+    }
+
+    const [rows] = await dbPool.execute(
+      `SELECT d.id, d.titulo, f.file_name, f.mime_type, f.base64_data
+       FROM customer_documents d
+       JOIN customer_document_files f ON f.document_id = d.id
+       WHERE d.id = :documentId
+       LIMIT 1`,
+      { documentId },
+    );
+
+    const document = rows[0];
+    if (!document) return response.status(404).json({ error: "Documento nao encontrado." });
+
+    const buffer = Buffer.from(String(document.base64_data || ""), "base64");
+    response.setHeader("Content-Type", document.mime_type || "application/octet-stream");
+    response.setHeader(
+      "Content-Disposition",
+      `inline; filename="${String(document.file_name || "documento").replace(/"/g, "")}"`,
+    );
+    response.send(buffer);
+  } catch (error) {
+    console.error("Erro ao baixar documento no admin:", error);
+    response.status(500).json({ error: "Erro ao baixar documento." });
   }
 });
 
@@ -4537,6 +4709,15 @@ app.get(["/areaadmin", "/areaadmin/"], (_request, response) => {
 
 app.get(["/inicio", "/servicos", "/planos", "/checkout", "/atendimento"], (_request, response) => {
   response.sendFile(path.join(__dirname, "index.html"));
+});
+
+app.use((error, _request, response, next) => {
+  if (!error) return next();
+  if (error instanceof multer.MulterError || /arquivo/i.test(error.message || "")) {
+    const message = error.code === "LIMIT_FILE_SIZE" ? "Arquivo acima do limite de 12 MB." : error.message;
+    return response.status(400).json({ error: message || "Erro no upload do arquivo." });
+  }
+  return next(error);
 });
 
 app.use("/api", (_request, response) => {

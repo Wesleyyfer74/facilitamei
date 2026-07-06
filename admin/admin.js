@@ -645,7 +645,7 @@ function renderCustomerPreview(data) {
         ${statusPill(document.status || "pendente")}
         ${
           document.arquivo_url
-            ? `<a class="icon-mini-button" href="${escapeHtml(document.arquivo_url)}" target="_blank" rel="noopener" aria-label="Abrir documento">+</a>`
+            ? `<button class="icon-mini-button" type="button" data-admin-download-document="${document.id}" data-file-name="${escapeHtml(document.titulo || "documento")}" aria-label="Baixar documento">${iconSvg("download")}</button>`
             : ""
         }
       </div>
@@ -745,7 +745,7 @@ function renderCustomerPreview(data) {
             <article class="panel compact-panel">
               <div class="panel-title-row">
                 <h4>Documentos e Contratos</h4>
-                <button class="ghost-button compact" type="button">Ver todos</button>
+                <button class="gold-button compact" type="button" data-upload-document="${customer.id}">Enviar documento</button>
               </div>
               <div class="document-list">
                 ${
@@ -2209,6 +2209,145 @@ async function openCustomer(customerId) {
   }
 }
 
+function openUploadDocument(customerId) {
+  const customer = customersCache.find((item) => Number(item.id) === Number(customerId));
+  openDrawer(`
+    <div class="drawer-content">
+      <div>
+        <p class="eyebrow">Documentos do cliente</p>
+        <h2>Enviar documento</h2>
+        <p>${escapeHtml(customer?.nome || "Selecione o arquivo para disponibilizar na area do cliente.")}</p>
+      </div>
+
+      <form class="form-grid" data-upload-document-form data-customer-id="${escapeHtml(customerId)}" enctype="multipart/form-data">
+        <label>
+          Titulo do documento
+          <input name="titulo" maxlength="160" placeholder="Ex.: Contrato assinado, Certificado Digital, DAS-MEI" required />
+        </label>
+        <div class="form-grid two-cols">
+          <label>
+            Tipo
+            <select name="tipo">
+              <option value="documento">Documento</option>
+              <option value="contrato">Contrato</option>
+              <option value="certificado">Certificado</option>
+              <option value="das">DAS-MEI</option>
+              <option value="nota">Nota fiscal</option>
+              <option value="outro">Outro</option>
+            </select>
+          </label>
+          <label>
+            Status
+            <select name="status">
+              <option value="aprovado">Disponivel</option>
+              <option value="pendente">Pendente</option>
+              <option value="enviado">Enviado</option>
+            </select>
+          </label>
+        </div>
+        <label>
+          Arquivo
+          <input name="documento" type="file" accept=".pdf,.png,.jpg,.jpeg,.webp,.doc,.docx,.xls,.xlsx" required />
+          <small>Limite de 12 MB. O arquivo ficara disponivel na aba Documentos do cliente.</small>
+        </label>
+        <label>
+          Observacao interna ou descricao para o cliente
+          <textarea name="observacao" rows="4" maxlength="1000" placeholder="Opcional"></textarea>
+        </label>
+        <div class="drawer-helper">
+          O documento sera salvo no banco e aparecera automaticamente para o cliente baixar.
+        </div>
+        <div class="drawer-actions">
+          <button class="gold-button" type="submit">Enviar documento</button>
+          <button class="ghost-button" type="button" data-close-drawer>Cancelar</button>
+        </div>
+      </form>
+    </div>
+  `);
+}
+
+async function uploadCustomerDocument(form) {
+  const customerId = form.dataset.customerId;
+  const submitButton = form.querySelector("[type='submit']");
+  const token = getToken();
+  const formData = new FormData(form);
+
+  if (!customerId) throw new Error("Cliente invalido para upload.");
+  if (!formData.get("documento")) throw new Error("Selecione um arquivo.");
+
+  try {
+    if (submitButton) submitButton.disabled = true;
+    setStatus("Enviando documento...");
+
+    const response = await fetch(`${API_BASE}/api/admin/customers/${customerId}/documents`, {
+      method: "POST",
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: formData,
+    });
+
+    const text = await response.text();
+    let data = {};
+    try {
+      data = text ? JSON.parse(text) : {};
+    } catch {
+      throw new Error("A API retornou uma resposta invalida ao enviar o documento.");
+    }
+
+    if (response.status === 401) {
+      clearToken();
+      showLogin();
+      throw new Error(data.error || "Sessao expirada.");
+    }
+
+    if (!response.ok) throw new Error(data.error || "Erro ao enviar documento.");
+
+    closeDrawer();
+    setStatus("Documento enviado para a area do cliente.");
+    await loadCustomerPreview(customerId);
+    renderCustomers(customersCache);
+    refreshNotifications({ silent: true }).catch(() => {});
+  } finally {
+    if (submitButton) submitButton.disabled = false;
+  }
+}
+
+async function downloadAdminDocument(documentId, fileName = "documento") {
+  const token = getToken();
+  if (!documentId) throw new Error("Documento invalido.");
+
+  setStatus("Baixando documento...");
+
+  const response = await fetch(`${API_BASE}/api/admin/documents/${documentId}/download`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+
+  if (response.status === 401) {
+    clearToken();
+    showLogin();
+    throw new Error("Sessao expirada.");
+  }
+
+  if (!response.ok) {
+    let message = "Erro ao baixar documento.";
+    try {
+      const data = await response.json();
+      message = data.error || message;
+    } catch {}
+    throw new Error(message);
+  }
+
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  const contentDisposition = response.headers.get("Content-Disposition") || "";
+  const match = contentDisposition.match(/filename="([^"]+)"/i);
+  link.href = url;
+  link.download = match?.[1] || `${fileName}.pdf`;
+  link.click();
+  URL.revokeObjectURL(url);
+  setStatus("Documento baixado.");
+}
+
 function openPlan(planId) {
   const plan = plansCache.find((item) => item.id === planId);
   if (!plan) return;
@@ -2480,6 +2619,8 @@ document.addEventListener("click", (event) => {
   const selectPlanButton = event.target.closest("[data-select-plan]");
   const deleteButton = event.target.closest("[data-delete-customer]");
   const cancelButton = event.target.closest("[data-cancel-subscription]");
+  const uploadDocumentButton = event.target.closest("[data-upload-document]");
+  const adminDownloadDocumentButton = event.target.closest("[data-admin-download-document]");
   const newCustomerButton = event.target.closest("[data-new-customer]");
   const newPlanButton = event.target.closest("[data-new-plan]");
   const contractBulkButton = event.target.closest("[data-contract-bulk]");
@@ -2513,6 +2654,13 @@ document.addEventListener("click", (event) => {
   if (planButton) openPlan(planButton.dataset.openPlan);
   if (deleteButton) deleteCustomer(deleteButton.dataset.deleteCustomer).catch((error) => setStatus(error.message, "error"));
   if (cancelButton) cancelSubscription(cancelButton.dataset.cancelSubscription).catch((error) => setStatus(error.message, "error"));
+  if (uploadDocumentButton) openUploadDocument(uploadDocumentButton.dataset.uploadDocument);
+  if (adminDownloadDocumentButton) {
+    downloadAdminDocument(
+      adminDownloadDocumentButton.dataset.adminDownloadDocument,
+      adminDownloadDocumentButton.dataset.fileName,
+    ).catch((error) => setStatus(error.message, "error"));
+  }
   if (newCustomerButton) openNewCustomer();
   if (newPlanButton) openNewPlan();
   if (contractBulkButton) generateBulkContracts().catch((error) => setStatus(error.message, "error"));
@@ -2556,6 +2704,7 @@ document.addEventListener("submit", (event) => {
   const contractReminderForm = event.target.closest("[data-contract-reminder-form]");
   const whatsappSettingsForm = event.target.closest("[data-whatsapp-settings-form]");
   const emailSettingsForm = event.target.closest("[data-email-settings-form]");
+  const uploadDocumentForm = event.target.closest("[data-upload-document-form]");
 
   if (createCustomerForm) {
     event.preventDefault();
@@ -2600,6 +2749,11 @@ document.addEventListener("submit", (event) => {
   if (emailSettingsForm) {
     event.preventDefault();
     saveEmailSettings(emailSettingsForm).catch((error) => setStatus(error.message, "error"));
+  }
+
+  if (uploadDocumentForm) {
+    event.preventDefault();
+    uploadCustomerDocument(uploadDocumentForm).catch((error) => setStatus(error.message, "error"));
   }
 });
 
