@@ -24,7 +24,10 @@ const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 12 * 1024 * 1024 },
   fileFilter: (_request, file, callback) => {
+    const originalName = String(file.originalname || "").toLowerCase();
+    const allowedExtensions = [".pdf", ".jpg", ".jpeg", ".png", ".webp", ".doc", ".docx", ".xls", ".xlsx"];
     const allowedMimeTypes = new Set([
+      "application/octet-stream",
       "application/pdf",
       "image/jpeg",
       "image/png",
@@ -35,7 +38,10 @@ const upload = multer({
       "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     ]);
 
-    if (allowedMimeTypes.has(file.mimetype)) return callback(null, true);
+    if (allowedMimeTypes.has(file.mimetype) || allowedExtensions.some((extension) => originalName.endsWith(extension))) {
+      return callback(null, true);
+    }
+
     return callback(new Error("Tipo de arquivo nao permitido. Envie PDF, imagem, DOCX ou XLSX."));
   },
 });

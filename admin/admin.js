@@ -2754,7 +2754,13 @@ document.addEventListener("submit", (event) => {
 
   if (uploadDocumentForm) {
     event.preventDefault();
-    uploadCustomerDocument(uploadDocumentForm).catch((error) => setStatus(error.message, "error"));
+    uploadCustomerDocument(uploadDocumentForm).catch((error) => {
+      setStatus(error.message, "error");
+      showAdminNoticeModal({
+        title: "Erro ao enviar documento",
+        message: error.message || "Nao foi possivel enviar o documento. Verifique o arquivo e tente novamente.",
+      });
+    });
   }
 });
 
