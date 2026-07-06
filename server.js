@@ -25,10 +25,30 @@ const upload = multer({
   limits: { fileSize: 12 * 1024 * 1024 },
   fileFilter: (_request, file, callback) => {
     const originalName = String(file.originalname || "").toLowerCase();
-    const allowedExtensions = [".pdf", ".jpg", ".jpeg", ".png", ".webp", ".doc", ".docx", ".xls", ".xlsx"];
+    const allowedExtensions = [
+      ".pdf",
+      ".xml",
+      ".txt",
+      ".csv",
+      ".jpg",
+      ".jpeg",
+      ".png",
+      ".webp",
+      ".doc",
+      ".docx",
+      ".xls",
+      ".xlsx",
+      ".zip",
+    ];
     const allowedMimeTypes = new Set([
       "application/octet-stream",
       "application/pdf",
+      "application/xml",
+      "text/xml",
+      "text/plain",
+      "text/csv",
+      "application/zip",
+      "application/x-zip-compressed",
       "image/jpeg",
       "image/png",
       "image/webp",
@@ -42,7 +62,7 @@ const upload = multer({
       return callback(null, true);
     }
 
-    return callback(new Error("Tipo de arquivo nao permitido. Envie PDF, imagem, DOCX ou XLSX."));
+    return callback(new Error("Tipo de arquivo nao permitido. Envie PDF, XML, imagem, DOCX, XLSX, TXT, CSV ou ZIP."));
   },
 });
 const localUrl = `http://localhost:${port}`;

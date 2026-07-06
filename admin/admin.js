@@ -2247,8 +2247,8 @@ function openUploadDocument(customerId) {
         </div>
         <label>
           Arquivo
-          <input name="documento" type="file" accept=".pdf,.png,.jpg,.jpeg,.webp,.doc,.docx,.xls,.xlsx" required />
-          <small>Limite de 12 MB. O arquivo ficara disponivel na aba Documentos do cliente.</small>
+          <input name="documento" type="file" accept=".pdf,.xml,.txt,.csv,.png,.jpg,.jpeg,.webp,.doc,.docx,.xls,.xlsx,.zip" required />
+          <small>Limite de 12 MB. Aceita PDF, XML de nota fiscal, imagens, Word, Excel, TXT, CSV e ZIP.</small>
         </label>
         <label>
           Observacao para o cliente
