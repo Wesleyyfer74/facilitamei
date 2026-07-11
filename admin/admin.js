@@ -2207,6 +2207,9 @@ async function openCustomer(customerId) {
               <article class="panel">
                 <h3>Assinatura</h3>
                 <p>Cliente ainda nao possui assinatura registrada.</p>
+                <div class="action-bar">
+                  <button class="gold-button" type="button" data-manage-customer-plan="${customer.id}">Vincular plano</button>
+                </div>
                 <form class="form-grid" data-create-subscription-form data-customer-id="${customer.id}">
                   <label>
                     Vincular plano
