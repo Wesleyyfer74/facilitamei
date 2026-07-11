@@ -1876,36 +1876,102 @@ app.post("/api/admin/customers", requireAdminSession, async (request, response) 
     const allowedStatuses = ["pending", "active", "blocked", "cancelled"];
     const status = allowedStatuses.includes(body.status) ? body.status : "pending";
     const loginAtivo = body.cliente_login_ativo === false || body.cliente_login_ativo === "0" ? 0 : 1;
+    const planId = String(body.plan_id || "").trim();
+    const allowedSubscriptionStatuses = ["pending", "authorized", "active", "paused", "cancelled", "expired", "rejected"];
+    const subscriptionStatus = allowedSubscriptionStatuses.includes(body.subscription_status)
+      ? body.subscription_status
+      : "active";
 
     if (!nome) return response.status(400).json({ error: "Informe o nome do cliente." });
     if (!email || !email.includes("@")) return response.status(400).json({ error: "Informe um e-mail valido para login." });
     if (password.length < 8) return response.status(400).json({ error: "A senha do cliente precisa ter pelo menos 8 caracteres." });
 
+    let selectedPlan = null;
+    if (planId) {
+      const [planRows] = await dbPool.execute(
+        `SELECT id, nome, valor, ativo
+         FROM plans
+         WHERE id = :planId
+         LIMIT 1`,
+        { planId },
+      );
+      selectedPlan = planRows[0] || null;
+      if (!selectedPlan) return response.status(400).json({ error: "Plano selecionado nao existe no banco." });
+      if (!Number(selectedPlan.ativo)) return response.status(400).json({ error: "Plano selecionado esta inativo." });
+    }
+
     const { hash, salt } = hashPassword(password);
 
-    const [result] = await dbPool.execute(
-      `INSERT INTO users
-        (nome, email, telefone, whatsapp, documento, cnpj, senha_hash, senha_salt, cliente_login_ativo, status)
-       VALUES
-        (:nome, :email, :telefone, :telefone, :documento, :cnpj, :senhaHash, :senhaSalt, :loginAtivo, :status)`,
-      {
-        nome,
-        email,
-        telefone,
-        documento,
-        cnpj: documento.length === 14 ? documento : null,
-        senhaHash: hash,
-        senhaSalt: salt,
-        loginAtivo,
-        status,
-      },
-    );
+    const connection = await dbPool.getConnection();
+    let customerId = null;
+    let subscriptionId = null;
+
+    try {
+      await connection.beginTransaction();
+
+      const [result] = await connection.execute(
+        `INSERT INTO users
+          (nome, email, telefone, whatsapp, documento, cnpj, senha_hash, senha_salt, cliente_login_ativo, status)
+         VALUES
+          (:nome, :email, :telefone, :telefone, :documento, :cnpj, :senhaHash, :senhaSalt, :loginAtivo, :status)`,
+        {
+          nome,
+          email,
+          telefone,
+          documento,
+          cnpj: documento.length === 14 ? documento : null,
+          senhaHash: hash,
+          senhaSalt: salt,
+          loginAtivo,
+          status,
+        },
+      );
+
+      customerId = result.insertId;
+
+      if (selectedPlan) {
+        const now = new Date();
+        const nextCharge = new Date(now);
+        nextCharge.setMonth(nextCharge.getMonth() + 1);
+        const localSubscriptionRef = `admin-local-${customerId}-${Date.now()}-${crypto.randomUUID()}`;
+
+        const [subscriptionResult] = await connection.execute(
+          `INSERT INTO subscriptions
+            (user_id, plan_id, mercado_pago_subscription_id, status, valor, data_inicio, data_proxima_cobranca, metodo_pagamento, raw_payload)
+           VALUES
+            (:customerId, :planId, :subscriptionRef, :subscriptionStatus, :valor, :startAt, :nextChargeAt, 'manual_admin', :rawPayload)`,
+          {
+            customerId,
+            planId: selectedPlan.id,
+            subscriptionRef: localSubscriptionRef,
+            subscriptionStatus,
+            valor: selectedPlan.valor,
+            startAt: now,
+            nextChargeAt: nextCharge,
+            rawPayload: JSON.stringify({
+              origem: "admin_manual",
+              plan_id: selectedPlan.id,
+              plan_name: selectedPlan.nome,
+              created_by: "admin",
+            }),
+          },
+        );
+        subscriptionId = subscriptionResult.insertId;
+      }
+
+      await connection.commit();
+    } catch (error) {
+      await connection.rollback();
+      throw error;
+    } finally {
+      connection.release();
+    }
 
     const [rows] = await dbPool.execute("SELECT id, nome, email, telefone, documento, status, created_at FROM users WHERE id = :id", {
-      id: result.insertId,
+      id: customerId,
     });
 
-    response.status(201).json({ ok: true, customer: rows[0] });
+    response.status(201).json({ ok: true, customer: rows[0], subscriptionId });
   } catch (error) {
     if (error.code === "ER_DUP_ENTRY") {
       return response.status(409).json({ error: "Ja existe um cliente cadastrado com este e-mail." });

@@ -2067,12 +2067,17 @@ async function openNotifications() {
 }
 
 function openNewCustomer() {
+  const planOptions = plansCache
+    .filter((plan) => Number(plan.ativo) !== 0)
+    .map((plan) => `<option value="${escapeHtml(plan.id)}">${escapeHtml(plan.nome)} - ${money(plan.valor)} / mes</option>`)
+    .join("");
+
   openDrawer(`
     <div class="drawer-content">
       <div>
         <p class="eyebrow">Cadastro manual</p>
         <h2>Novo cliente</h2>
-        <p>Crie o cliente no banco com login por e-mail e senha de acesso.</p>
+        <p>Crie o cliente no banco com login por e-mail, senha de acesso e plano vinculado quando necessario.</p>
       </div>
 
       <form class="form-grid" data-create-customer-form>
@@ -2091,6 +2096,25 @@ function openNewCustomer() {
               <option value="active">Ativo</option>
               <option value="blocked">Bloqueado</option>
               <option value="cancelled">Cancelado</option>
+            </select>
+          </label>
+        </div>
+        <div class="form-grid two-cols">
+          <label>
+            Vincular plano
+            <select name="plan_id">
+              <option value="">Sem plano agora</option>
+              ${planOptions || `<option value="" disabled>Nenhum plano ativo encontrado</option>`}
+            </select>
+          </label>
+          <label>
+            Status da assinatura
+            <select name="subscription_status">
+              <option value="active">Ativa</option>
+              <option value="authorized">Autorizada</option>
+              <option value="pending">Pendente</option>
+              <option value="paused">Pausada</option>
+              <option value="cancelled">Cancelada</option>
             </select>
           </label>
         </div>
@@ -2475,7 +2499,7 @@ async function createCustomer(form) {
     body: JSON.stringify(payload),
   });
 
-  setStatus("Cliente criado.");
+  setStatus(data.subscriptionId ? "Cliente criado e plano vinculado." : "Cliente criado.");
   closeDrawer();
   await loadCustomers();
 
