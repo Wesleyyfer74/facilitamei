@@ -705,7 +705,7 @@ function renderCustomerPreview(data) {
             <h4>Acoes rapidas</h4>
             <div class="quick-actions-grid">
               <button class="mini-action" type="button" data-open-customer="${customer.id}"><span>${iconSvg("renew")}</span>Renovar Assinatura</button>
-              <button class="mini-action" type="button" data-open-customer="${customer.id}"><span>${iconSvg("swap")}</span>Trocar Plano</button>
+              <button class="mini-action" type="button" data-manage-customer-plan="${customer.id}"><span>${iconSvg("swap")}</span>${subscription.id ? "Trocar Plano" : "Vincular Plano"}</button>
               <button class="mini-action danger" type="button" ${subscription.id ? `data-cancel-subscription="${subscription.id}"` : "disabled"}><span>${iconSvg("cancel")}</span>Cancelar Assinatura</button>
               <button class="mini-action" type="button" data-open-customer="${customer.id}"><span>${iconSvg("edit")}</span>Editar Cliente</button>
             </div>
@@ -2177,7 +2177,7 @@ async function openCustomer(customerId) {
                 <h3>Assinatura atual</h3>
                 <p><strong>${escapeHtml(latestSubscription.plan_name)}</strong></p>
                 <p>${statusPill(latestSubscription.status)} ${money(latestSubscription.valor)}</p>
-                <form class="form-grid" data-subscription-form data-subscription-id="${latestSubscription.id}">
+                <form class="form-grid" data-subscription-form data-subscription-id="${latestSubscription.id}" data-customer-id="${customer.id}">
                   <label>
                     Trocar plano local
                     <select name="planId">
@@ -2255,6 +2255,66 @@ async function openCustomer(customerId) {
             }
           </div>
         </article>
+      </div>
+    `);
+    setStatus("");
+  } catch (error) {
+    setStatus(error.message, "error");
+  }
+}
+
+async function openCustomerPlanManager(customerId) {
+  try {
+    setStatus("Carregando planos do cliente...");
+    const data = await apiRequest(`/api/admin/customers/${customerId}`);
+    const customer = data.customer || {};
+    const latestSubscription = data.subscriptions?.[0];
+    const planOptions = plansCache
+      .filter((plan) => Number(plan.ativo) !== 0)
+      .map(
+        (plan) =>
+          `<option value="${escapeHtml(plan.id)}" ${latestSubscription?.plan_id === plan.id ? "selected" : ""}>${escapeHtml(plan.nome)} - ${money(plan.valor)} / mes</option>`,
+      )
+      .join("");
+    const currentStatus = latestSubscription?.status || "active";
+    const statusOptions = ["pending", "authorized", "active", "paused", "cancelled", "expired", "rejected"]
+      .map((status) => `<option value="${status}" ${currentStatus === status ? "selected" : ""}>${status}</option>`)
+      .join("");
+
+    openDrawer(`
+      <div class="drawer-content">
+        <div>
+          <p class="eyebrow">Assinatura do cliente</p>
+          <h2>${latestSubscription ? "Trocar plano" : "Vincular plano"}</h2>
+          <p>${escapeHtml(customer.nome || "Cliente")} ${latestSubscription ? "ja possui assinatura registrada." : "ainda nao possui assinatura registrada."}</p>
+        </div>
+
+        <form
+          class="form-grid"
+          ${latestSubscription ? `data-subscription-form data-subscription-id="${latestSubscription.id}"` : "data-create-subscription-form"}
+          data-customer-id="${customer.id}"
+        >
+          <label>
+            Plano
+            <select name="planId" required>
+              <option value="">Selecione um plano</option>
+              ${planOptions || `<option value="" disabled>Nenhum plano ativo encontrado</option>`}
+            </select>
+          </label>
+          <label>
+            Status da assinatura
+            <select name="status">
+              ${statusOptions}
+            </select>
+          </label>
+          <div class="drawer-helper">
+            O valor sera puxado diretamente da tabela de planos. Este vinculo local nao cria cobranca no Mercado Pago.
+          </div>
+          <div class="action-bar">
+            <button class="gold-button" type="submit">${latestSubscription ? "Salvar troca de plano" : "Vincular plano"}</button>
+            <button class="ghost-button" type="button" data-close-drawer>Cancelar</button>
+          </div>
+        </form>
       </div>
     `);
     setStatus("");
@@ -2541,6 +2601,7 @@ async function createCustomer(form) {
 async function saveSubscription(form) {
   const formData = new FormData(form);
   const subscriptionId = form.dataset.subscriptionId;
+  const customerId = form.dataset.customerId;
   const payload = Object.fromEntries(formData.entries());
   if (!payload.planId) delete payload.planId;
 
@@ -2551,6 +2612,7 @@ async function saveSubscription(form) {
   setStatus("Assinatura atualizada.");
   closeDrawer();
   await loadCustomers();
+  if (customerId) await loadCustomerPreview(customerId);
 }
 
 async function createCustomerSubscription(form) {
@@ -2566,8 +2628,9 @@ async function createCustomerSubscription(form) {
   });
 
   setStatus("Plano vinculado ao cliente.");
+  closeDrawer();
   await loadCustomers();
-  await openCustomer(customerId);
+  await loadCustomerPreview(customerId);
 }
 
 async function savePlan(form) {
@@ -2691,6 +2754,7 @@ document.addEventListener("click", (event) => {
   const selectPlanButton = event.target.closest("[data-select-plan]");
   const deleteButton = event.target.closest("[data-delete-customer]");
   const cancelButton = event.target.closest("[data-cancel-subscription]");
+  const manageCustomerPlanButton = event.target.closest("[data-manage-customer-plan]");
   const uploadDocumentButton = event.target.closest("[data-upload-document]");
   const adminDownloadDocumentButton = event.target.closest("[data-admin-download-document]");
   const newCustomerButton = event.target.closest("[data-new-customer]");
@@ -2726,6 +2790,7 @@ document.addEventListener("click", (event) => {
   if (planButton) openPlan(planButton.dataset.openPlan);
   if (deleteButton) deleteCustomer(deleteButton.dataset.deleteCustomer).catch((error) => setStatus(error.message, "error"));
   if (cancelButton) cancelSubscription(cancelButton.dataset.cancelSubscription).catch((error) => setStatus(error.message, "error"));
+  if (manageCustomerPlanButton) openCustomerPlanManager(manageCustomerPlanButton.dataset.manageCustomerPlan);
   if (uploadDocumentButton) openUploadDocument(uploadDocumentButton.dataset.uploadDocument);
   if (adminDownloadDocumentButton) {
     downloadAdminDocument(
