@@ -3643,6 +3643,58 @@ app.patch("/api/admin/subscriptions/:id", requireAdminSession, async (request, r
   }
 });
 
+app.post("/api/admin/customers/:id/subscriptions", requireAdminSession, async (request, response) => {
+  try {
+    const userId = Number(request.params.id);
+    const { planId, status } = request.body || {};
+    const allowedStatuses = ["pending", "authorized", "active", "paused", "cancelled", "expired", "rejected"];
+    const subscriptionStatus = allowedStatuses.includes(status) ? status : "active";
+
+    if (!userId) return response.status(400).json({ error: "Cliente invalido." });
+    if (!planId) return response.status(400).json({ error: "Selecione um plano para vincular." });
+
+    const [[customer]] = await dbPool.execute("SELECT id FROM users WHERE id = :userId LIMIT 1", { userId });
+    if (!customer) return response.status(404).json({ error: "Cliente nao encontrado." });
+
+    const plan = await getPlanById(planId);
+    if (!plan) return response.status(400).json({ error: "Plano invalido ou inativo." });
+
+    const now = new Date();
+    const nextCharge = new Date(now);
+    nextCharge.setMonth(nextCharge.getMonth() + 1);
+    const localSubscriptionRef = `admin-local-${userId}-${Date.now()}-${crypto.randomUUID()}`;
+
+    const [result] = await dbPool.execute(
+      `INSERT INTO subscriptions
+        (user_id, plan_id, mercado_pago_subscription_id, status, valor, data_inicio, data_proxima_cobranca, metodo_pagamento, raw_payload)
+       VALUES
+        (:userId, :planId, :subscriptionRef, :status, :valor, :startAt, :nextChargeAt, 'manual_admin', :rawPayload)`,
+      {
+        userId,
+        planId: plan.id,
+        subscriptionRef: localSubscriptionRef,
+        status: subscriptionStatus,
+        valor: plan.price,
+        startAt: now,
+        nextChargeAt: nextCharge,
+        rawPayload: JSON.stringify({
+          origem: "admin_manual",
+          plan_id: plan.id,
+          plan_name: plan.name,
+          created_by: "admin",
+        }),
+      },
+    );
+
+    await updateUserStatusFromSubscription(userId, subscriptionStatus);
+
+    response.status(201).json({ ok: true, subscriptionId: result.insertId });
+  } catch (error) {
+    console.error(error);
+    response.status(500).json({ error: "Erro ao vincular plano ao cliente." });
+  }
+});
+
 app.post("/api/admin/subscriptions/:id/cancel", requireAdminSession, async (request, response) => {
   try {
     const subscriptionId = Number(request.params.id);

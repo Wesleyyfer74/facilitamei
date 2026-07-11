@@ -2203,7 +2203,37 @@ async function openCustomer(customerId) {
                 </form>
               </article>
             `
-            : `<article class="panel"><h3>Assinatura</h3><p>Cliente ainda nao possui assinatura registrada.</p></article>`
+            : `
+              <article class="panel">
+                <h3>Assinatura</h3>
+                <p>Cliente ainda nao possui assinatura registrada.</p>
+                <form class="form-grid" data-create-subscription-form data-customer-id="${customer.id}">
+                  <label>
+                    Vincular plano
+                    <select name="planId" required>
+                      <option value="">Selecione um plano</option>
+                      ${planOptions}
+                    </select>
+                  </label>
+                  <label>
+                    Status da assinatura
+                    <select name="status">
+                      <option value="active">Ativa</option>
+                      <option value="authorized">Autorizada</option>
+                      <option value="pending">Pendente</option>
+                      <option value="paused">Pausada</option>
+                      <option value="cancelled">Cancelada</option>
+                    </select>
+                  </label>
+                  <div class="drawer-helper">
+                    Este vinculo e local no banco. Nao cria cobranca no Mercado Pago.
+                  </div>
+                  <div class="action-bar">
+                    <button class="gold-button" type="submit">Vincular plano</button>
+                  </div>
+                </form>
+              </article>
+            `
         }
 
         <article class="panel">
@@ -2523,6 +2553,23 @@ async function saveSubscription(form) {
   await loadCustomers();
 }
 
+async function createCustomerSubscription(form) {
+  const customerId = form.dataset.customerId;
+  const formData = new FormData(form);
+  const payload = Object.fromEntries(formData.entries());
+
+  if (!customerId) throw new Error("Cliente invalido para vincular plano.");
+
+  await apiRequest(`/api/admin/customers/${customerId}/subscriptions`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+
+  setStatus("Plano vinculado ao cliente.");
+  await loadCustomers();
+  await openCustomer(customerId);
+}
+
 async function savePlan(form) {
   const formData = new FormData(form);
   const planId = form.dataset.planId;
@@ -2724,6 +2771,7 @@ document.addEventListener("submit", (event) => {
   const createPlanForm = event.target.closest("[data-create-plan-form]");
   const customerForm = event.target.closest("[data-customer-form]");
   const subscriptionForm = event.target.closest("[data-subscription-form]");
+  const createSubscriptionForm = event.target.closest("[data-create-subscription-form]");
   const planForm = event.target.closest("[data-plan-form]");
   const contractTemplateForm = event.target.closest("[data-contract-template-form]");
   const contractReminderForm = event.target.closest("[data-contract-reminder-form]");
@@ -2749,6 +2797,11 @@ document.addEventListener("submit", (event) => {
   if (subscriptionForm) {
     event.preventDefault();
     saveSubscription(subscriptionForm).catch((error) => setStatus(error.message, "error"));
+  }
+
+  if (createSubscriptionForm) {
+    event.preventDefault();
+    createCustomerSubscription(createSubscriptionForm).catch((error) => setStatus(error.message, "error"));
   }
 
   if (planForm) {
