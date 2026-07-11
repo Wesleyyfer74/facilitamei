@@ -711,7 +711,7 @@
             <p class="eyebrow">Checkout seguro</p>
             <h2 id="checkout-title">Finalize sua assinatura</h2>
             <p>
-              Informe seus dados e assine com cartao de credito pelo checkout seguro.
+              Informe seus dados e escolha entre cartao de credito, Pix ou boleto pelo checkout seguro.
             </p>
           </div>
 
@@ -723,20 +723,14 @@
                 <p data-checkout-price>R$ 89,99 /mes</p>
               </div>
 
-              <div class="payment-methods" aria-label="Metodo de pagamento" data-payment-methods>
-                <label class="payment-method is-selected">
-                  <input type="radio" name="paymentMethod" value="card" checked />
-                  <span>Cartao recorrente</span>
-                </label>
-                <label class="payment-method">
-                  <input type="radio" name="paymentMethod" value="pix" />
-                  <span>Pix</span>
-                </label>
-                <label class="payment-method">
-                  <input type="radio" name="paymentMethod" value="boleto" />
-                  <span>Boleto</span>
-                </label>
-              </div>
+              <label class="payment-method-select">
+                Selecione o metodo de pagamento
+                <select name="paymentMethod" data-payment-method-select>
+                  <option value="card" selected>Cartao recorrente</option>
+                  <option value="pix">Pix</option>
+                  <option value="boleto">Boleto</option>
+                </select>
+              </label>
 
               <label>
                 Nome completo
@@ -871,6 +865,6 @@
     <script src="./config.js?v=20260606-railway"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
-    <script src="./app.js?v=20260711-pix-boleto"></script>
+    <script src="./app.js?v=20260711-payment-select"></script>
   </body>
 </html>

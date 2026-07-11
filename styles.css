@@ -2744,43 +2744,33 @@ select option {
   pointer-events: none;
 }
 
-.payment-methods {
+.payment-method-select {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
-}
-
-.payment-method {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 48px;
-  padding: 0 12px;
+  gap: 8px;
   color: var(--muted);
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.05);
-  cursor: pointer;
-}
-
-.single-method .payment-method {
-  cursor: default;
-}
-
-.payment-method input {
-  position: absolute;
-  opacity: 0;
-  pointer-events: none;
-}
-
-.payment-method span {
   font-weight: 900;
 }
 
-.payment-method.is-selected {
-  color: #17120d;
-  border-color: transparent;
-  background: linear-gradient(135deg, var(--gold), var(--gold-strong));
+.payment-method-select select {
+  width: 100%;
+  min-height: 54px;
+  padding: 0 44px 0 16px;
+  color: var(--text);
+  border: 1px solid rgba(240, 191, 90, 0.52);
+  border-radius: 10px;
+  background:
+    linear-gradient(45deg, transparent 50%, var(--gold-strong) 50%) calc(100% - 22px) 50% / 7px 7px no-repeat,
+    linear-gradient(135deg, rgba(240, 191, 90, 0.16), rgba(255, 255, 255, 0.05));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 12px 24px rgba(240, 191, 90, 0.08);
+  font: inherit;
+  font-weight: 900;
+  appearance: none;
+  cursor: pointer;
+}
+
+.payment-method-select select:focus {
+  outline: 2px solid rgba(255, 218, 127, 0.56);
+  outline-offset: 2px;
 }
 
 .payment-instructions {

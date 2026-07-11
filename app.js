@@ -32,8 +32,7 @@ const meiPrev = document.querySelector("[data-mei-prev]");
 const meiNext = document.querySelector("[data-mei-next]");
 const meiStatus = document.querySelector("[data-mei-status]");
 const paymentSubmit = document.querySelector("[data-payment-submit]");
-const paymentMethods = document.querySelector("[data-payment-methods]");
-const paymentMethodInputs = document.querySelectorAll("input[name='paymentMethod']");
+const paymentMethodSelect = document.querySelector("[data-payment-method-select]");
 const cardPaymentFields = document.querySelectorAll("[data-card-payment-field]");
 const cardRequiredFields = document.querySelectorAll("[data-card-required]");
 const paymentResult = document.querySelector("[data-payment-result]");
@@ -506,16 +505,11 @@ function updateCheckout(planId) {
 }
 
 function getSelectedPaymentMethod() {
-  return document.querySelector("input[name='paymentMethod']:checked")?.value || "card";
+  return paymentMethodSelect?.value || "card";
 }
 
 function updateCheckoutPaymentMethod() {
   const method = getSelectedPaymentMethod();
-
-  paymentMethods?.querySelectorAll(".payment-method").forEach((item) => {
-    const input = item.querySelector("input");
-    item.classList.toggle("is-selected", input?.value === method);
-  });
 
   cardPaymentFields.forEach((field) => {
     field.hidden = method !== "card";
@@ -1144,9 +1138,7 @@ checkoutSelect?.addEventListener("change", (event) => {
   updateCheckout(event.target.value);
 });
 
-paymentMethodInputs.forEach((input) => {
-  input.addEventListener("change", updateCheckoutPaymentMethod);
-});
+paymentMethodSelect?.addEventListener("change", updateCheckoutPaymentMethod);
 
 document.querySelector("#form-checkout__identificationNumber")?.addEventListener("input", (event) => {
   syncIdentificationType(event.target.value);
