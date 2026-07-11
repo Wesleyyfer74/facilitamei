@@ -4163,9 +4163,7 @@ function getSubscriptionMessage(status) {
 }
 
 function ensureSinglePaymentPlan(plan) {
-  if (plan.billing !== "single") {
-    throw new Error("Este plano e mensal. Use o fluxo de assinatura recorrente.");
-  }
+  return Boolean(plan);
 }
 
 function ensureSubscriptionPlan(plan) {
@@ -4291,6 +4289,7 @@ app.post("/api/payments/pix", async (request, response) => {
     const transactionData = data.point_of_interaction?.transaction_data || {};
 
     response.json({
+      customerId,
       paymentId: data.id,
       status: data.status,
       statusDetail: data.status_detail,
@@ -4303,6 +4302,101 @@ app.post("/api/payments/pix", async (request, response) => {
   } catch (error) {
     console.error(error);
     response.status(500).json({ error: error.message || "Erro ao criar Pix." });
+  }
+});
+
+app.post("/api/payments/boleto", async (request, response) => {
+  try {
+    const body = request.body || {};
+    const { planId, userId, email } = body;
+    const name = body.nome || body.name;
+    const phone = body.telefone || body.phone;
+    const document = body.documento || body.document;
+    const plan = await getPlanById(planId);
+    const accessToken = process.env.MERCADO_PAGO_ACCESS_TOKEN;
+    const documentNumber = normalizeDigits(document);
+    const phoneNumber = normalizeDigits(phone);
+    const { firstName, lastName } = splitName(name);
+
+    if (!plan) {
+      return response.status(400).json({ error: "Plano invalido." });
+    }
+
+    ensureSinglePaymentPlan(plan);
+
+    if (!name || !email || !phone || !documentNumber) {
+      return response.status(400).json({ error: "Nome, e-mail, WhatsApp e CPF/CNPJ sao obrigatorios." });
+    }
+
+    if (!accessToken || accessToken.includes("SEU_ACCESS_TOKEN_AQUI")) {
+      throw new Error("Configure MERCADO_PAGO_ACCESS_TOKEN no arquivo .env");
+    }
+
+    const externalReference = `facilita-boleto-${Date.now()}-${crypto.randomUUID()}`;
+    const mercadoPagoResponse = await fetch("https://api.mercadopago.com/v1/payments", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+        "X-Idempotency-Key": crypto.randomUUID(),
+      },
+      body: JSON.stringify({
+        transaction_amount: plan.price,
+        description: `${plan.title} - Facilita MEI`,
+        payment_method_id: "bolbradesco",
+        external_reference: externalReference,
+        notification_url: `${apiPublicUrl}/api/webhooks/mercadopago`,
+        payer: {
+          email,
+          first_name: firstName,
+          last_name: lastName,
+          identification: {
+            type: getDocumentType(documentNumber),
+            number: documentNumber,
+          },
+          phone: {
+            number: phoneNumber,
+          },
+        },
+        metadata: {
+          plan_id: plan.id,
+          plan_name: plan.title,
+          service_code: plan.serviceCode,
+          customer_name: name,
+          customer_email: email,
+          customer_phone: phone,
+          customer_document: documentNumber,
+          payment_method: "boleto",
+        },
+      }),
+    });
+
+    const data = await mercadoPagoResponse.json();
+
+    if (!mercadoPagoResponse.ok) {
+      return response.status(mercadoPagoResponse.status).json({
+        error: data.message || "Erro ao criar boleto no Mercado Pago.",
+        details: data,
+      });
+    }
+
+    storePayment(data);
+    const customerId = await upsertCustomer({ userId, name, email, phone, document });
+    await savePaymentRecord({ customerId, plan, paymentData: data, paymentMethod: "boleto" });
+
+    response.json({
+      customerId,
+      paymentId: data.id,
+      status: data.status,
+      statusDetail: data.status_detail,
+      message: getPaymentMessage(data.status),
+      ticketUrl: data.transaction_details?.external_resource_url || data.transaction_details?.ticket_url,
+      externalResourceUrl: data.transaction_details?.external_resource_url,
+      externalReference,
+    });
+  } catch (error) {
+    console.error(error);
+    response.status(500).json({ error: error.message || "Erro ao criar boleto." });
   }
 });
 

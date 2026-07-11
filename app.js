@@ -32,11 +32,16 @@ const meiPrev = document.querySelector("[data-mei-prev]");
 const meiNext = document.querySelector("[data-mei-next]");
 const meiStatus = document.querySelector("[data-mei-status]");
 const paymentSubmit = document.querySelector("[data-payment-submit]");
+const paymentMethods = document.querySelector("[data-payment-methods]");
+const paymentMethodInputs = document.querySelectorAll("input[name='paymentMethod']");
+const cardPaymentFields = document.querySelectorAll("[data-card-payment-field]");
+const cardRequiredFields = document.querySelectorAll("[data-card-required]");
 const paymentResult = document.querySelector("[data-payment-result]");
 const resultKicker = document.querySelector("[data-result-kicker]");
 const resultPlan = document.querySelector("[data-result-plan]");
 const resultStatus = document.querySelector("[data-result-status]");
 const subscriptionMessage = document.querySelector("[data-subscription-message]");
+const paymentInstructions = document.querySelector("[data-payment-instructions]");
 const cnpjLinkForm = document.querySelector("[data-cnpj-link-form]");
 const cnpjLinkStatus = document.querySelector("[data-cnpj-link-status]");
 const postSubscriptionActions = document.querySelector("[data-post-subscription-actions]");
@@ -492,12 +497,42 @@ function updateCheckout(planId) {
   if (checkoutPlan) checkoutPlan.textContent = details.title;
   if (checkoutPrice) checkoutPrice.textContent = details.price;
   if (resultPlan) resultPlan.textContent = details.title;
-  if (paymentSubmit) paymentSubmit.textContent = "Assinar plano";
+  updateCheckoutPaymentMethod();
 
   planCards.forEach((card) => {
     const button = card.querySelector("[data-plan-id]");
     card.classList.toggle("selected", button?.dataset.planId === selectedPlan);
   });
+}
+
+function getSelectedPaymentMethod() {
+  return document.querySelector("input[name='paymentMethod']:checked")?.value || "card";
+}
+
+function updateCheckoutPaymentMethod() {
+  const method = getSelectedPaymentMethod();
+
+  paymentMethods?.querySelectorAll(".payment-method").forEach((item) => {
+    const input = item.querySelector("input");
+    item.classList.toggle("is-selected", input?.value === method);
+  });
+
+  cardPaymentFields.forEach((field) => {
+    field.hidden = method !== "card";
+  });
+  cardRequiredFields.forEach((field) => {
+    field.required = method === "card";
+    field.disabled = method !== "card";
+  });
+
+  if (paymentSubmit) {
+    paymentSubmit.textContent =
+      method === "pix" ? "Gerar Pix" : method === "boleto" ? "Gerar boleto" : "Assinar plano";
+  }
+
+  if (subscriptionMessage && !paymentResult?.hidden) {
+    subscriptionMessage.textContent = "";
+  }
 }
 
 function getAttendanceUrl({ planId, customer }) {
@@ -555,6 +590,10 @@ function resetPaymentResult() {
   if (resultKicker) resultKicker.textContent = "Assinatura";
   if (resultStatus) resultStatus.textContent = "Aguardando pagamento";
   if (subscriptionMessage) subscriptionMessage.textContent = "";
+  if (paymentInstructions) {
+    paymentInstructions.hidden = true;
+    paymentInstructions.innerHTML = "";
+  }
   if (cnpjLinkForm) {
     cnpjLinkForm.hidden = false;
     cnpjLinkForm.reset();
@@ -575,6 +614,7 @@ function openCheckout(planName) {
   if (checkoutForm) checkoutForm.hidden = false;
   checkoutForm?.classList.remove("is-processing");
   resetPaymentResult();
+  updateCheckoutPaymentMethod();
   ensureMercadoPagoCardForm().catch((error) => {
     checkoutStatus.textContent = error.message;
   });
@@ -1104,6 +1144,10 @@ checkoutSelect?.addEventListener("change", (event) => {
   updateCheckout(event.target.value);
 });
 
+paymentMethodInputs.forEach((input) => {
+  input.addEventListener("change", updateCheckoutPaymentMethod);
+});
+
 document.querySelector("#form-checkout__identificationNumber")?.addEventListener("input", (event) => {
   syncIdentificationType(event.target.value);
 });
@@ -1199,6 +1243,55 @@ function renderSubscription(data, planId, customer) {
   checkoutForm?.classList.remove("is-processing");
 }
 
+function renderOneTimePayment(data, planId, customer, method) {
+  const details = planDetails[planId] || planDetails["start-mei"];
+  if (!paymentResult) return;
+
+  lastSubscriptionContext = {
+    customerId: data.customerId,
+    subscriptionId: null,
+    planId,
+    customer,
+  };
+
+  paymentResult.hidden = false;
+  if (checkoutForm) checkoutForm.hidden = true;
+  if (resultKicker) resultKicker.textContent = method === "pix" ? "Pagamento Pix" : "Pagamento por boleto";
+  if (resultPlan) resultPlan.textContent = details.title;
+  if (resultStatus) resultStatus.textContent = data.message || "Aguardando pagamento.";
+  if (subscriptionMessage) {
+    subscriptionMessage.textContent =
+      method === "pix"
+        ? "Pague o Pix pelo QR Code ou copie o codigo abaixo. A confirmacao sera enviada pelo Mercado Pago."
+        : "Abra o boleto em uma nova aba para pagar. A confirmacao sera enviada pelo Mercado Pago.";
+  }
+  if (whatsappAttendance) whatsappAttendance.href = getAttendanceUrl({ planId, customer });
+  if (cnpjLinkForm) cnpjLinkForm.hidden = true;
+  if (postSubscriptionActions) postSubscriptionActions.hidden = false;
+
+  if (paymentInstructions) {
+    const pixImage = data.qrCodeBase64
+      ? `<img class="payment-qr" src="data:image/png;base64,${data.qrCodeBase64}" alt="QR Code Pix" />`
+      : "";
+    const pixCode = data.qrCode
+      ? `<label class="payment-copy-code">Codigo Pix copia e cola<textarea readonly>${escapeHtml(data.qrCode)}</textarea></label>`
+      : "";
+    const paymentLink = data.ticketUrl || data.externalResourceUrl || data.transactionUrl;
+
+    paymentInstructions.hidden = false;
+    paymentInstructions.innerHTML =
+      method === "pix"
+        ? `${pixImage}${pixCode}`
+        : `<a class="button primary" href="${escapeHtml(paymentLink || "#")}" target="_blank" rel="noopener noreferrer">Abrir boleto</a>`;
+  }
+
+  checkoutForm?.classList.remove("is-processing");
+
+  if (data.paymentId) {
+    startPaymentStatusPolling(data.paymentId);
+  }
+}
+
 function startPaymentStatusPolling(paymentId) {
   window.clearInterval(statusPollingId);
 
@@ -1291,6 +1384,37 @@ async function submitSubscriptionWithToken(cardTokenId) {
   renderSubscription(data, payload.planId, payload);
 }
 
+async function submitOneTimePayment(method) {
+  const payload = Object.fromEntries(new FormData(checkoutForm));
+  const endpoint = method === "boleto" ? "/api/payments/boleto" : "/api/payments/pix";
+
+  checkoutStatus.textContent = method === "boleto" ? "Gerando boleto no Mercado Pago..." : "Gerando Pix no Mercado Pago...";
+  checkoutForm.classList.add("is-processing");
+  resetPaymentResult();
+
+  const response = await fetch(`${API_BASE}${endpoint}`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      planId: payload.planId,
+      nome: payload.name,
+      email: payload.email,
+      telefone: payload.phone,
+      documento: payload.document,
+    }),
+  });
+  const data = await parseJsonResponse(response, "O backend retornou uma resposta invalida. Confira se o config.js aponta para o Railway.");
+
+  if (!response.ok) {
+    throw new Error(data.error || "Nao foi possivel gerar o pagamento.");
+  }
+
+  checkoutStatus.textContent = "";
+  renderOneTimePayment(data, payload.planId, payload, method);
+}
+
 async function ensureMercadoPagoCardForm() {
   if (mercadoPagoCardForm || !checkoutForm) return mercadoPagoCardForm;
 
@@ -1347,6 +1471,12 @@ async function ensureMercadoPagoCardForm() {
         event.preventDefault();
 
         try {
+          const method = getSelectedPaymentMethod();
+          if (method !== "card") {
+            await submitOneTimePayment(method);
+            return;
+          }
+
           syncIdentificationType(document.querySelector("#form-checkout__identificationNumber")?.value);
           const { token } = mercadoPagoCardForm.getCardFormData();
           if (!token) throw new Error("Nao foi possivel gerar o token do cartao.");
