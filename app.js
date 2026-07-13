@@ -612,9 +612,11 @@ function openCheckout(planName) {
   checkoutForm?.classList.remove("is-processing");
   resetPaymentResult();
   updateCheckoutPaymentMethod();
-  ensureMercadoPagoCardForm().catch((error) => {
-    checkoutStatus.textContent = error.message;
-  });
+  if (getSelectedPaymentMethod() === "card") {
+    ensureMercadoPagoCardForm().catch((error) => {
+      checkoutStatus.textContent = error.message;
+    });
+  }
   window.setTimeout(() => checkoutForm?.querySelector("input")?.focus(), 60);
   window.setTimeout(() => checkoutModal.classList.remove("is-opening"), 620);
 }
@@ -1141,7 +1143,35 @@ checkoutSelect?.addEventListener("change", (event) => {
   updateCheckout(event.target.value);
 });
 
-paymentMethodSelect?.addEventListener("change", updateCheckoutPaymentMethod);
+paymentMethodSelect?.addEventListener("change", () => {
+  updateCheckoutPaymentMethod();
+  if (getSelectedPaymentMethod() === "card") {
+    ensureMercadoPagoCardForm().catch((error) => {
+      checkoutStatus.textContent = error.message;
+    });
+  } else if (checkoutStatus) {
+    checkoutStatus.textContent = "";
+  }
+});
+
+checkoutForm?.addEventListener(
+  "submit",
+  async (event) => {
+    const method = getSelectedPaymentMethod();
+    if (method === "card") return;
+
+    event.preventDefault();
+    event.stopImmediatePropagation();
+
+    try {
+      await submitOneTimePayment(method);
+    } catch (error) {
+      checkoutForm.classList.remove("is-processing");
+      checkoutStatus.textContent = error.message || "Nao foi possivel gerar o pagamento.";
+    }
+  },
+  true,
+);
 
 document.querySelector("#form-checkout__identificationNumber")?.addEventListener("input", (event) => {
   syncIdentificationType(event.target.value);
