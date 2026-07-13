@@ -3862,8 +3862,14 @@ function isValidCpfOrCnpj(documentNumber = "") {
 
 function getMercadoPagoPaymentError(data, fallbackMessage) {
   const message = String(data?.message || "");
-  if (message.toLowerCase().includes("invalid user identification number")) {
+  const normalizedMessage = message.toLowerCase();
+
+  if (normalizedMessage.includes("invalid user identification number")) {
     return "Informe um CPF ou CNPJ valido para gerar o pagamento.";
+  }
+
+  if (normalizedMessage.includes("collector user without key enabled for qr render")) {
+    return "Pix ainda nao esta habilitado na conta Mercado Pago recebedora. Cadastre uma chave Pix na conta do Mercado Pago e tente novamente.";
   }
 
   return data?.message || fallbackMessage;
