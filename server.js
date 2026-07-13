@@ -394,6 +394,51 @@ async function ensureClientEditableUserFields() {
   }
 }
 
+let paymentsMetadataColumnsPromise = null;
+
+async function ensurePaymentsMetadataColumns() {
+  if (paymentsMetadataColumnsPromise) return paymentsMetadataColumnsPromise;
+
+  paymentsMetadataColumnsPromise = (async () => {
+    const databaseName = process.env.DB_NAME || "facilita_modern";
+    const paymentColumns = {
+      gateway: "VARCHAR(40) NULL",
+      gateway_payment_id: "VARCHAR(120) NULL",
+      competencia: "VARCHAR(7) NULL",
+      updated_at: "TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP",
+    };
+
+    try {
+      const [rows] = await dbPool.execute(
+        `SELECT COLUMN_NAME
+         FROM INFORMATION_SCHEMA.COLUMNS
+         WHERE TABLE_SCHEMA = :databaseName
+           AND TABLE_NAME = 'payments'`,
+        { databaseName },
+      );
+      const existingColumns = new Set(rows.map((row) => row.COLUMN_NAME));
+      const missingColumns = Object.entries(paymentColumns).filter(([column]) => !existingColumns.has(column));
+
+      for (const [column, definition] of missingColumns) {
+        await dbPool.query(`ALTER TABLE payments ADD COLUMN ${column} ${definition}`);
+      }
+
+      if (!existingColumns.has("gateway_payment_id")) {
+        await dbPool.query("ALTER TABLE payments ADD INDEX payments_gateway_payment_idx (gateway_payment_id)");
+      }
+
+      if (missingColumns.length) {
+        console.log(`Campos de pagamento criados: ${missingColumns.map(([column]) => column).join(", ")}`);
+      }
+    } catch (error) {
+      paymentsMetadataColumnsPromise = null;
+      throw error;
+    }
+  })();
+
+  return paymentsMetadataColumnsPromise;
+}
+
 function cleanText(value = "", maxLength = 180) {
   return String(value || "").trim().slice(0, maxLength) || null;
 }
@@ -3982,6 +4027,8 @@ async function updateUserStatusFromSubscription(userId, subscriptionStatus) {
 }
 
 async function savePaymentRecord({ customerId, plan, paymentData, paymentMethod }) {
+  await ensurePaymentsMetadataColumns();
+
   const [result] = await dbPool.execute(
     `INSERT INTO payments
       (mercado_pago_payment_id, gateway, gateway_payment_id, user_id, subscription_id, valor, status, data_pagamento, competencia, raw_payload)
@@ -4058,6 +4105,8 @@ async function saveSubscriptionRecord({ customerId, plan, subscriptionData, paym
 }
 
 async function updatePaymentStatus(paymentData) {
+  await ensurePaymentsMetadataColumns();
+
   const [result] = await dbPool.execute(
     `UPDATE payments
      SET status = :status,
