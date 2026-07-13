@@ -767,6 +767,37 @@
                   <option value="full">Facilita MEI Full</option>
                 </select>
               </label>
+              <div class="boleto-fields" data-boleto-payment-field hidden>
+                <p class="checkout-field-title">Dados para boleto</p>
+                <label>
+                  CEP
+                  <input name="boletoZipCode" inputmode="numeric" autocomplete="postal-code" placeholder="00000-000" data-boleto-required />
+                </label>
+                <label>
+                  Rua
+                  <input name="boletoStreetName" autocomplete="address-line1" placeholder="Logradouro" data-boleto-required />
+                </label>
+                <div class="form-row">
+                  <label>
+                    Numero
+                    <input name="boletoStreetNumber" autocomplete="address-line2" placeholder="123" data-boleto-required />
+                  </label>
+                  <label>
+                    Bairro
+                    <input name="boletoNeighborhood" placeholder="Bairro" data-boleto-required />
+                  </label>
+                </div>
+                <div class="form-row">
+                  <label>
+                    Cidade
+                    <input name="boletoCity" autocomplete="address-level2" placeholder="Cidade" data-boleto-required />
+                  </label>
+                  <label>
+                    UF
+                    <input name="boletoFederalUnit" maxlength="2" autocomplete="address-level1" placeholder="MS" data-boleto-required />
+                  </label>
+                </div>
+              </div>
               <label data-card-payment-field>
                 Nome impresso no cartao
                 <input id="cardholderName" name="cardholderName" autocomplete="cc-name" required data-card-required />
@@ -865,6 +896,6 @@
     <script src="./config.js?v=20260606-railway"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
-    <script src="./app.js?v=20260713-pix-boleto-submit"></script>
+    <script src="./app.js?v=20260713-pix-boleto-address"></script>
   </body>
 </html>

@@ -35,6 +35,8 @@ const paymentSubmit = document.querySelector("[data-payment-submit]");
 const paymentMethodSelect = document.querySelector("[data-payment-method-select]");
 const cardPaymentFields = document.querySelectorAll("[data-card-payment-field]");
 const cardRequiredFields = document.querySelectorAll("[data-card-required]");
+const boletoPaymentFields = document.querySelectorAll("[data-boleto-payment-field]");
+const boletoRequiredFields = document.querySelectorAll("[data-boleto-required]");
 const paymentResult = document.querySelector("[data-payment-result]");
 const resultKicker = document.querySelector("[data-result-kicker]");
 const resultPlan = document.querySelector("[data-result-plan]");
@@ -520,6 +522,16 @@ function updateCheckoutPaymentMethod() {
   cardRequiredFields.forEach((field) => {
     field.required = method === "card";
     field.disabled = method !== "card";
+  });
+  boletoPaymentFields.forEach((field) => {
+    const shouldShowBoletoField = method === "boleto";
+    field.hidden = !shouldShowBoletoField;
+    field.classList.toggle("is-payment-field-hidden", !shouldShowBoletoField);
+    field.style.display = shouldShowBoletoField ? "" : "none";
+  });
+  boletoRequiredFields.forEach((field) => {
+    field.required = method === "boleto";
+    field.disabled = method !== "boleto";
   });
 
   if (paymentSubmit) {
@@ -1304,10 +1316,16 @@ function renderOneTimePayment(data, planId, customer, method) {
     const paymentLink = data.ticketUrl || data.externalResourceUrl || data.transactionUrl;
 
     paymentInstructions.hidden = false;
-    paymentInstructions.innerHTML =
-      method === "pix"
-        ? `${pixImage}${pixCode}`
-        : `<a class="button primary" href="${escapeHtml(paymentLink || "#")}" target="_blank" rel="noopener noreferrer">Abrir boleto</a>`;
+    if (method === "pix") {
+      paymentInstructions.innerHTML =
+        pixImage || pixCode
+          ? `${pixImage}${pixCode}`
+          : `<p class="payment-warning">Pix gerado, mas o Mercado Pago nao retornou o QR Code. Aguarde a confirmacao ou tente gerar novamente.</p>`;
+    } else {
+      paymentInstructions.innerHTML = paymentLink
+        ? `<a class="button primary" href="${escapeHtml(paymentLink)}" target="_blank" rel="noopener noreferrer">Abrir boleto</a>`
+        : `<p class="payment-warning">Boleto gerado, mas o Mercado Pago nao retornou o link. Aguarde a confirmacao ou tente gerar novamente.</p>`;
+    }
   }
 
   checkoutForm?.classList.remove("is-processing");
@@ -1428,6 +1446,14 @@ async function submitOneTimePayment(method) {
       email: payload.email,
       telefone: payload.phone,
       documento: payload.document,
+      endereco: {
+        cep: payload.boletoZipCode,
+        logradouro: payload.boletoStreetName,
+        numero: payload.boletoStreetNumber,
+        bairro: payload.boletoNeighborhood,
+        cidade: payload.boletoCity,
+        uf: payload.boletoFederalUnit,
+      },
     }),
   });
   const data = await parseJsonResponse(response, "O backend retornou uma resposta invalida. Confira se o config.js aponta para o Railway.");

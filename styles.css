@@ -2774,8 +2774,24 @@ select option {
 }
 
 [data-card-payment-field][hidden],
+[data-boleto-payment-field][hidden],
 .is-payment-field-hidden {
   display: none !important;
+}
+
+.boleto-fields {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid rgba(240, 191, 90, 0.24);
+  border-radius: 10px;
+  background: rgba(240, 191, 90, 0.06);
+}
+
+.checkout-field-title {
+  margin: 0;
+  color: var(--gold-strong);
+  font-weight: 900;
 }
 
 .payment-instructions {
@@ -2813,6 +2829,14 @@ select option {
   border: 1px solid rgba(240, 191, 90, 0.36);
   border-radius: 12px;
   background: rgba(255, 255, 255, 0.06);
+}
+
+.payment-warning {
+  max-width: 420px;
+  margin: 0;
+  color: var(--gold-strong);
+  font-weight: 800;
+  line-height: 1.45;
 }
 
 .form-row {

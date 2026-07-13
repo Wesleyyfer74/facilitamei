@@ -3917,7 +3917,42 @@ function getMercadoPagoPaymentError(data, fallbackMessage) {
     return "Pix ainda nao esta habilitado na conta Mercado Pago recebedora. Cadastre uma chave Pix na conta do Mercado Pago e tente novamente.";
   }
 
+  if (normalizedMessage.includes("unauthorized use of live credentials")) {
+    return "Credenciais de producao do Mercado Pago sem permissao para criar pagamentos. Confira se o Access Token pertence a aplicacao correta e tem permissao de pagamentos.";
+  }
+
   return data?.message || fallbackMessage;
+}
+
+function normalizeBoletoAddress(address = {}) {
+  return {
+    zipCode: normalizeDigits(address.cep || address.zipCode || address.zip_code || ""),
+    streetName: cleanText(address.logradouro || address.streetName || address.street_name || "", 120),
+    streetNumber: cleanText(address.numero || address.streetNumber || address.street_number || "", 24),
+    neighborhood: cleanText(address.bairro || address.neighborhood || "", 80),
+    city: cleanText(address.cidade || address.city || "", 80),
+    federalUnit: cleanText(address.uf || address.federalUnit || address.federal_unit || "", 2)?.toUpperCase() || "",
+  };
+}
+
+function validateBoletoAddress(address = {}) {
+  const normalizedAddress = normalizeBoletoAddress(address);
+  const missingFields = [];
+
+  if (normalizedAddress.zipCode.length !== 8) missingFields.push("CEP");
+  if (!normalizedAddress.streetName) missingFields.push("rua");
+  if (!normalizedAddress.streetNumber) missingFields.push("numero");
+  if (!normalizedAddress.neighborhood) missingFields.push("bairro");
+  if (!normalizedAddress.city) missingFields.push("cidade");
+  if (!/^[A-Z]{2}$/.test(normalizedAddress.federalUnit)) missingFields.push("UF");
+
+  return { normalizedAddress, missingFields };
+}
+
+function getBoletoExpirationDate() {
+  const expirationDate = new Date();
+  expirationDate.setDate(expirationDate.getDate() + 3);
+  return expirationDate.toISOString();
 }
 
 function statusLabelForApi(status = "") {
@@ -4243,16 +4278,17 @@ function storePayment(paymentData) {
     statusDetail: paymentData.status_detail,
     externalReference: paymentData.external_reference,
     metadata: paymentData.metadata,
+    paymentMethod: paymentData.metadata?.payment_method || paymentData.payment_method_id,
     updatedAt: new Date().toISOString(),
   });
 }
 
-function getPaymentMessage(status) {
+function getPaymentMessage(status, method = "pix") {
   const messages = {
     approved: "Pagamento aprovado. Obrigado!",
-    pending: "Aguardando pagamento Pix.",
+    pending: method === "boleto" ? "Boleto gerado. Aguardando compensacao bancaria." : "Aguardando pagamento Pix.",
     in_process: "Pagamento em analise pelo Mercado Pago.",
-    rejected: "Pagamento recusado. Gere um novo Pix ou tente outro metodo.",
+    rejected: method === "boleto" ? "Boleto recusado. Gere um novo boleto ou tente outro metodo." : "Pagamento recusado. Gere um novo Pix ou tente outro metodo.",
     cancelled: "Pagamento cancelado.",
     refunded: "Pagamento estornado.",
   };
@@ -4382,6 +4418,7 @@ app.post("/api/payments/pix", async (request, response) => {
           customer_email: email,
           customer_phone: phone,
           customer_document: documentNumber,
+          payment_method: "pix",
         },
       }),
     });
@@ -4425,11 +4462,13 @@ app.post("/api/payments/boleto", async (request, response) => {
     const name = body.nome || body.name;
     const phone = body.telefone || body.phone;
     const document = body.documento || body.document;
+    const address = body.endereco || body.address || {};
     const plan = await getPlanById(planId);
     const accessToken = process.env.MERCADO_PAGO_ACCESS_TOKEN;
     const documentNumber = normalizeDigits(document);
     const phoneNumber = normalizeDigits(phone);
     const { firstName, lastName } = splitName(name);
+    const { normalizedAddress, missingFields } = validateBoletoAddress(address);
 
     if (!plan) {
       return response.status(400).json({ error: "Plano invalido." });
@@ -4443,6 +4482,12 @@ app.post("/api/payments/boleto", async (request, response) => {
 
     if (!isValidCpfOrCnpj(documentNumber)) {
       return response.status(400).json({ error: "Informe um CPF ou CNPJ valido para gerar o boleto." });
+    }
+
+    if (missingFields.length) {
+      return response.status(400).json({
+        error: `Preencha os dados do endereco para gerar o boleto: ${missingFields.join(", ")}.`,
+      });
     }
 
     if (!accessToken || accessToken.includes("SEU_ACCESS_TOKEN_AQUI")) {
@@ -4461,6 +4506,7 @@ app.post("/api/payments/boleto", async (request, response) => {
         transaction_amount: plan.price,
         description: `${plan.title} - Facilita MEI`,
         payment_method_id: "bolbradesco",
+        date_of_expiration: getBoletoExpirationDate(),
         external_reference: externalReference,
         notification_url: `${apiPublicUrl}/api/webhooks/mercadopago`,
         payer: {
@@ -4474,6 +4520,14 @@ app.post("/api/payments/boleto", async (request, response) => {
           phone: {
             number: phoneNumber,
           },
+          address: {
+            zip_code: normalizedAddress.zipCode,
+            street_name: normalizedAddress.streetName,
+            street_number: normalizedAddress.streetNumber,
+            neighborhood: normalizedAddress.neighborhood,
+            city: normalizedAddress.city,
+            federal_unit: normalizedAddress.federalUnit,
+          },
         },
         metadata: {
           plan_id: plan.id,
@@ -4483,6 +4537,9 @@ app.post("/api/payments/boleto", async (request, response) => {
           customer_email: email,
           customer_phone: phone,
           customer_document: documentNumber,
+          customer_zip_code: normalizedAddress.zipCode,
+          customer_city: normalizedAddress.city,
+          customer_uf: normalizedAddress.federalUnit,
           payment_method: "boleto",
         },
       }),
@@ -4506,7 +4563,7 @@ app.post("/api/payments/boleto", async (request, response) => {
       paymentId: data.id,
       status: data.status,
       statusDetail: data.status_detail,
-      message: getPaymentMessage(data.status),
+      message: getPaymentMessage(data.status, "boleto"),
       ticketUrl: data.transaction_details?.external_resource_url || data.transaction_details?.ticket_url,
       externalResourceUrl: data.transaction_details?.external_resource_url,
       externalReference,
@@ -4833,8 +4890,12 @@ app.get("/api/payments/:id/status", async (request, response) => {
       id: paymentData.id,
       status: paymentData.status,
       statusDetail: paymentData.status_detail,
-      message: getPaymentMessage(paymentData.status),
+      message: getPaymentMessage(
+        paymentData.status,
+        paymentData.metadata?.payment_method || (paymentData.payment_method_id === "bolbradesco" ? "boleto" : paymentData.payment_method_id),
+      ),
       metadata: paymentData.metadata,
+      paymentMethod: paymentData.metadata?.payment_method || paymentData.payment_method_id,
     });
   } catch (error) {
     const cachedPayment = paymentStore.get(String(request.params.id));
@@ -4842,7 +4903,7 @@ app.get("/api/payments/:id/status", async (request, response) => {
     if (cachedPayment) {
       return response.json({
         ...cachedPayment,
-        message: getPaymentMessage(cachedPayment.status),
+        message: getPaymentMessage(cachedPayment.status, cachedPayment.paymentMethod === "bolbradesco" ? "boleto" : cachedPayment.paymentMethod),
       });
     }
 
