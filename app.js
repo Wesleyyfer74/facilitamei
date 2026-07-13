@@ -512,7 +512,10 @@ function updateCheckoutPaymentMethod() {
   const method = getSelectedPaymentMethod();
 
   cardPaymentFields.forEach((field) => {
-    field.hidden = method !== "card";
+    const shouldShowCardField = method === "card";
+    field.hidden = !shouldShowCardField;
+    field.classList.toggle("is-payment-field-hidden", !shouldShowCardField);
+    field.style.display = shouldShowCardField ? "" : "none";
   });
   cardRequiredFields.forEach((field) => {
     field.required = method === "card";

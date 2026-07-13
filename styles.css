@@ -2773,6 +2773,11 @@ select option {
   outline-offset: 2px;
 }
 
+[data-card-payment-field][hidden],
+.is-payment-field-hidden {
+  display: none !important;
+}
+
 .payment-instructions {
   display: grid;
   gap: 16px;
