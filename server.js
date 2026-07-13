@@ -3815,6 +3815,60 @@ function normalizeDigits(value = "") {
   return String(value).replace(/\D/g, "");
 }
 
+function hasRepeatedDigits(value = "") {
+  return /^(\d)\1+$/.test(value);
+}
+
+function isValidCpf(documentNumber = "") {
+  const cpf = normalizeDigits(documentNumber);
+  if (cpf.length !== 11 || hasRepeatedDigits(cpf)) return false;
+
+  let sum = 0;
+  for (let i = 0; i < 9; i += 1) sum += Number(cpf[i]) * (10 - i);
+  let digit = (sum * 10) % 11;
+  if (digit === 10) digit = 0;
+  if (digit !== Number(cpf[9])) return false;
+
+  sum = 0;
+  for (let i = 0; i < 10; i += 1) sum += Number(cpf[i]) * (11 - i);
+  digit = (sum * 10) % 11;
+  if (digit === 10) digit = 0;
+
+  return digit === Number(cpf[10]);
+}
+
+function isValidCnpj(documentNumber = "") {
+  const cnpj = normalizeDigits(documentNumber);
+  if (cnpj.length !== 14 || hasRepeatedDigits(cnpj)) return false;
+
+  const validateDigit = (base, weights) => {
+    const sum = weights.reduce((total, weight, index) => total + Number(base[index]) * weight, 0);
+    const rest = sum % 11;
+    return rest < 2 ? 0 : 11 - rest;
+  };
+
+  const firstDigit = validateDigit(cnpj.slice(0, 12), [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2]);
+  const secondDigit = validateDigit(cnpj.slice(0, 13), [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2]);
+
+  return firstDigit === Number(cnpj[12]) && secondDigit === Number(cnpj[13]);
+}
+
+function isValidCpfOrCnpj(documentNumber = "") {
+  const digits = normalizeDigits(documentNumber);
+  if (digits.length === 11) return isValidCpf(digits);
+  if (digits.length === 14) return isValidCnpj(digits);
+  return false;
+}
+
+function getMercadoPagoPaymentError(data, fallbackMessage) {
+  const message = String(data?.message || "");
+  if (message.toLowerCase().includes("invalid user identification number")) {
+    return "Informe um CPF ou CNPJ valido para gerar o pagamento.";
+  }
+
+  return data?.message || fallbackMessage;
+}
+
 function statusLabelForApi(status = "") {
   const labels = {
     active: "Ativo",
@@ -4231,6 +4285,10 @@ app.post("/api/payments/pix", async (request, response) => {
       return response.status(400).json({ error: "Nome, e-mail, WhatsApp e CPF/CNPJ sao obrigatorios." });
     }
 
+    if (!isValidCpfOrCnpj(documentNumber)) {
+      return response.status(400).json({ error: "Informe um CPF ou CNPJ valido para gerar o Pix." });
+    }
+
     if (!accessToken || accessToken.includes("SEU_ACCESS_TOKEN_AQUI")) {
       throw new Error("Configure MERCADO_PAGO_ACCESS_TOKEN no arquivo .env");
     }
@@ -4277,7 +4335,7 @@ app.post("/api/payments/pix", async (request, response) => {
 
     if (!mercadoPagoResponse.ok) {
       return response.status(mercadoPagoResponse.status).json({
-        error: data.message || "Erro ao criar pagamento Pix no Mercado Pago.",
+        error: getMercadoPagoPaymentError(data, "Erro ao criar pagamento Pix no Mercado Pago."),
         details: data,
       });
     }
@@ -4328,6 +4386,10 @@ app.post("/api/payments/boleto", async (request, response) => {
       return response.status(400).json({ error: "Nome, e-mail, WhatsApp e CPF/CNPJ sao obrigatorios." });
     }
 
+    if (!isValidCpfOrCnpj(documentNumber)) {
+      return response.status(400).json({ error: "Informe um CPF ou CNPJ valido para gerar o boleto." });
+    }
+
     if (!accessToken || accessToken.includes("SEU_ACCESS_TOKEN_AQUI")) {
       throw new Error("Configure MERCADO_PAGO_ACCESS_TOKEN no arquivo .env");
     }
@@ -4375,7 +4437,7 @@ app.post("/api/payments/boleto", async (request, response) => {
 
     if (!mercadoPagoResponse.ok) {
       return response.status(mercadoPagoResponse.status).json({
-        error: data.message || "Erro ao criar boleto no Mercado Pago.",
+        error: getMercadoPagoPaymentError(data, "Erro ao criar boleto no Mercado Pago."),
         details: data,
       });
     }
@@ -4422,6 +4484,10 @@ app.post("/api/payments/card", async (request, response) => {
 
     if (!name || !email || !phone || !documentNumber) {
       return response.status(400).json({ error: "Nome, e-mail, WhatsApp e CPF/CNPJ sao obrigatorios." });
+    }
+
+    if (!isValidCpfOrCnpj(documentNumber)) {
+      return response.status(400).json({ error: "Informe um CPF ou CNPJ valido para pagar com cartao." });
     }
 
     if (!cardToken || !paymentMethodId) {
@@ -4478,7 +4544,7 @@ app.post("/api/payments/card", async (request, response) => {
 
     if (!mercadoPagoResponse.ok) {
       return response.status(mercadoPagoResponse.status).json({
-        error: data.message || "Erro ao criar pagamento com cartao no Mercado Pago.",
+        error: getMercadoPagoPaymentError(data, "Erro ao criar pagamento com cartao no Mercado Pago."),
         details: data,
       });
     }
