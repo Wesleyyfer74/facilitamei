@@ -771,16 +771,16 @@
                 <p class="checkout-field-title">Dados para boleto</p>
                 <label>
                   CEP
-                  <input name="boletoZipCode" inputmode="numeric" autocomplete="postal-code" placeholder="00000-000" data-boleto-required />
+                  <input name="boletoZipCode" inputmode="numeric" autocomplete="postal-code" placeholder="Preenchido pelo CNPJ" data-boleto-required />
                 </label>
                 <label>
                   Rua
-                  <input name="boletoStreetName" autocomplete="address-line1" placeholder="Logradouro" data-boleto-required />
+                  <input name="boletoStreetName" autocomplete="address-line1" placeholder="Preenchido pelo CNPJ" data-boleto-required />
                 </label>
                 <div class="form-row">
                   <label>
                     Numero
-                    <input name="boletoStreetNumber" autocomplete="address-line2" placeholder="123" data-boleto-required />
+                    <input name="boletoStreetNumber" autocomplete="address-line2" placeholder="Numero" data-boleto-required />
                   </label>
                   <label>
                     Bairro
@@ -794,7 +794,7 @@
                   </label>
                   <label>
                     UF
-                    <input name="boletoFederalUnit" maxlength="2" autocomplete="address-level1" placeholder="MS" data-boleto-required />
+                    <input name="boletoFederalUnit" maxlength="2" autocomplete="address-level1" placeholder="UF" data-boleto-required />
                   </label>
                 </div>
               </div>
@@ -896,6 +896,6 @@
     <script src="./config.js?v=20260606-railway"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
-    <script src="./app.js?v=20260713-pix-boleto-address"></script>
+    <script src="./app.js?v=20260715-boleto-cnpj"></script>
   </body>
 </html>

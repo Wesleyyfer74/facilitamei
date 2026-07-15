@@ -1165,6 +1165,21 @@ app.post("/api/customers/cnpj", async (request, response) => {
   }
 });
 
+app.post("/api/cnpj/consultar", async (request, response) => {
+  try {
+    const cnpj = normalizeDigits(request.body?.cnpj || "");
+    const company = await consultarOpenCnpj(cnpj);
+
+    response.json({
+      ok: true,
+      company,
+    });
+  } catch (error) {
+    console.error("Erro ao consultar CNPJ:", error.message);
+    response.status(error.status || 500).json({ error: error.message || "Erro ao consultar CNPJ." });
+  }
+});
+
 app.post("/api/client/auth/setup", async (request, response) => {
   try {
     const email = String(request.body?.email || "").trim().toLowerCase();

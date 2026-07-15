@@ -33,6 +33,7 @@ const meiNext = document.querySelector("[data-mei-next]");
 const meiStatus = document.querySelector("[data-mei-status]");
 const paymentSubmit = document.querySelector("[data-payment-submit]");
 const paymentMethodSelect = document.querySelector("[data-payment-method-select]");
+const checkoutDocumentInput = document.querySelector("#form-checkout__identificationNumber");
 const cardPaymentFields = document.querySelectorAll("[data-card-payment-field]");
 const cardRequiredFields = document.querySelectorAll("[data-card-required]");
 const boletoPaymentFields = document.querySelectorAll("[data-boleto-payment-field]");
@@ -56,6 +57,8 @@ const pageLoader = document.querySelector("[data-page-loader]");
 
 const loaderStartedAt = performance.now();
 let lastSubscriptionContext = null;
+let lastBoletoCnpjLookup = "";
+let boletoCnpjLookupTimeout = null;
 
 function preloadImage(src) {
   return new Promise((resolve) => {
@@ -510,6 +513,58 @@ function getSelectedPaymentMethod() {
   return paymentMethodSelect?.value || "card";
 }
 
+function setCheckoutFieldValue(name, value) {
+  const field = checkoutForm?.elements?.[name];
+  if (field && value) field.value = value;
+}
+
+function fillBoletoAddressFromCompany(company = {}) {
+  setCheckoutFieldValue("boletoZipCode", company.cep || "");
+  setCheckoutFieldValue("boletoStreetName", company.logradouro || "");
+  setCheckoutFieldValue("boletoStreetNumber", company.numero || "");
+  setCheckoutFieldValue("boletoNeighborhood", company.bairro || "");
+  setCheckoutFieldValue("boletoCity", company.municipio || "");
+  setCheckoutFieldValue("boletoFederalUnit", company.uf || "");
+}
+
+async function consultCnpjForBoleto() {
+  if (!checkoutForm || getSelectedPaymentMethod() !== "boleto") return;
+
+  const documentDigits = String(checkoutDocumentInput?.value || "").replace(/\D/g, "");
+  if (documentDigits.length !== 14 || documentDigits === lastBoletoCnpjLookup) return;
+
+  lastBoletoCnpjLookup = documentDigits;
+  if (checkoutStatus) checkoutStatus.textContent = "Buscando dados do CNPJ para preencher o boleto...";
+
+  try {
+    const response = await fetch(`${API_BASE}/api/cnpj/consultar`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ cnpj: documentDigits }),
+    });
+    const data = await parseJsonResponse(response, "Nao foi possivel ler os dados do CNPJ.");
+
+    if (!response.ok) throw new Error(data.error || "Nao foi possivel consultar este CNPJ.");
+
+    fillBoletoAddressFromCompany(data.company || {});
+    if (checkoutStatus) checkoutStatus.textContent = "Endereco preenchido com dados publicos do CNPJ.";
+    window.setTimeout(() => {
+      if (checkoutStatus?.textContent === "Endereco preenchido com dados publicos do CNPJ.") {
+        checkoutStatus.textContent = "";
+      }
+    }, 2800);
+  } catch (error) {
+    if (checkoutStatus) checkoutStatus.textContent = `${error.message} Preencha o endereco manualmente.`;
+  }
+}
+
+function scheduleBoletoCnpjLookup() {
+  window.clearTimeout(boletoCnpjLookupTimeout);
+  boletoCnpjLookupTimeout = window.setTimeout(consultCnpjForBoleto, 450);
+}
+
 function updateCheckoutPaymentMethod() {
   const method = getSelectedPaymentMethod();
 
@@ -541,6 +596,10 @@ function updateCheckoutPaymentMethod() {
 
   if (subscriptionMessage && !paymentResult?.hidden) {
     subscriptionMessage.textContent = "";
+  }
+
+  if (method === "boleto") {
+    scheduleBoletoCnpjLookup();
   }
 }
 
@@ -1185,8 +1244,9 @@ checkoutForm?.addEventListener(
   true,
 );
 
-document.querySelector("#form-checkout__identificationNumber")?.addEventListener("input", (event) => {
+checkoutDocumentInput?.addEventListener("input", (event) => {
   syncIdentificationType(event.target.value);
+  scheduleBoletoCnpjLookup();
 });
 
 cnpjLinkForm?.querySelector("input")?.addEventListener("input", (event) => {
