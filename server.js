@@ -3755,6 +3755,69 @@ app.post("/api/admin/customers/:id/subscriptions", requireAdminSession, async (r
   }
 });
 
+app.post("/api/admin/customers/:id/payments/:method", requireAdminSession, async (request, response) => {
+  try {
+    const userId = Number(request.params.id);
+    const method = String(request.params.method || "").toLowerCase();
+    const { planId, endereco, address } = request.body || {};
+
+    if (!Number.isFinite(userId) || userId <= 0) {
+      return response.status(400).json({ error: "Cliente invalido." });
+    }
+
+    if (!["pix", "boleto"].includes(method)) {
+      return response.status(400).json({ error: "Metodo de pagamento invalido." });
+    }
+
+    const [customerRows] = await dbPool.execute(
+      `SELECT id, nome, email, telefone, whatsapp, documento, cnpj, cep, logradouro, numero, bairro, municipio, uf
+       FROM users
+       WHERE id = :userId
+       LIMIT 1`,
+      { userId },
+    );
+    const customer = customerRows[0];
+
+    if (!customer) return response.status(404).json({ error: "Cliente nao encontrado." });
+
+    let selectedPlanId = planId;
+    if (!selectedPlanId) {
+      const [subscriptionRows] = await dbPool.execute(
+        `SELECT plan_id
+         FROM subscriptions
+         WHERE user_id = :userId
+         ORDER BY created_at DESC
+         LIMIT 1`,
+        { userId },
+      );
+      selectedPlanId = subscriptionRows[0]?.plan_id;
+    }
+
+    if (!selectedPlanId) {
+      return response.status(400).json({ error: "Selecione ou vincule um plano antes de gerar cobranca." });
+    }
+
+    const plan = await getPlanById(selectedPlanId);
+    if (!plan) return response.status(400).json({ error: "Plano invalido ou inativo." });
+
+    const payment = await createMercadoPagoSinglePayment({
+      customerId: userId,
+      customer,
+      plan,
+      paymentMethod: method,
+      address: endereco || address || {},
+    });
+
+    response.status(201).json({ ok: true, payment });
+  } catch (error) {
+    console.error(`Erro ao gerar cobranca administrativa:`, error);
+    response.status(error.status || 500).json({
+      error: error.message || "Erro ao gerar cobranca.",
+      details: error.details,
+    });
+  }
+});
+
 app.post("/api/admin/subscriptions/:id/cancel", requireAdminSession, async (request, response) => {
   try {
     const subscriptionId = Number(request.params.id);
@@ -4324,6 +4387,154 @@ function getSubscriptionMessage(status) {
 
 function ensureSinglePaymentPlan(plan) {
   return Boolean(plan);
+}
+
+function buildCustomerPaymentProfile(customer = {}) {
+  const name = cleanText(customer.nome || customer.name, 160);
+  const email = cleanText(customer.email, 160);
+  const phone = normalizeDigits(customer.whatsapp || customer.telefone || customer.phone || "");
+  const documentNumber = normalizeDigits(customer.documento || customer.cnpj || customer.document || "");
+
+  return {
+    name,
+    email,
+    phone,
+    documentNumber,
+    cnpj: documentNumber.length === 14 ? documentNumber : normalizeDigits(customer.cnpj || ""),
+    address: {
+      cep: customer.cep,
+      logradouro: customer.logradouro,
+      numero: customer.numero,
+      bairro: customer.bairro,
+      cidade: customer.municipio || customer.cidade,
+      uf: customer.uf,
+    },
+  };
+}
+
+async function createMercadoPagoSinglePayment({ customerId, customer, plan, paymentMethod, address = {} }) {
+  const accessToken = process.env.MERCADO_PAGO_ACCESS_TOKEN;
+  const profile = buildCustomerPaymentProfile(customer);
+  const { firstName, lastName } = splitName(profile.name);
+
+  if (!plan) throw new Error("Plano invalido.");
+  ensureSinglePaymentPlan(plan);
+
+  if (!profile.name || !profile.email || !profile.phone || !profile.documentNumber) {
+    throw new Error("Cliente precisa ter nome, e-mail, WhatsApp e CPF/CNPJ para gerar cobranca.");
+  }
+
+  if (!isValidCpfOrCnpj(profile.documentNumber)) {
+    throw new Error("Cliente precisa ter CPF ou CNPJ valido para gerar cobranca.");
+  }
+
+  if (!accessToken || accessToken.includes("SEU_ACCESS_TOKEN_AQUI")) {
+    throw new Error("Configure MERCADO_PAGO_ACCESS_TOKEN no arquivo .env");
+  }
+
+  const isBoleto = paymentMethod === "boleto";
+  const methodAddress = isBoleto ? { ...profile.address, ...address } : {};
+  const { normalizedAddress, missingFields } = isBoleto
+    ? validateBoletoAddress(methodAddress)
+    : { normalizedAddress: null, missingFields: [] };
+
+  if (missingFields.length) {
+    throw new Error(`Preencha os dados do endereco para gerar o boleto: ${missingFields.join(", ")}.`);
+  }
+
+  const externalReference = `facilita-admin-${paymentMethod}-${Date.now()}-${crypto.randomUUID()}`;
+  const payer = {
+    email: profile.email,
+    first_name: firstName,
+    last_name: lastName,
+    identification: {
+      type: getDocumentType(profile.documentNumber),
+      number: profile.documentNumber,
+    },
+    phone: {
+      number: profile.phone,
+    },
+  };
+
+  if (isBoleto) {
+    payer.address = {
+      zip_code: normalizedAddress.zipCode,
+      street_name: normalizedAddress.streetName,
+      street_number: normalizedAddress.streetNumber,
+      neighborhood: normalizedAddress.neighborhood,
+      city: normalizedAddress.city,
+      federal_unit: normalizedAddress.federalUnit,
+    };
+  }
+
+  const mercadoPagoResponse = await fetch("https://api.mercadopago.com/v1/payments", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+      "X-Idempotency-Key": crypto.randomUUID(),
+    },
+    body: JSON.stringify({
+      transaction_amount: plan.price,
+      description: `${plan.title} - Facilita MEI`,
+      payment_method_id: isBoleto ? "bolbradesco" : "pix",
+      ...(isBoleto ? { date_of_expiration: getBoletoExpirationDate() } : {}),
+      external_reference: externalReference,
+      notification_url: `${apiPublicUrl}/api/webhooks/mercadopago`,
+      payer,
+      metadata: {
+        origin: "admin",
+        plan_id: plan.id,
+        plan_name: plan.title,
+        service_code: plan.serviceCode,
+        customer_id: customerId,
+        customer_name: profile.name,
+        customer_email: profile.email,
+        customer_phone: profile.phone,
+        customer_document: profile.documentNumber,
+        payment_method: paymentMethod,
+        ...(isBoleto
+          ? {
+              customer_zip_code: normalizedAddress.zipCode,
+              customer_city: normalizedAddress.city,
+              customer_uf: normalizedAddress.federalUnit,
+            }
+          : {}),
+      },
+    }),
+  });
+
+  const data = await mercadoPagoResponse.json();
+
+  if (!mercadoPagoResponse.ok) {
+    const error = new Error(getMercadoPagoPaymentError(data, `Erro ao criar ${isBoleto ? "boleto" : "Pix"} no Mercado Pago.`));
+    error.status = mercadoPagoResponse.status;
+    error.details = data;
+    throw error;
+  }
+
+  storePayment(data);
+  await savePaymentRecord({ customerId, plan, paymentData: data, paymentMethod });
+
+  const transactionData = data.point_of_interaction?.transaction_data || {};
+
+  return {
+    customerId,
+    paymentId: data.id,
+    status: data.status,
+    statusDetail: data.status_detail,
+    message: getPaymentMessage(data.status, paymentMethod),
+    qrCode: transactionData.qr_code,
+    qrCodeBase64: transactionData.qr_code_base64,
+    ticketUrl: isBoleto
+      ? data.transaction_details?.external_resource_url || data.transaction_details?.ticket_url
+      : transactionData.ticket_url,
+    externalResourceUrl: data.transaction_details?.external_resource_url,
+    externalReference,
+    amount: plan.price,
+    planName: plan.title,
+    paymentMethod,
+  };
 }
 
 function ensureSubscriptionPlan(plan) {

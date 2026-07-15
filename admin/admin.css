@@ -3283,6 +3283,72 @@ td small {
   line-height: 1.45;
 }
 
+.charge-customer-card,
+.admin-payment-result,
+.boleto-address-fields {
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid rgba(240, 191, 90, 0.18);
+  border-radius: 10px;
+  background: linear-gradient(180deg, rgba(35, 28, 19, 0.82), rgba(11, 10, 8, 0.92));
+}
+
+.charge-customer-card {
+  display: grid;
+  gap: 5px;
+}
+
+.charge-customer-card strong,
+.admin-payment-result h4 {
+  color: var(--gold-strong);
+}
+
+.charge-customer-card span,
+.admin-payment-result p {
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+.boleto-address-fields {
+  display: grid;
+  gap: 14px;
+}
+
+.boleto-address-fields[hidden],
+.admin-payment-result[hidden] {
+  display: none;
+}
+
+.boleto-address-fields legend {
+  padding: 0 8px;
+  color: var(--gold-strong);
+  font-weight: 800;
+}
+
+.admin-payment-result {
+  display: grid;
+  gap: 10px;
+}
+
+.admin-payment-result h4,
+.admin-payment-result p {
+  margin: 0;
+}
+
+.admin-payment-result textarea {
+  width: 100%;
+  resize: vertical;
+}
+
+.admin-payment-qr {
+  width: 168px;
+  max-width: 100%;
+  border-radius: 10px;
+  border: 1px solid rgba(240, 191, 90, 0.24);
+  background: #fff;
+  padding: 8px;
+}
+
 .contract-history-list {
   display: grid;
   gap: 12px;

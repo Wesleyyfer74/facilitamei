@@ -706,6 +706,8 @@ function renderCustomerPreview(data) {
             <div class="quick-actions-grid">
               <button class="mini-action" type="button" data-open-customer="${customer.id}"><span>${iconSvg("renew")}</span>Renovar Assinatura</button>
               <button class="mini-action" type="button" data-manage-customer-plan="${customer.id}"><span>${iconSvg("swap")}</span>${subscription.id ? "Trocar Plano" : "Vincular Plano"}</button>
+              <button class="mini-action" type="button" data-generate-customer-payment="${customer.id}" data-payment-method="pix"><span>${iconSvg("money")}</span>Gerar Pix</button>
+              <button class="mini-action" type="button" data-generate-customer-payment="${customer.id}" data-payment-method="boleto"><span>${iconSvg("ticket")}</span>Gerar Boleto</button>
               <button class="mini-action danger" type="button" ${subscription.id ? `data-cancel-subscription="${subscription.id}"` : "disabled"}><span>${iconSvg("cancel")}</span>Cancelar Assinatura</button>
               <button class="mini-action" type="button" data-open-customer="${customer.id}"><span>${iconSvg("edit")}</span>Editar Cliente</button>
             </div>
@@ -2240,6 +2242,15 @@ async function openCustomer(customerId) {
         }
 
         <article class="panel">
+          <h3>Cobranca avulsa</h3>
+          <p>Gere Pix ou boleto para assuntos especificos do cliente usando o valor do plano no banco.</p>
+          <div class="action-bar">
+            <button class="gold-button" type="button" data-generate-customer-payment="${customer.id}" data-payment-method="pix">Gerar Pix</button>
+            <button class="ghost-button" type="button" data-generate-customer-payment="${customer.id}" data-payment-method="boleto">Gerar boleto</button>
+          </div>
+        </article>
+
+        <article class="panel">
           <h3>Historico de pagamentos</h3>
           <div class="history-list">
             ${
@@ -2323,6 +2334,161 @@ async function openCustomerPlanManager(customerId) {
     setStatus("");
   } catch (error) {
     setStatus(error.message, "error");
+  }
+}
+
+async function openCustomerPaymentManager(customerId, method = "pix") {
+  try {
+    setStatus("Carregando dados para cobranca...");
+    const data = await apiRequest(`/api/admin/customers/${customerId}`);
+    const customer = data.customer || {};
+    const latestSubscription = data.subscriptions?.[0];
+    const activePlans = plansCache.filter((plan) => Number(plan.ativo) !== 0);
+    const selectedPlanId = latestSubscription?.plan_id || activePlans[0]?.id || "";
+    const planOptions = activePlans
+      .map(
+        (plan) =>
+          `<option value="${escapeHtml(plan.id)}" ${selectedPlanId === plan.id ? "selected" : ""}>${escapeHtml(plan.nome)} - ${money(plan.valor)}</option>`,
+      )
+      .join("");
+
+    openDrawer(`
+      <div class="drawer-content">
+        <div>
+          <p class="eyebrow">Cobranca administrativa</p>
+          <h2>Gerar ${method === "boleto" ? "boleto" : "Pix"}</h2>
+          <p>${escapeHtml(customer.nome || "Cliente")} recebera uma cobranca avulsa vinculada ao plano selecionado.</p>
+        </div>
+
+        <form class="form-grid" data-admin-payment-form data-customer-id="${escapeHtml(customer.id)}">
+          <div class="form-grid two-cols">
+            <label>
+              Metodo
+              <select name="method" data-admin-payment-method>
+                <option value="pix" ${method === "pix" ? "selected" : ""}>Pix</option>
+                <option value="boleto" ${method === "boleto" ? "selected" : ""}>Boleto</option>
+              </select>
+            </label>
+            <label>
+              Plano
+              <select name="planId" required>
+                <option value="">Selecione um plano</option>
+                ${planOptions || `<option value="" disabled>Nenhum plano ativo encontrado</option>`}
+              </select>
+            </label>
+          </div>
+
+          <article class="charge-customer-card">
+            <strong>${escapeHtml(customer.nome || "Cliente")}</strong>
+            <span>${escapeHtml(customer.email || "Sem e-mail")} &bull; ${escapeHtml(customer.whatsapp || customer.telefone || "Sem telefone")}</span>
+            <span>Documento: ${escapeHtml(customer.documento || customer.cnpj || "Nao cadastrado")}</span>
+          </article>
+
+          <fieldset class="boleto-address-fields" data-boleto-address-fields ${method === "boleto" ? "" : "hidden"}>
+            <legend>Endereco para boleto</legend>
+            <div class="form-grid two-cols">
+              <label>CEP<input name="cep" value="${escapeHtml(customer.cep || "")}" placeholder="79940000" /></label>
+              <label>UF<input name="uf" value="${escapeHtml(customer.uf || "")}" maxlength="2" placeholder="MS" /></label>
+            </div>
+            <label>Logradouro<input name="logradouro" value="${escapeHtml(customer.logradouro || "")}" placeholder="Rua ou avenida" /></label>
+            <div class="form-grid two-cols">
+              <label>Numero<input name="numero" value="${escapeHtml(customer.numero || "")}" placeholder="419" /></label>
+              <label>Bairro<input name="bairro" value="${escapeHtml(customer.bairro || "")}" placeholder="Centro" /></label>
+            </div>
+            <label>Cidade<input name="cidade" value="${escapeHtml(customer.municipio || "")}" placeholder="Caarapo" /></label>
+            <div class="drawer-helper">
+              Para boleto, o Mercado Pago exige endereco completo do pagador.
+            </div>
+          </fieldset>
+
+          <div class="drawer-helper">
+            O valor sera sempre buscado no backend pela tabela de planos. O webhook confirmara o pagamento quando o Mercado Pago aprovar.
+          </div>
+
+          <div class="admin-payment-result" data-admin-payment-result hidden></div>
+
+          <div class="drawer-actions">
+            <button class="gold-button" type="submit">Gerar cobranca</button>
+            <button class="ghost-button" type="button" data-close-drawer>Cancelar</button>
+          </div>
+        </form>
+      </div>
+    `);
+    setStatus("");
+  } catch (error) {
+    setStatus(error.message, "error");
+  }
+}
+
+function renderAdminPaymentResult(resultNode, payment) {
+  const isPix = payment.paymentMethod === "pix";
+  const qrImage = isPix && payment.qrCodeBase64 ? `data:image/png;base64,${payment.qrCodeBase64}` : "";
+  resultNode.hidden = false;
+  resultNode.innerHTML = `
+    <h4>${isPix ? "Pix gerado" : "Boleto gerado"}</h4>
+    <p>${escapeHtml(payment.message || "Cobranca criada no Mercado Pago.")}</p>
+    <p><strong>${escapeHtml(payment.planName || "Plano")}</strong> &bull; ${money(payment.amount)}</p>
+    <p>ID Mercado Pago: <strong>${escapeHtml(payment.paymentId || "-")}</strong></p>
+    ${
+      qrImage
+        ? `<img src="${qrImage}" alt="QR Code Pix" class="admin-payment-qr" />`
+        : ""
+    }
+    ${
+      payment.qrCode
+        ? `<label>Pix copia e cola<textarea readonly rows="5">${escapeHtml(payment.qrCode)}</textarea></label>`
+        : ""
+    }
+    ${
+      payment.ticketUrl
+        ? `<a class="gold-button compact" href="${escapeHtml(payment.ticketUrl)}" target="_blank" rel="noopener">${isPix ? "Abrir pagamento" : "Abrir boleto"}</a>`
+        : ""
+    }
+  `;
+}
+
+async function generateAdminCustomerPayment(form) {
+  const customerId = form.dataset.customerId;
+  const formData = new FormData(form);
+  const method = String(formData.get("method") || "pix");
+  const resultNode = form.querySelector("[data-admin-payment-result]");
+  const submitButton = form.querySelector("[type='submit']");
+  const payload = {
+    planId: formData.get("planId"),
+  };
+
+  if (method === "boleto") {
+    payload.endereco = {
+      cep: formData.get("cep"),
+      logradouro: formData.get("logradouro"),
+      numero: formData.get("numero"),
+      bairro: formData.get("bairro"),
+      cidade: formData.get("cidade"),
+      uf: formData.get("uf"),
+    };
+  }
+
+  if (!customerId) throw new Error("Cliente invalido para gerar cobranca.");
+  if (!payload.planId) throw new Error("Selecione um plano para gerar a cobranca.");
+
+  try {
+    if (submitButton) submitButton.disabled = true;
+    if (resultNode) {
+      resultNode.hidden = false;
+      resultNode.innerHTML = "<p>Gerando cobranca no Mercado Pago...</p>";
+    }
+    setStatus("Gerando cobranca...");
+
+    const data = await apiRequest(`/api/admin/customers/${customerId}/payments/${method}`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+
+    if (resultNode) renderAdminPaymentResult(resultNode, data.payment || {});
+    setStatus(`${method === "boleto" ? "Boleto" : "Pix"} gerado para o cliente.`);
+    await loadCustomerPreview(customerId);
+  } finally {
+    if (submitButton) submitButton.disabled = false;
   }
 }
 
@@ -2758,6 +2924,7 @@ document.addEventListener("click", (event) => {
   const deleteButton = event.target.closest("[data-delete-customer]");
   const cancelButton = event.target.closest("[data-cancel-subscription]");
   const manageCustomerPlanButton = event.target.closest("[data-manage-customer-plan]");
+  const generateCustomerPaymentButton = event.target.closest("[data-generate-customer-payment]");
   const uploadDocumentButton = event.target.closest("[data-upload-document]");
   const adminDownloadDocumentButton = event.target.closest("[data-admin-download-document]");
   const newCustomerButton = event.target.closest("[data-new-customer]");
@@ -2794,6 +2961,12 @@ document.addEventListener("click", (event) => {
   if (deleteButton) deleteCustomer(deleteButton.dataset.deleteCustomer).catch((error) => setStatus(error.message, "error"));
   if (cancelButton) cancelSubscription(cancelButton.dataset.cancelSubscription).catch((error) => setStatus(error.message, "error"));
   if (manageCustomerPlanButton) openCustomerPlanManager(manageCustomerPlanButton.dataset.manageCustomerPlan);
+  if (generateCustomerPaymentButton) {
+    openCustomerPaymentManager(
+      generateCustomerPaymentButton.dataset.generateCustomerPayment,
+      generateCustomerPaymentButton.dataset.paymentMethod || "pix",
+    );
+  }
   if (uploadDocumentButton) openUploadDocument(uploadDocumentButton.dataset.uploadDocument);
   if (adminDownloadDocumentButton) {
     downloadAdminDocument(
@@ -2834,6 +3007,15 @@ document.addEventListener("click", (event) => {
   }
 });
 
+document.addEventListener("change", (event) => {
+  const paymentMethodSelect = event.target.closest("[data-admin-payment-method]");
+  if (!paymentMethodSelect) return;
+
+  const form = paymentMethodSelect.closest("[data-admin-payment-form]");
+  const boletoFields = form?.querySelector("[data-boleto-address-fields]");
+  if (boletoFields) boletoFields.hidden = paymentMethodSelect.value !== "boleto";
+});
+
 document.addEventListener("submit", (event) => {
   const createCustomerForm = event.target.closest("[data-create-customer-form]");
   const createPlanForm = event.target.closest("[data-create-plan-form]");
@@ -2846,6 +3028,7 @@ document.addEventListener("submit", (event) => {
   const whatsappSettingsForm = event.target.closest("[data-whatsapp-settings-form]");
   const emailSettingsForm = event.target.closest("[data-email-settings-form]");
   const uploadDocumentForm = event.target.closest("[data-upload-document-form]");
+  const adminPaymentForm = event.target.closest("[data-admin-payment-form]");
 
   if (createCustomerForm) {
     event.preventDefault();
@@ -2905,6 +3088,18 @@ document.addEventListener("submit", (event) => {
         title: "Erro ao enviar documento",
         message: error.message || "Nao foi possivel enviar o documento. Verifique o arquivo e tente novamente.",
       });
+    });
+  }
+
+  if (adminPaymentForm) {
+    event.preventDefault();
+    generateAdminCustomerPayment(adminPaymentForm).catch((error) => {
+      setStatus(error.message, "error");
+      const resultNode = adminPaymentForm.querySelector("[data-admin-payment-result]");
+      if (resultNode) {
+        resultNode.hidden = false;
+        resultNode.innerHTML = `<p>${escapeHtml(error.message || "Erro ao gerar cobranca.")}</p>`;
+      }
     });
   }
 });
