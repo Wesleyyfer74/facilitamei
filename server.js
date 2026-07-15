@@ -5134,6 +5134,72 @@ app.post("/api/webhooks/mercadopago", async (request, response) => {
   }
 });
 
+app.post("/api/testes/webhook/mercadopago/payment", requireAdminKey, async (request, response) => {
+  try {
+    const body = request.body || {};
+    const paymentId = String(body.paymentId || `test-${Date.now()}`);
+    const status = String(body.status || "approved");
+    const paymentMethod = String(body.paymentMethod || "pix");
+    const amount = Number(body.valor || body.amount || 149.99);
+    const approvedAt = status === "approved" ? new Date().toISOString() : null;
+
+    const paymentData = {
+      id: paymentId,
+      status,
+      status_detail: body.statusDetail || "accredited",
+      transaction_amount: amount,
+      date_approved: body.dateApproved || approvedAt,
+      payment_method_id: paymentMethod === "boleto" ? "bolbradesco" : paymentMethod,
+      external_reference: body.externalReference || `webhook-test-${paymentId}`,
+      metadata: {
+        plan_id: body.planId || "premium",
+        plan_name: body.planName || "Facilita Premium",
+        service_code: body.serviceCode || "bot_whatsapp_premium",
+        customer_name: body.nome || body.name || "Cliente Teste Webhook",
+        customer_email: body.email || `webhook-${paymentId}@teste.local`,
+        customer_phone: normalizeDigits(body.telefone || body.phone || "67999999999"),
+        customer_document: normalizeDigits(body.documento || body.document || "41952830000104"),
+        payment_method: paymentMethod,
+      },
+      payer: {
+        email: body.email || `webhook-${paymentId}@teste.local`,
+        first_name: body.nome || body.name || "Cliente Teste Webhook",
+        phone: {
+          number: normalizeDigits(body.telefone || body.phone || "67999999999"),
+        },
+        identification: {
+          type: getDocumentType(normalizeDigits(body.documento || body.document || "41952830000104")),
+          number: normalizeDigits(body.documento || body.document || "41952830000104"),
+        },
+      },
+    };
+
+    storePayment(paymentData);
+    const localPaymentId = await updatePaymentStatus(paymentData);
+
+    const [rows] = await dbPool.execute(
+      `SELECT p.id, p.user_id, p.mercado_pago_payment_id, p.gateway, p.gateway_payment_id, p.valor, p.status, p.data_pagamento, p.competencia,
+              u.nome, u.email, u.status AS user_status
+       FROM payments p
+       LEFT JOIN users u ON u.id = p.user_id
+       WHERE p.id = :localPaymentId
+       LIMIT 1`,
+      { localPaymentId },
+    );
+
+    response.json({
+      ok: true,
+      message: "Webhook de pagamento simulado e salvo com sucesso.",
+      paymentId,
+      localPaymentId,
+      payment: rows[0] || null,
+    });
+  } catch (error) {
+    console.error("Erro ao simular webhook Mercado Pago:", error);
+    response.status(500).json({ error: error.message || "Erro ao simular webhook." });
+  }
+});
+
 app.get("/", (_request, response) => {
   response.sendFile(path.join(__dirname, "index.html"));
 });
