@@ -15,7 +15,19 @@ async function runSqlMigration(connection, { version, name, sql }) {
     if (rows[0].checksum !== checksum) throw new Error(`Migracao ${version} foi alterada depois de aplicada.`);
     return false;
   }
-  for (const statement of splitSqlStatements(sql)) await connection.query(statement);
+  const recoverableDdlErrors = new Set([
+    "ER_TABLE_EXISTS_ERROR",
+    "ER_DUP_FIELDNAME",
+    "ER_DUP_KEYNAME",
+    "ER_FK_DUP_NAME",
+  ]);
+  for (const statement of splitSqlStatements(sql)) {
+    try {
+      await connection.query(statement);
+    } catch (error) {
+      if (!recoverableDdlErrors.has(error.code)) throw error;
+    }
+  }
   await connection.execute(
     "INSERT INTO schema_migrations (version, name, checksum) VALUES (?, ?, ?)",
     [version, name, checksum],

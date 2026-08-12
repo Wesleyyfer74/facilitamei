@@ -24,14 +24,14 @@ try {
     applied_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
   )`);
 
+  const baselineSql = await fs.readFile(path.join(projectRoot, "database", "railway-schema.sql"), "utf8");
+  // Reexecutar o baseline e seguro porque usa CREATE TABLE IF NOT EXISTS e
+  // INSERT ... ON DUPLICATE KEY. Isso repara bancos legados incompletos antes
+  // de as migracoes incrementais criarem indices ou alterarem colunas.
+  for (const statement of splitSqlStatements(baselineSql)) await connection.query(statement);
+
   const [baselineRows] = await connection.execute("SELECT version FROM schema_migrations WHERE version = '001' LIMIT 1");
   if (!baselineRows[0]) {
-    const baselineSql = await fs.readFile(path.join(projectRoot, "database", "railway-schema.sql"), "utf8");
-    const [tableRows] = await connection.execute(
-      "SELECT COUNT(*) AS total FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'users'",
-      [process.env.DB_NAME],
-    );
-    if (!Number(tableRows[0]?.total)) for (const statement of splitSqlStatements(baselineSql)) await connection.query(statement);
     await connection.execute(
       "INSERT INTO schema_migrations (version, name, checksum) VALUES ('001', 'baseline', ?)",
       [migrationChecksum(baselineSql)],

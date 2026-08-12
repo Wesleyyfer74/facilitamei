@@ -1,7 +1,10 @@
 ALTER TABLE payments
-  ADD COLUMN plan_id VARCHAR(60) NULL AFTER subscription_id,
-  ADD COLUMN payment_method VARCHAR(40) NULL AFTER plan_id,
-  ADD KEY payments_plan_idx (plan_id),
+  ADD COLUMN plan_id VARCHAR(60) NULL AFTER subscription_id;
+ALTER TABLE payments
+  ADD COLUMN payment_method VARCHAR(40) NULL AFTER plan_id;
+ALTER TABLE payments
+  ADD KEY payments_plan_idx (plan_id);
+ALTER TABLE payments
   ADD CONSTRAINT payments_plan_fk FOREIGN KEY (plan_id) REFERENCES plans(id) ON DELETE SET NULL;
 
 UPDATE payments p

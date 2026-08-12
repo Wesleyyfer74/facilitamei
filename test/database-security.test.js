@@ -4,7 +4,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
 import { decryptSensitive, encryptSensitive } from "../src/services/dataEncryptionService.js";
-import { migrationChecksum, splitSqlStatements } from "../src/services/migrationService.js";
+import { migrationChecksum, runSqlMigration, splitSqlStatements } from "../src/services/migrationService.js";
 
 const projectRoot = path.resolve(import.meta.dirname, "..");
 
@@ -28,6 +28,28 @@ test("migracoes possuem separacao deterministica e checksum", () => {
   assert.equal(splitSqlStatements(sql).length, 2);
   assert.equal(migrationChecksum(sql), migrationChecksum(sql));
   assert.notEqual(migrationChecksum(sql), migrationChecksum(`${sql}\n-- alterado`));
+});
+
+test("migracao pode retomar DDL parcialmente aplicado", async () => {
+  const executed = [];
+  const connection = {
+    async execute(sql) {
+      if (sql.startsWith("SELECT checksum")) return [[]];
+      executed.push(sql);
+      return [{}];
+    },
+    async query(sql) {
+      if (sql.includes("indice_existente")) throw Object.assign(new Error("indice duplicado"), { code: "ER_DUP_KEYNAME" });
+      executed.push(sql);
+    },
+  };
+  const applied = await runSqlMigration(connection, {
+    version: "999", name: "retomavel.sql",
+    sql: "CREATE INDEX indice_existente ON exemplo (id);\nALTER TABLE exemplo ADD nome TEXT;",
+  });
+  assert.equal(applied, true);
+  assert.ok(executed.some((sql) => sql.includes("ADD nome")));
+  assert.ok(executed.some((sql) => sql.startsWith("INSERT INTO schema_migrations")));
 });
 
 test("payload completo do gateway nao e mais persistido", async () => {
