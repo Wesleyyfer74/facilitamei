@@ -614,6 +614,11 @@ function renderCustomerPreview(data) {
   const paidPayments = payments.filter((payment) => ["approved", "paid", "pago"].includes(String(payment.status).toLowerCase()));
   const totalPaid = paidPayments.reduce((sum, payment) => sum + Number(payment.valor || 0), 0);
   const latestPayment = payments[0];
+  const effectivePlanName = subscription.plan_name || latestPayment?.plan_name || "Sem plano";
+  const effectivePlanId = subscription.plan_id || latestPayment?.plan_id;
+  const effectiveValue = subscription.valor || latestPayment?.valor;
+  const effectiveStatus = subscription.status || latestPayment?.status;
+  const effectivePaymentMethod = subscription.metodo_pagamento || latestPayment?.payment_method;
   const paymentRows = payments.slice(0, 3).map(
     (payment) => `
       <tr>
@@ -675,13 +680,13 @@ function renderCustomerPreview(data) {
             ${renderDetailItem("Cadastro", formatDateOnly(customer.created_at))}
             ${renderDetailItem("Atualizado em", formatDateOnly(customer.updated_at))}
 
-            <h4>Assinatura</h4>
+            <h4>Plano contratado</h4>
             ${renderDetailItem("ID assinatura", subscription.id)}
-            ${renderDetailItem("Plano", subscription.plan_name || "Sem plano")}
-            ${renderDetailItem("Plano ID", subscription.plan_id)}
-            ${renderDetailItem("Status assinatura", subscription.status)}
-            ${renderDetailItem("Valor", subscription.valor ? money(subscription.valor) : "")}
-            ${renderDetailItem("Metodo de pagamento", subscription.metodo_pagamento)}
+            ${renderDetailItem("Plano", effectivePlanName)}
+            ${renderDetailItem("Plano ID", effectivePlanId)}
+            ${renderDetailItem(subscription.id ? "Status assinatura" : "Status pagamento", effectiveStatus)}
+            ${renderDetailItem("Valor", effectiveValue ? money(effectiveValue) : "")}
+            ${renderDetailItem("Metodo de pagamento", effectivePaymentMethod)}
             ${renderDetailItem("Inicio", formatDateOnly(subscription.data_inicio))}
             ${renderDetailItem("Proxima cobranca", formatDateOnly(subscription.data_proxima_cobranca))}
             ${renderDetailItem("Criada em", formatDateOnly(subscription.created_at))}
@@ -708,7 +713,7 @@ function renderCustomerPreview(data) {
             <p><span>Total Pago</span><strong>${money(totalPaid)}</strong></p>
             <p><span>Ultimo Pagamento</span><strong>${formatDateOnly(latestPayment?.data_pagamento || latestPayment?.created_at)}</strong></p>
             <p><span>Situacao</span>${statusPill(latestPayment?.status || "pending")}</p>
-            <p><span>Forma de Pagamento</span><strong>${escapeHtml(latestPayment?.metodo_pagamento || latestPayment?.payment_method || "Cartao de Credito")}</strong></p>
+            <p><span>Forma de Pagamento</span><strong>${escapeHtml(latestPayment?.payment_method || subscription.metodo_pagamento || "Nao informado")}</strong></p>
           </div>
         </div>
 

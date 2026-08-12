@@ -6,6 +6,8 @@ import test from "node:test";
 import { decryptSensitive, encryptSensitive } from "../src/services/dataEncryptionService.js";
 import { migrationChecksum, splitSqlStatements } from "../src/services/migrationService.js";
 
+const projectRoot = path.resolve(import.meta.dirname, "..");
+
 test("AES-256-GCM protege dados e detecta adulteracao", () => {
   const key = crypto.randomBytes(32).toString("base64");
   const encrypted = encryptSensitive("agencia-1234", key);
@@ -32,4 +34,16 @@ test("payload completo do gateway nao e mais persistido", async () => {
   const serverSource = await fs.readFile(path.resolve(import.meta.dirname, "..", "server.js"), "utf8");
   assert.doesNotMatch(serverSource, /JSON\.stringify\((?:paymentData|subscriptionData)\)/);
   assert.match(serverSource, /serializeMinimalGatewayPayload/);
+});
+
+test("pagamentos guardam vinculo direto com plano e forma de pagamento", async () => {
+  const server = await fs.readFile(path.join(projectRoot, "server.js"), "utf8");
+  const migration = await fs.readFile(
+    path.join(projectRoot, "database", "migrations", "006-payment-plan-link.sql"),
+    "utf8",
+  );
+  assert.match(server, /plan_id, payment_method/);
+  assert.match(server, /LEFT JOIN plans pl ON pl\.id = p\.plan_id/);
+  assert.match(migration, /ADD COLUMN plan_id/);
+  assert.match(migration, /JSON_EXTRACT\(p\.raw_payload, '\$\.plan_id'\)/);
 });

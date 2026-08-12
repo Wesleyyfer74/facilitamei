@@ -112,6 +112,8 @@ CREATE TABLE IF NOT EXISTS payments (
   id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   user_id BIGINT UNSIGNED NOT NULL,
   subscription_id BIGINT UNSIGNED NULL,
+  plan_id VARCHAR(60) NULL,
+  payment_method VARCHAR(40) NULL,
   mercado_pago_payment_id VARCHAR(120) NOT NULL,
   gateway VARCHAR(40) NULL,
   gateway_payment_id VARCHAR(120) NULL,
@@ -128,10 +130,12 @@ CREATE TABLE IF NOT EXISTS payments (
   KEY payments_gateway_payment_idx (gateway_payment_id),
   KEY payments_user_idx (user_id),
   KEY payments_subscription_idx (subscription_id),
+  KEY payments_plan_idx (plan_id),
   KEY payments_status_idx (status),
   KEY payments_status_token_idx (status_token_hash),
   CONSTRAINT payments_user_fk FOREIGN KEY (user_id) REFERENCES users(id),
   CONSTRAINT payments_subscription_fk FOREIGN KEY (subscription_id) REFERENCES subscriptions(id)
+  ,CONSTRAINT payments_plan_fk FOREIGN KEY (plan_id) REFERENCES plans(id) ON DELETE SET NULL
 );
 
 CREATE TABLE IF NOT EXISTS mercado_pago_webhook_events (

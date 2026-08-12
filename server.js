@@ -391,7 +391,7 @@ async function ensurePaymentsMetadataColumns() {
         { databaseName },
       );
       const existingColumns = new Set(rows.map((row) => row.COLUMN_NAME));
-      const requiredColumns = ["gateway", "gateway_payment_id", "competencia", "updated_at", "status_token_hash", "status_token_expires_at"];
+      const requiredColumns = ["gateway", "gateway_payment_id", "plan_id", "payment_method", "competencia", "updated_at", "status_token_hash", "status_token_expires_at"];
       const missingColumns = requiredColumns.filter((column) => !existingColumns.has(column));
       if (missingColumns.length) throw new Error(`Execute as migracoes: payments sem ${missingColumns.join(", ")}`);
     } catch (error) {
@@ -1920,12 +1920,15 @@ app.get("/api/admin/customers", requireAdminSession, async (request, response) =
       `SELECT
         u.id, u.nome, u.email, u.telefone, u.documento, u.status, u.created_at, u.updated_at,
         s.id AS subscription_id,
-        s.status AS subscription_status,
-        s.valor AS subscription_value,
         s.data_proxima_cobranca,
         s.mercado_pago_subscription_id,
-        pl.id AS plan_id,
-        pl.nome AS plan_name
+        COALESCE(pl.id, pay_pl.id) AS plan_id,
+        COALESCE(pl.nome, pay_pl.nome) AS plan_name,
+        COALESCE(s.status, pay.status) AS subscription_status,
+        COALESCE(s.valor, pay.valor) AS subscription_value,
+        pay.status AS latest_payment_status,
+        pay.valor AS latest_payment_value,
+        pay.payment_method AS latest_payment_method
        FROM users u
        LEFT JOIN subscriptions s ON s.id = (
          SELECT s2.id
@@ -1935,6 +1938,11 @@ app.get("/api/admin/customers", requireAdminSession, async (request, response) =
          LIMIT 1
        )
        LEFT JOIN plans pl ON pl.id = s.plan_id
+       LEFT JOIN payments pay ON pay.id = (
+         SELECT p2.id FROM payments p2 WHERE p2.user_id = u.id
+         ORDER BY (p2.status IN ('approved', 'paid', 'pago')) DESC, COALESCE(p2.data_pagamento, p2.created_at) DESC LIMIT 1
+       )
+       LEFT JOIN plans pay_pl ON pay_pl.id = pay.plan_id
        WHERE (u.nome LIKE :search OR u.email LIKE :search OR u.telefone LIKE :search OR u.documento LIKE :search)
        ${statusFilter}
        ORDER BY u.created_at DESC
@@ -1964,10 +1972,11 @@ app.get("/api/admin/customers/:id", requireAdminSession, async (request, respons
         { userId },
       ),
       dbPool.execute(
-        `SELECT *
-         FROM payments
-         WHERE user_id = :userId
-         ORDER BY created_at DESC
+        `SELECT p.*, pl.nome AS plan_name
+         FROM payments p
+         LEFT JOIN plans pl ON pl.id = p.plan_id
+         WHERE p.user_id = :userId
+         ORDER BY p.created_at DESC
          LIMIT 80`,
         { userId },
       ),
@@ -3734,11 +3743,12 @@ app.get("/api/admin/payments", requireAdminSession, async (request, response) =>
          p.*,
          u.nome AS user_name,
          u.email,
-         pl.nome AS plan_name
+         COALESCE(pl.nome, subscription_plan.nome) AS plan_name
        FROM payments p
        JOIN users u ON u.id = p.user_id
        LEFT JOIN subscriptions s ON s.id = p.subscription_id
-       LEFT JOIN plans pl ON pl.id = s.plan_id
+       LEFT JOIN plans pl ON pl.id = p.plan_id
+       LEFT JOIN plans subscription_plan ON subscription_plan.id = s.plan_id
        ${statusFilter}
        ORDER BY p.created_at DESC
        LIMIT 160`,
@@ -4178,10 +4188,22 @@ async function upsertCustomer({ userId, name, email, phone, document }) {
   const documentNumber = normalizeDigits(document);
   const phoneNumber = normalizeDigits(phone);
   const cnpj = documentNumber.length === 14 ? documentNumber : null;
+  const normalizedEmail = cleanEmail(email);
 
   if (userId) {
-    const [rows] = await dbPool.execute("SELECT id FROM users WHERE id = :userId LIMIT 1", { userId });
-    if (rows[0]?.id) return rows[0].id;
+    const [rows] = await dbPool.execute(
+      "SELECT id FROM users WHERE id = :userId AND LOWER(email) = :email LIMIT 1",
+      { userId, email: normalizedEmail },
+    );
+    if (rows[0]?.id) {
+      await dbPool.execute(
+        `UPDATE users SET nome = :name, telefone = :phone, whatsapp = :phone,
+         documento = :documentNumber, cnpj = COALESCE(:cnpj, cnpj), updated_at = CURRENT_TIMESTAMP
+         WHERE id = :userId`,
+        { userId, name, phone: phoneNumber, documentNumber, cnpj },
+      );
+      return rows[0].id;
+    }
   }
 
   const [result] = await dbPool.execute(
@@ -4194,12 +4216,12 @@ async function upsertCustomer({ userId, name, email, phone, document }) {
        documento = VALUES(documento),
        cnpj = COALESCE(cnpj, VALUES(cnpj)),
        updated_at = CURRENT_TIMESTAMP`,
-    { name, email, phone: phoneNumber, documentNumber, cnpj },
+    { name, email: normalizedEmail, phone: phoneNumber, documentNumber, cnpj },
   );
 
   if (result.insertId) return result.insertId;
 
-  const [rows] = await dbPool.execute("SELECT id FROM users WHERE email = :email LIMIT 1", { email });
+  const [rows] = await dbPool.execute("SELECT id FROM users WHERE email = :email LIMIT 1", { email: normalizedEmail });
   return rows[0]?.id;
 }
 
@@ -4282,11 +4304,13 @@ async function savePaymentRecord({ customerId, plan, paymentData, paymentMethod:
 
   const [result] = await dbPool.execute(
     `INSERT INTO payments
-      (mercado_pago_payment_id, gateway, gateway_payment_id, user_id, subscription_id, valor, status, data_pagamento, competencia, raw_payload)
+      (mercado_pago_payment_id, gateway, gateway_payment_id, user_id, subscription_id, plan_id, payment_method, valor, status, data_pagamento, competencia, raw_payload)
      VALUES
-      (:paymentId, 'mercado_pago', :paymentId, :customerId, NULL, :amount, :status, :paidAt, :competencia, :rawPayload)
+      (:paymentId, 'mercado_pago', :paymentId, :customerId, NULL, :planId, :paymentMethod, :amount, :status, :paidAt, :competencia, :rawPayload)
      ON DUPLICATE KEY UPDATE
       status = VALUES(status),
+      plan_id = COALESCE(plan_id, VALUES(plan_id)),
+      payment_method = COALESCE(VALUES(payment_method), payment_method),
       gateway = VALUES(gateway),
       gateway_payment_id = VALUES(gateway_payment_id),
       data_pagamento = VALUES(data_pagamento),
@@ -4296,6 +4320,8 @@ async function savePaymentRecord({ customerId, plan, paymentData, paymentMethod:
     {
       paymentId: String(paymentData.id),
       customerId,
+      planId: plan.id,
+      paymentMethod: _paymentMethod || paymentData.metadata?.payment_method || paymentData.payment_method_id || null,
       amount: plan.price,
       status: paymentData.status || "pending",
       paidAt: paymentData.date_approved ? new Date(paymentData.date_approved) : null,
@@ -4383,12 +4409,16 @@ async function saveSubscriptionRecord({ customerId, plan, subscriptionData, paym
 
 async function updatePaymentStatus(paymentData) {
   await ensurePaymentsMetadataColumns();
+  const metadata = paymentData.metadata || {};
+  const paymentMethod = metadata.payment_method || paymentData.payment_method_id || null;
 
   const [result] = await dbPool.execute(
     `UPDATE payments
      SET status = :status,
          gateway = 'mercado_pago',
          gateway_payment_id = :paymentId,
+         plan_id = COALESCE(plan_id, :planId),
+         payment_method = COALESCE(:paymentMethod, payment_method),
          data_pagamento = :paidAt,
          competencia = :competencia,
          raw_payload = :rawPayload,
@@ -4397,6 +4427,8 @@ async function updatePaymentStatus(paymentData) {
     {
       paymentId: String(paymentData.id),
       status: paymentData.status || "pending",
+      planId: metadata.plan_id || null,
+      paymentMethod,
       paidAt: paymentData.date_approved ? new Date(paymentData.date_approved) : null,
       competencia: paymentData.date_approved
         ? new Date(paymentData.date_approved).toISOString().slice(0, 7)
@@ -4406,7 +4438,6 @@ async function updatePaymentStatus(paymentData) {
   );
 
   if (result.affectedRows === 0) {
-    const metadata = paymentData.metadata || {};
     const payer = paymentData.payer || {};
     const payerEmail = metadata.customer_email || payer.email;
 
@@ -4452,12 +4483,14 @@ async function updatePaymentStatus(paymentData) {
 
       await dbPool.execute(
         `INSERT INTO payments
-          (user_id, subscription_id, mercado_pago_payment_id, gateway, gateway_payment_id, valor, status, data_pagamento, competencia, raw_payload)
+          (user_id, subscription_id, plan_id, payment_method, mercado_pago_payment_id, gateway, gateway_payment_id, valor, status, data_pagamento, competencia, raw_payload)
          VALUES
-          (:userId, :subscriptionId, :paymentId, 'mercado_pago', :paymentId, :amount, :status, :paidAt, :competencia, :rawPayload)
+          (:userId, :subscriptionId, :planId, :paymentMethod, :paymentId, 'mercado_pago', :paymentId, :amount, :status, :paidAt, :competencia, :rawPayload)
          ON DUPLICATE KEY UPDATE
           status = VALUES(status),
           subscription_id = COALESCE(subscription_id, VALUES(subscription_id)),
+          plan_id = COALESCE(plan_id, VALUES(plan_id)),
+          payment_method = COALESCE(VALUES(payment_method), payment_method),
           gateway = VALUES(gateway),
           gateway_payment_id = VALUES(gateway_payment_id),
           data_pagamento = VALUES(data_pagamento),
@@ -4467,6 +4500,8 @@ async function updatePaymentStatus(paymentData) {
         {
           userId,
           subscriptionId,
+          planId: metadata.plan_id || null,
+          paymentMethod,
           paymentId: String(paymentData.id),
           amount: Number(paymentData.transaction_amount || 0),
           status: paymentData.status || "pending",
@@ -4853,7 +4888,7 @@ async function validateMercadoPagoPayment(paymentData) {
   }
 
   const [localRows] = await dbPool.execute(
-    `SELECT p.valor, s.plan_id
+    `SELECT p.valor, COALESCE(p.plan_id, s.plan_id) AS plan_id
      FROM payments p
      LEFT JOIN subscriptions s ON s.id = p.subscription_id
      WHERE p.mercado_pago_payment_id = :paymentId

@@ -14,7 +14,7 @@ const requiredSchema = {
   client_auth_tokens: ["token_hash", "purpose", "expires_at", "used_at"],
   plans: ["id", "valor", "tipo_cobranca"],
   subscriptions: ["id", "user_id", "status"],
-  payments: ["id", "gateway_payment_id", "status_token_hash", "status_token_expires_at"],
+  payments: ["id", "gateway_payment_id", "plan_id", "payment_method", "status_token_hash", "status_token_expires_at"],
   mercado_pago_webhook_events: ["event_key", "status", "processed_at"],
   mercado_pago_webhook_receipts: ["receipt_id", "topic", "resource_id", "signature_present", "status", "http_status"],
   customer_documents: ["id", "user_id", "arquivo_url"],
