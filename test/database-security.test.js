@@ -69,3 +69,14 @@ test("pagamentos guardam vinculo direto com plano e forma de pagamento", async (
   assert.match(migration, /ADD COLUMN plan_id/);
   assert.match(migration, /JSON_EXTRACT\(p\.raw_payload, '\$\.plan_id'\)/);
 });
+
+test("banco legado recebe colunas obrigatorias de pagamentos e documentos", async () => {
+  const migration = await fs.readFile(
+    path.join(projectRoot, "database", "migrations", "007-legacy-required-columns.sql"),
+    "utf8",
+  );
+  for (const column of ["status_token_hash", "status_token_expires_at", "storage_key", "sha256"]) {
+    assert.match(migration, new RegExp(`ADD COLUMN ${column}`));
+  }
+  assert.ok(splitSqlStatements(migration).length >= 9);
+});
