@@ -6,15 +6,39 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node --watch server.js",
-    "sync:mp-plans": "node scripts/sync-mercado-pago-plans.js"
+    "check": "node --check server.js && node --check app.js && node --check admin/admin.js && node --check cliente/cliente.js",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "node --test",
+    "test:env": "node --env-file=.env.test --test",
+    "dev:test": "node --env-file=.env.test server.js",
+    "sync:mp-plans": "node scripts/sync-mercado-pago-plans.js",
+    "migrate:documents-storage": "node scripts/migrate-document-files-to-storage.js",
+    "db:migrate": "node scripts/migrate-database.js",
+    "db:encrypt-legacy": "node scripts/encrypt-legacy-bank-data.js",
+    "db:purge-expired": "node scripts/purge-expired-data.js",
+    "db:verify": "node scripts/check-production-schema.js",
+    "admin:bootstrap": "node scripts/bootstrap-admin.js",
+    "homologation:preflight": "node scripts/homologation-preflight.js",
+    "homologation:preflight:test": "node --env-file=.env.test scripts/homologation-preflight.js",
+    "homologation:preflight:external": "node --env-file=.env.test scripts/homologation-preflight.js --external"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1105.0",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
     "express": "^4.18.3",
-    "mercadopago": "^2.0.15",
-    "multer": "^2.0.2",
+    "file-type": "^22.0.1",
+    "mercadopago": "^3.3.0",
+    "multer": "^2.2.0",
     "mysql2": "^3.11.5",
-    "nodemailer": "^6.9.16"
+    "nodemailer": "^9.0.5",
+    "redis": "^5.8.2"
+  },
+  "devDependencies": {
+    "eslint": "^10.8.0",
+    "globals": "^17.9.0",
+    "prettier": "^3.9.6"
   }
 }

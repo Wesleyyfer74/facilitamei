@@ -19,7 +19,8 @@
 
           <div class="access-tabs">
             <button class="is-active" type="button" data-access-tab="login">Entrar</button>
-            <button type="button" data-access-tab="setup">Criar senha</button>
+            <button type="button" data-access-tab="setup">Criar acesso</button>
+            <button type="button" data-access-tab="recovery">Recuperar senha</button>
           </div>
 
           <form class="access-form is-active" data-login-form>
@@ -30,9 +31,20 @@
 
           <form class="access-form" data-setup-form>
             <label>E-mail da assinatura<input name="email" type="email" autocomplete="email" required /></label>
-            <label>CPF ou CNPJ<input name="documento" inputmode="numeric" autocomplete="off" required /></label>
-            <label>Crie sua senha<input name="password" type="password" minlength="8" autocomplete="new-password" required /></label>
-            <button class="gold-button" type="submit">Criar acesso</button>
+            <button class="gold-button" type="submit">Enviar link de ativacao</button>
+          </form>
+
+          <form class="access-form" data-recovery-form>
+            <label>E-mail cadastrado<input name="email" type="email" autocomplete="email" required /></label>
+            <button class="gold-button" type="submit">Enviar link de recuperacao</button>
+          </form>
+
+          <form class="access-form" data-confirm-password-form>
+            <input name="token" type="hidden" />
+            <input name="purpose" type="hidden" />
+            <label>Nova senha<input name="password" type="password" minlength="8" autocomplete="new-password" required /></label>
+            <label>Confirme a nova senha<input name="passwordConfirm" type="password" minlength="8" autocomplete="new-password" required /></label>
+            <button class="gold-button" type="submit">Salvar senha e entrar</button>
           </form>
 
           <div class="client-status" data-client-status></div>
@@ -367,6 +379,7 @@
                 <article class="settings-card settings-company-card">
                   <div class="settings-card-header">
                     <h3>&#127970; Dados da Empresa</h3>
+                    <button type="button" data-open-settings-modal="company">Cadastrar CNPJ</button>
                   </div>
                   <div class="settings-data-columns">
                     <dl>
@@ -474,6 +487,23 @@
         </section>
       </section>
     </main>
+
+    <div class="client-modal" data-settings-modal="company" hidden>
+      <div class="client-modal-backdrop" data-close-settings-modal></div>
+      <section class="client-modal-card">
+        <button class="client-modal-close" type="button" data-close-settings-modal>&times;</button>
+        <p class="eyebrow">Minha empresa</p>
+        <h2>Cadastrar CNPJ</h2>
+        <p>Os dados publicos da empresa serao consultados e vinculados somente a sua conta autenticada.</p>
+        <form class="settings-edit-form" data-company-form>
+          <label>CNPJ<input name="cnpj" inputmode="numeric" maxlength="18" autocomplete="off" required /></label>
+          <div class="modal-actions">
+            <button class="ghost-button" type="button" data-close-settings-modal>Cancelar</button>
+            <button class="gold-button" type="submit">Consultar e salvar</button>
+          </div>
+        </form>
+      </section>
+    </div>
 
     <div class="client-modal" data-settings-modal="address" hidden>
       <div class="client-modal-backdrop" data-close-settings-modal></div>

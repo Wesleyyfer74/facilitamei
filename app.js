@@ -56,7 +56,6 @@ const heroParticlesCanvas = document.querySelector("[data-hero-particles]");
 const pageLoader = document.querySelector("[data-page-loader]");
 
 const loaderStartedAt = performance.now();
-let lastSubscriptionContext = null;
 let lastBoletoCnpjLookup = "";
 let boletoCnpjLookupTimeout = null;
 
@@ -163,6 +162,7 @@ let mercadoPagoInstance;
 let mercadoPagoCardForm;
 let aboutRevealObserver;
 let heroParticlesCleanup;
+window.addEventListener("pagehide", () => heroParticlesCleanup?.(), { once: true });
 
 function syncHeader() {
   header.classList.toggle("is-scrolled", window.scrollY > 24);
@@ -652,7 +652,6 @@ async function loadPlansFromBackend() {
 function resetPaymentResult() {
   window.clearInterval(statusPollingId);
   statusPollingId = null;
-  lastSubscriptionContext = null;
 
   if (paymentResult) paymentResult.hidden = true;
   if (resultKicker) resultKicker.textContent = "Assinatura";
@@ -1258,84 +1257,23 @@ cnpjLinkForm?.querySelector("input")?.addEventListener("input", (event) => {
     .replace(/(\d{4})(\d)/, "$1-$2");
 });
 
-cnpjLinkForm?.addEventListener("submit", async (event) => {
-  event.preventDefault();
-  const cnpj = cnpjLinkForm.elements.cnpj?.value || "";
-  const digits = cnpj.replace(/\D/g, "");
-  const submitButton = cnpjLinkForm.querySelector("[type='submit']");
-
-  if (digits.length !== 14) {
-    if (cnpjLinkStatus) cnpjLinkStatus.textContent = "Informe um CNPJ valido com 14 digitos.";
-    return;
-  }
-
-  if (!lastSubscriptionContext?.customerId || !lastSubscriptionContext?.subscriptionId) {
-    if (cnpjLinkStatus) cnpjLinkStatus.textContent = "Nao encontrei os dados da assinatura. Tente assinar novamente ou fale com o atendimento.";
-    return;
-  }
-
-  submitButton.disabled = true;
-  cnpjLinkForm.classList.add("is-processing");
-  if (cnpjLinkStatus) cnpjLinkStatus.textContent = "Consultando CNPJ e preenchendo os dados da empresa...";
-
-  try {
-    const response = await fetch(`${API_BASE}/api/customers/cnpj`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        customerId: lastSubscriptionContext.customerId,
-        subscriptionId: lastSubscriptionContext.subscriptionId,
-        email: lastSubscriptionContext.customer?.email,
-        cnpj: digits,
-      }),
-    });
-    const data = await parseJsonResponse(response, "Nao foi possivel consultar o CNPJ agora.");
-
-    if (!response.ok) {
-      throw new Error(data.error || "Nao foi possivel vincular este CNPJ.");
-    }
-
-    if (resultStatus) resultStatus.textContent = "Dados do CNPJ salvos com sucesso.";
-    if (subscriptionMessage) {
-      subscriptionMessage.textContent = "Pronto. Agora voce pode criar o acesso do cliente ou falar com o atendimento.";
-    }
-    if (cnpjLinkStatus) cnpjLinkStatus.textContent = data.company?.razaoSocial || "Dados publicos preenchidos.";
-    cnpjLinkForm.hidden = true;
-    if (postSubscriptionActions) postSubscriptionActions.hidden = false;
-  } catch (error) {
-    if (cnpjLinkStatus) cnpjLinkStatus.textContent = error.message;
-  } finally {
-    submitButton.disabled = false;
-    cnpjLinkForm.classList.remove("is-processing");
-  }
-});
-
 function renderSubscription(data, planId, customer) {
   const details = planDetails[planId] || planDetails["start-mei"];
   if (!paymentResult) return;
 
-  lastSubscriptionContext = {
-    customerId: data.customerId,
-    subscriptionId: data.localSubscriptionId,
-    planId,
-    customer,
-  };
   paymentResult.hidden = false;
   if (checkoutForm) checkoutForm.hidden = true;
   if (resultKicker) resultKicker.textContent = "Assinatura concluida";
   if (resultPlan) resultPlan.textContent = details.title;
   if (resultStatus) resultStatus.textContent = data.message || "Plano assinado com sucesso.";
   if (subscriptionMessage) {
-    subscriptionMessage.textContent = "Informe o CNPJ da empresa para preencher os dados publicos automaticamente na area do cliente.";
+    subscriptionMessage.textContent = "Ative seu acesso pelo e-mail e cadastre o CNPJ com seguranca na area do cliente.";
   }
   if (whatsappAttendance) whatsappAttendance.href = getAttendanceUrl({ planId, customer });
   if (cnpjLinkForm) {
-    cnpjLinkForm.hidden = false;
-    cnpjLinkForm.querySelector("input")?.focus();
+    cnpjLinkForm.hidden = true;
   }
-  if (postSubscriptionActions) postSubscriptionActions.hidden = true;
+  if (postSubscriptionActions) postSubscriptionActions.hidden = false;
 
   checkoutForm?.classList.remove("is-processing");
 }
@@ -1343,13 +1281,6 @@ function renderSubscription(data, planId, customer) {
 function renderOneTimePayment(data, planId, customer, method) {
   const details = planDetails[planId] || planDetails["start-mei"];
   if (!paymentResult) return;
-
-  lastSubscriptionContext = {
-    customerId: data.customerId,
-    subscriptionId: null,
-    planId,
-    customer,
-  };
 
   paymentResult.hidden = false;
   if (checkoutForm) checkoutForm.hidden = true;
@@ -1390,31 +1321,42 @@ function renderOneTimePayment(data, planId, customer, method) {
 
   checkoutForm?.classList.remove("is-processing");
 
-  if (data.paymentId) {
-    startPaymentStatusPolling(data.paymentId);
+  if (data.paymentStatusToken) {
+    startPaymentStatusPolling(data.paymentStatusToken);
   }
 }
 
-function startPaymentStatusPolling(paymentId) {
+function startPaymentStatusPolling(paymentStatusToken) {
   window.clearInterval(statusPollingId);
+  let intervalMs = 8000;
 
-  statusPollingId = window.setInterval(async () => {
+  const poll = async () => {
     try {
-      const response = await fetch(`${API_BASE}/api/payments/${paymentId}/status`);
+      const response = await fetch(`${API_BASE}/api/payments/status`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token: paymentStatusToken }),
+      });
       const data = await parseJsonResponse(response, "Nao foi possivel consultar o status do pagamento.");
 
-      if (!response.ok) return;
+      if (!response.ok) {
+        if ([401, 410, 429].includes(response.status)) return;
+      } else {
+        if (resultStatus) resultStatus.textContent = data.message || "Aguardando confirmacao.";
 
-      if (resultStatus) resultStatus.textContent = data.message || "Aguardando confirmacao.";
-
-      if (["approved", "rejected", "cancelled", "refunded"].includes(data.status)) {
-        window.clearInterval(statusPollingId);
-        statusPollingId = null;
+        if (["approved", "rejected", "cancelled", "refunded"].includes(data.status)) {
+          statusPollingId = null;
+          return;
+        }
       }
     } catch {
       // O webhook continua sendo a confirmacao principal; a consulta local e apenas apoio visual.
     }
-  }, 8000);
+    intervalMs = Math.min(intervalMs + 4000, 30000);
+    statusPollingId = window.setTimeout(poll, intervalMs);
+  };
+
+  statusPollingId = window.setTimeout(poll, intervalMs);
 }
 
 async function loadMercadoPago() {

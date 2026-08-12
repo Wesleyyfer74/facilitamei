@@ -2,6 +2,8 @@ const accessView = document.querySelector("[data-access-view]");
 const dashboardView = document.querySelector("[data-dashboard-view]");
 const loginForm = document.querySelector("[data-login-form]");
 const setupForm = document.querySelector("[data-setup-form]");
+const recoveryForm = document.querySelector("[data-recovery-form]");
+const confirmPasswordForm = document.querySelector("[data-confirm-password-form]");
 const statusBox = document.querySelector("[data-client-status]");
 const tabButtons = document.querySelectorAll("[data-access-tab]");
 const routeButtons = document.querySelectorAll("[data-client-route]");
@@ -14,6 +16,7 @@ const settingsModals = document.querySelectorAll("[data-settings-modal]");
 const closeSettingsModalButtons = document.querySelectorAll("[data-close-settings-modal]");
 const addressForm = document.querySelector("[data-address-form]");
 const bankForm = document.querySelector("[data-bank-form]");
+const companyForm = document.querySelector("[data-company-form]");
 const clientName = document.querySelector("[data-client-name]");
 const clientFirstName = document.querySelector("[data-client-first-name]");
 const clientInitials = document.querySelector("[data-client-initials]");
@@ -115,8 +118,8 @@ const isFacilitaDomain = /(^|\.)facilitameibr\.com\.br$/i.test(window.location.h
 const API_BASE =
   configuredApiBase ||
   (isLocalFile || isLocalHost ? "http://localhost:3000" : isFacilitaDomain ? productionApiBase : "");
-const SESSION_KEY = "facilita_client_session";
 let currentDashboardData = null;
+let csrfToken = "";
 
 function escapeHtml(value = "") {
   return String(value)
@@ -125,18 +128,6 @@ function escapeHtml(value = "") {
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#039;");
-}
-
-function getToken() {
-  return localStorage.getItem(SESSION_KEY) || "";
-}
-
-function setToken(token) {
-  localStorage.setItem(SESSION_KEY, token);
-}
-
-function clearToken() {
-  localStorage.removeItem(SESSION_KEY);
 }
 
 function setStatus(message = "", type = "info") {
@@ -149,12 +140,13 @@ async function apiRequest(path, options = {}) {
     "Content-Type": "application/json",
     ...(options.headers || {}),
   };
-  const token = getToken();
-  if (token) headers.Authorization = `Bearer ${token}`;
-
+  const method = String(options.method || "GET").toUpperCase();
+  if (!["GET", "HEAD", "OPTIONS"].includes(method) && csrfToken) {
+    headers["X-CSRF-Token"] = csrfToken;
+  }
   let response;
   try {
-    response = await fetch(`${API_BASE}${path}`, { ...options, headers });
+    response = await fetch(`${API_BASE}${path}`, { ...options, headers, credentials: "include" });
   } catch {
     throw new Error("Nao consegui conectar ao backend. Confira a URL da API.");
   }
@@ -167,8 +159,10 @@ async function apiRequest(path, options = {}) {
     throw new Error("A API retornou uma resposta invalida.");
   }
 
+  if (data.csrfToken) csrfToken = data.csrfToken;
+
   if (response.status === 401) {
-    clearToken();
+    csrfToken = "";
     showAccess();
     throw new Error(data.error || "Sessao expirada.");
   }
@@ -244,13 +238,12 @@ async function downloadProtectedDocument(fileUrl, fallbackFileName = "documento.
     return;
   }
 
-  const token = getToken();
   const response = await fetch(`${API_BASE}${apiPath}`, {
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    credentials: "include",
   });
 
   if (response.status === 401) {
-    clearToken();
+    csrfToken = "";
     showAccess();
     throw new Error("Sessao do cliente expirada. Faca login novamente.");
   }
@@ -787,6 +780,8 @@ tabButtons.forEach((button) => {
     tabButtons.forEach((item) => item.classList.toggle("is-active", item === button));
     loginForm.classList.toggle("is-active", tab === "login");
     setupForm.classList.toggle("is-active", tab === "setup");
+    recoveryForm.classList.toggle("is-active", tab === "recovery");
+    confirmPasswordForm.classList.remove("is-active");
     setStatus("");
   });
 });
@@ -944,6 +939,27 @@ addressForm?.addEventListener("submit", async (event) => {
   }
 });
 
+companyForm?.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const submitButton = companyForm.querySelector("[type='submit']");
+  submitButton.disabled = true;
+  try {
+    const payload = Object.fromEntries(new FormData(companyForm).entries());
+    await apiRequest("/api/client/settings/company", {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    });
+    companyForm.reset();
+    closeSettingsModals();
+    await loadDashboard();
+    showClientPage("configuracoes", false);
+  } catch (error) {
+    alert(error.message);
+  } finally {
+    submitButton.disabled = false;
+  }
+});
+
 bankForm?.addEventListener("submit", async (event) => {
   event.preventDefault();
   const submitButton = bankForm.querySelector("[type='submit']");
@@ -969,11 +985,10 @@ loginForm.addEventListener("submit", async (event) => {
   setStatus("Validando acesso...");
   try {
     const payload = Object.fromEntries(new FormData(loginForm).entries());
-    const data = await apiRequest("/api/client/auth/login", {
+    await apiRequest("/api/client/auth/login", {
       method: "POST",
       body: JSON.stringify(payload),
     });
-    setToken(data.token);
     setStatus("");
     await loadDashboard();
     showClientPage(pageFromHash(), false);
@@ -984,14 +999,52 @@ loginForm.addEventListener("submit", async (event) => {
 
 setupForm.addEventListener("submit", async (event) => {
   event.preventDefault();
-  setStatus("Criando seu acesso...");
+  setStatus("Solicitando link de ativacao...");
   try {
     const payload = Object.fromEntries(new FormData(setupForm).entries());
-    const data = await apiRequest("/api/client/auth/setup", {
+    const data = await apiRequest("/api/client/auth/setup/request", {
       method: "POST",
       body: JSON.stringify(payload),
     });
-    setToken(data.token);
+    setupForm.reset();
+    setStatus(data.message || "Confira seu e-mail para criar o acesso.");
+  } catch (error) {
+    setStatus(error.message, "error");
+  }
+});
+
+recoveryForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  setStatus("Solicitando link de recuperacao...");
+  try {
+    const payload = Object.fromEntries(new FormData(recoveryForm).entries());
+    const data = await apiRequest("/api/client/auth/recovery/request", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+    recoveryForm.reset();
+    setStatus(data.message || "Confira seu e-mail para redefinir a senha.");
+  } catch (error) {
+    setStatus(error.message, "error");
+  }
+});
+
+confirmPasswordForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const payload = Object.fromEntries(new FormData(confirmPasswordForm).entries());
+  if (payload.password !== payload.passwordConfirm) {
+    setStatus("As senhas nao conferem.", "error");
+    return;
+  }
+
+  setStatus("Validando link e salvando senha...");
+  try {
+    await apiRequest(`/api/client/auth/${payload.purpose}/confirm`, {
+      method: "POST",
+      body: JSON.stringify({ token: payload.token, password: payload.password }),
+    });
+    window.history.replaceState(null, "", window.location.pathname);
+    confirmPasswordForm.reset();
     setStatus("");
     await loadDashboard();
     showClientPage(pageFromHash(), false);
@@ -1006,7 +1059,7 @@ document.querySelector("[data-logout]").addEventListener("click", async () => {
   } catch {
     // A sessao local precisa sair mesmo se o backend estiver indisponivel.
   }
-  clearToken();
+  csrfToken = "";
   showAccess();
 });
 
@@ -1019,8 +1072,19 @@ requestDasButton?.addEventListener("click", async () => {
 });
 
 (async function bootClientArea() {
-  if (!getToken()) {
+  const params = new URLSearchParams(window.location.search);
+  const authToken = params.get("auth_token") || "";
+  const authAction = params.get("auth_action") || "";
+  if (/^[a-f0-9]{64}$/i.test(authToken) && ["setup", "recovery"].includes(authAction)) {
     showAccess();
+    tabButtons.forEach((button) => button.classList.remove("is-active"));
+    loginForm.classList.remove("is-active");
+    setupForm.classList.remove("is-active");
+    recoveryForm.classList.remove("is-active");
+    confirmPasswordForm.classList.add("is-active");
+    confirmPasswordForm.elements.token.value = authToken;
+    confirmPasswordForm.elements.purpose.value = authAction;
+    setStatus(authAction === "setup" ? "Crie sua senha para ativar o acesso." : "Defina uma nova senha.");
     return;
   }
 
@@ -1029,7 +1093,6 @@ requestDasButton?.addEventListener("click", async () => {
     await loadDashboard();
     showClientPage(pageFromHash(), false);
   } catch {
-    clearToken();
     showAccess();
   }
 })();

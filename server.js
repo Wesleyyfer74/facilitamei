@@ -11,6 +11,23 @@ import multer from "multer";
 import { MercadoPagoConfig, Preference, Payment } from "mercadopago";
 import { DAS_MEI_FACILITA_CNPJ, gerarDasMei, montarPayloadGerarDasMei } from "./src/services/dasMeiService.js";
 import { gerarTokenSerpro } from "./src/services/serproAuthService.js";
+import { createSessionStore } from "./src/services/sessionStore.js";
+import {
+  createClientAuthToken,
+  hashClientAuthToken,
+  normalizeClientAuthPurpose,
+} from "./src/services/clientAuthTokenService.js";
+import { createRateLimiter, createRateLimitStore } from "./src/services/rateLimitService.js";
+import { createPaymentStatusToken, hashPaymentStatusToken } from "./src/services/paymentStatusTokenService.js";
+import { validateUploadedDocument } from "./src/services/documentFileService.js";
+import { createDocumentStorage, documentSha256 } from "./src/services/documentStorageService.js";
+import { scanDocumentBuffer } from "./src/services/antivirusService.js";
+import { assertProductionConfig } from "./src/services/productionConfigService.js";
+import { decryptBankFields, decryptSensitive, encryptSensitive } from "./src/services/dataEncryptionService.js";
+import { isAdminAuthorized, verifyAdminPassword, verifyTotp } from "./src/services/adminAuthService.js";
+import { hashIp, requestContextMiddleware } from "./src/services/structuredLogger.js";
+import { sendOperationalAlert } from "./src/services/alertService.js";
+import { metricsMiddleware, snapshotMetrics } from "./src/services/metricsService.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -23,59 +40,39 @@ const port = Number(process.env.PORT || 3000);
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 12 * 1024 * 1024 },
-  fileFilter: (_request, file, callback) => {
-    const originalName = String(file.originalname || "").toLowerCase();
-    const allowedExtensions = [
-      ".pdf",
-      ".xml",
-      ".txt",
-      ".csv",
-      ".jpg",
-      ".jpeg",
-      ".png",
-      ".webp",
-      ".doc",
-      ".docx",
-      ".xls",
-      ".xlsx",
-      ".zip",
-    ];
-    const allowedMimeTypes = new Set([
-      "application/octet-stream",
-      "application/pdf",
-      "application/xml",
-      "text/xml",
-      "text/plain",
-      "text/csv",
-      "application/zip",
-      "application/x-zip-compressed",
-      "image/jpeg",
-      "image/png",
-      "image/webp",
-      "application/msword",
-      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-      "application/vnd.ms-excel",
-      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    ]);
-
-    if (allowedMimeTypes.has(file.mimetype) || allowedExtensions.some((extension) => originalName.endsWith(extension))) {
-      return callback(null, true);
-    }
-
-    return callback(new Error("Tipo de arquivo nao permitido. Envie PDF, XML, imagem, DOCX, XLSX, TXT, CSV ou ZIP."));
-  },
 });
 const localUrl = `http://localhost:${port}`;
 const railwayPublicUrl = process.env.RAILWAY_PUBLIC_DOMAIN ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}` : "";
 const frontendUrl = process.env.FRONTEND_URL || process.env.SITE_URL || localUrl;
 const apiPublicUrl = process.env.API_PUBLIC_URL || railwayPublicUrl || frontendUrl;
+const mercadoPagoWebhookUrl = new URL("/api/webhooks/mercadopago", `${apiPublicUrl.replace(/\/$/, "")}/`).toString();
 const mercadoPagoBackUrl = process.env.MERCADO_PAGO_BACK_URL || frontendUrl;
 const isProduction = process.env.NODE_ENV === "production";
 const paymentStore = new Map();
-const adminSessions = new Map();
-const clientSessions = new Map();
 const adminSessionDurationMs = 1000 * 60 * 60 * 8;
 const clientSessionDurationMs = 1000 * 60 * 60 * 24 * 7;
+const sessionStore = createSessionStore();
+const rateLimitStore = createRateLimitStore();
+const documentStorage = createDocumentStorage({ rootPath: path.join(__dirname, "data", "private-documents") });
+const requestIp = (request) => request.ip || request.socket?.remoteAddress || "unknown";
+const accountIdentity = (request) => `${requestIp(request)}:${cleanEmail(request.body?.email || "anonymous")}`;
+const sessionIdentity = (request) => `${requestIp(request)}:${request.clientSession?.userId || "anonymous"}`;
+const generalApiLimiter = createRateLimiter({
+  store: rateLimitStore,
+  name: "api-general",
+  limit: 120,
+  windowMs: 60 * 1000,
+  keyGenerator: requestIp,
+  skip: (request) => request.path === "/webhooks/mercadopago",
+});
+const adminLoginLimiter = createRateLimiter({ store: rateLimitStore, name: "admin-login", limit: 5, windowMs: 15 * 60 * 1000, keyGenerator: accountIdentity });
+const clientAuthLimiter = createRateLimiter({ store: rateLimitStore, name: "client-auth", limit: 5, windowMs: 15 * 60 * 1000, keyGenerator: accountIdentity });
+const cnpjLookupLimiter = createRateLimiter({ store: rateLimitStore, name: "cnpj-lookup", limit: 10, windowMs: 60 * 1000, keyGenerator: requestIp });
+const paymentCreationLimiter = createRateLimiter({ store: rateLimitStore, name: "payment-create", limit: 5, windowMs: 10 * 60 * 1000, keyGenerator: accountIdentity });
+const paymentStatusLimiter = createRateLimiter({ store: rateLimitStore, name: "payment-status", limit: 30, windowMs: 60 * 1000, keyGenerator: requestIp });
+const dasLimiter = createRateLimiter({ store: rateLimitStore, name: "client-das", limit: 3, windowMs: 60 * 60 * 1000, keyGenerator: sessionIdentity });
+const companyLimiter = createRateLimiter({ store: rateLimitStore, name: "client-company", limit: 10, windowMs: 60 * 60 * 1000, keyGenerator: sessionIdentity });
+const webhookLimiter = createRateLimiter({ store: rateLimitStore, name: "mp-webhook", limit: 600, windowMs: 60 * 1000, keyGenerator: requestIp });
 const dbPool = mysql.createPool({
   host: process.env.DB_HOST || "127.0.0.1",
   port: Number(process.env.DB_PORT || 3306),
@@ -86,39 +83,10 @@ const dbPool = mysql.createPool({
   connectionLimit: 10,
   namedPlaceholders: true,
 });
-const clientEditableUserColumns = {
-  razao_social: "VARCHAR(180) NULL",
-  nome_fantasia: "VARCHAR(160) NULL",
-  data_abertura: "DATE NULL",
-  cep: "VARCHAR(12) NULL",
-  logradouro: "VARCHAR(180) NULL",
-  numero: "VARCHAR(30) NULL",
-  complemento: "VARCHAR(120) NULL",
-  bairro: "VARCHAR(120) NULL",
-  municipio: "VARCHAR(120) NULL",
-  uf: "VARCHAR(2) NULL",
-  cnae_principal_codigo: "VARCHAR(20) NULL",
-  cnae_principal_descricao: "VARCHAR(255) NULL",
-  cnae_secundario_codigo: "VARCHAR(80) NULL",
-  cnae_secundario_descricao: "VARCHAR(255) NULL",
-  capital_social: "DECIMAL(12,2) NULL",
-  inscricao_municipal: "VARCHAR(60) NULL",
-  inscricao_estadual: "VARCHAR(60) NULL",
-  alvara_status: "VARCHAR(80) NULL",
-  banco: "VARCHAR(120) NULL",
-  agencia: "VARCHAR(30) NULL",
-  conta: "VARCHAR(40) NULL",
-  tipo_conta: "VARCHAR(40) NULL",
-};
 const allowedOrigins = new Set([
   frontendUrl,
   apiPublicUrl,
-  "http://localhost",
-  "http://127.0.0.1",
-  "http://localhost:80",
-  "http://127.0.0.1:80",
-  "http://localhost:3000",
-  "http://127.0.0.1:3000",
+  ...(!isProduction ? ["http://localhost", "http://127.0.0.1", "http://localhost:80", "http://127.0.0.1:80", "http://localhost:3000", "http://127.0.0.1:3000"] : []),
   ...(process.env.CORS_ORIGINS || "")
     .split(",")
     .map((origin) => origin.trim())
@@ -126,6 +94,9 @@ const allowedOrigins = new Set([
 ]);
 
 app.disable("x-powered-by");
+if (isProduction) app.set("trust proxy", 1);
+app.use(requestContextMiddleware);
+app.use(metricsMiddleware);
 app.use((request, response, next) => {
   response.setHeader("X-Content-Type-Options", "nosniff");
   response.setHeader("X-Frame-Options", "DENY");
@@ -154,13 +125,26 @@ app.use((request, response, next) => {
 });
 app.use(
   cors({
+    credentials: true,
     origin(origin, callback) {
       if (!origin || allowedOrigins.has(origin)) return callback(null, true);
-      return callback(new Error("Origem nao autorizada pelo CORS."));
+      return callback(Object.assign(new Error("Origem nao autorizada pelo CORS."), { status: 403 }));
     },
   }),
 );
+app.get("/health/live", (_request, response) => response.json({ status: "ok" }));
+app.get("/health/ready", async (_request, response) => {
+  try {
+    await Promise.all([dbPool.query("SELECT 1"), sessionStore.ping(), rateLimitStore.ping()]);
+    response.json({ status: "ready", mysql: "ok", redis: "ok" });
+  } catch (error) {
+    console.error("Readiness check falhou:", error.message);
+    void sendOperationalAlert("readiness_failed", { message: error.message });
+    response.status(503).json({ status: "not_ready" });
+  }
+});
 app.use(express.json());
+app.use("/api", generalApiLimiter);
 app.use((error, _request, response, next) => {
   if (error instanceof SyntaxError && "body" in error) {
     return response.status(400).json({ error: "JSON invalido no corpo da requisicao." });
@@ -171,7 +155,7 @@ app.use((error, _request, response, next) => {
 app.use((request, response, next) => {
   const blockedPattern =
     /^\/(?:\.env|package(?:-lock)?\.json|server\.js|backend\.log|DEPLOYMENT\.md)$/i;
-  const blockedDirectory = /^\/(?:database|docs|scripts|node_modules|\.git|\.agents|\.codex)(?:\/|$)/i;
+  const blockedDirectory = /^\/(?:data|database|docs|scripts|node_modules|\.git|\.agents|\.codex)(?:\/|$)/i;
 
   if (blockedPattern.test(request.path) || blockedDirectory.test(request.path)) {
     return response.sendStatus(404);
@@ -191,10 +175,23 @@ app.use(
   "/admin",
   express.static(path.join(__dirname, "admin"), {
     dotfiles: "deny",
-    index: false,
+    index: "index.html",
     maxAge: isProduction ? "30d" : 0,
+    setHeaders(response, filePath) { if (filePath.endsWith(".html")) response.setHeader("Cache-Control", "no-cache"); },
   }),
 );
+app.use(
+  "/cliente",
+  express.static(path.join(__dirname, "cliente"), {
+    dotfiles: "deny",
+    index: "index.html",
+    maxAge: isProduction ? "30d" : 0,
+    setHeaders(response, filePath) { if (filePath.endsWith(".html")) response.setHeader("Cache-Control", "no-cache"); },
+  }),
+);
+app.get("/config.js", (_request, response) => {
+  response.sendFile(path.join(__dirname, "config.js"));
+});
 app.get("/styles.css", (_request, response) => {
   response.sendFile(path.join(__dirname, "styles.css"));
 });
@@ -216,46 +213,39 @@ function parseCookies(cookieHeader = "") {
   );
 }
 
-function createAdminSession() {
+async function createAdminSession(admin = {}) {
   const token = crypto.randomBytes(32).toString("hex");
+  const csrfToken = crypto.randomBytes(32).toString("hex");
   const expiresAt = Date.now() + adminSessionDurationMs;
 
-  adminSessions.set(token, { expiresAt });
-  return { token, expiresAt };
+  await sessionStore.set("admin", token, {
+    csrfToken,
+    adminUserId: admin.id || null,
+    email: admin.email || null,
+    role: admin.role || "owner",
+  }, adminSessionDurationMs);
+  return { token, csrfToken, expiresAt };
 }
 
-function createClientSession(user) {
+async function createClientSession(user) {
   const token = crypto.randomBytes(32).toString("hex");
+  const csrfToken = crypto.randomBytes(32).toString("hex");
   const expiresAt = Date.now() + clientSessionDurationMs;
 
-  clientSessions.set(token, {
+  await sessionStore.set("client", token, {
     userId: user.id,
     email: user.email,
-    expiresAt,
-  });
-  return { token, expiresAt };
+    csrfToken,
+  }, clientSessionDurationMs);
+  return { token, csrfToken, expiresAt };
 }
 
-function deleteExpiredAdminSessions() {
-  const now = Date.now();
-  for (const [token, session] of adminSessions.entries()) {
-    if (session.expiresAt <= now) adminSessions.delete(token);
-  }
-}
-
-function deleteExpiredClientSessions() {
-  const now = Date.now();
-  for (const [token, session] of clientSessions.entries()) {
-    if (session.expiresAt <= now) clientSessions.delete(token);
-  }
-}
-
-function setAdminCookie(response, token, expiresAt) {
+function setSessionCookie(response, name, token, expiresAt) {
   const cookieParts = [
-    `facilita_admin=${encodeURIComponent(token)}`,
+    `${name}=${encodeURIComponent(token)}`,
     "Path=/",
     "HttpOnly",
-    "SameSite=Lax",
+    isProduction ? "SameSite=None" : "SameSite=Lax",
     `Expires=${new Date(expiresAt).toUTCString()}`,
   ];
 
@@ -263,17 +253,33 @@ function setAdminCookie(response, token, expiresAt) {
   response.setHeader("Set-Cookie", cookieParts.join("; "));
 }
 
-function clearAdminCookie(response) {
+function clearSessionCookie(response, name) {
   const cookieParts = [
-    "facilita_admin=",
+    `${name}=`,
     "Path=/",
     "HttpOnly",
-    "SameSite=Lax",
+    isProduction ? "SameSite=None" : "SameSite=Lax",
     "Expires=Thu, 01 Jan 1970 00:00:00 GMT",
   ];
 
   if (isProduction) cookieParts.push("Secure");
   response.setHeader("Set-Cookie", cookieParts.join("; "));
+}
+
+function setAdminCookie(response, token, expiresAt) {
+  setSessionCookie(response, "facilita_admin", token, expiresAt);
+}
+
+function setClientCookie(response, token, expiresAt) {
+  setSessionCookie(response, "facilita_client", token, expiresAt);
+}
+
+function clearAdminCookie(response) {
+  clearSessionCookie(response, "facilita_admin");
+}
+
+function clearClientCookie(response) {
+  clearSessionCookie(response, "facilita_client");
 }
 
 function safeCompare(value = "", expected = "") {
@@ -369,31 +375,6 @@ async function logContractEvent({ contractId = null, userId = null, acao, status
   }
 }
 
-async function ensureClientEditableUserFields() {
-  const databaseName = process.env.DB_NAME || "facilita_modern";
-  try {
-    const [rows] = await dbPool.execute(
-      `SELECT COLUMN_NAME
-       FROM INFORMATION_SCHEMA.COLUMNS
-       WHERE TABLE_SCHEMA = :databaseName
-         AND TABLE_NAME = 'users'`,
-      { databaseName },
-    );
-    const existingColumns = new Set(rows.map((row) => row.COLUMN_NAME));
-    const missingColumns = Object.entries(clientEditableUserColumns).filter(([column]) => !existingColumns.has(column));
-
-    for (const [column, definition] of missingColumns) {
-      await dbPool.query(`ALTER TABLE users ADD COLUMN ${column} ${definition}`);
-    }
-
-    if (missingColumns.length) {
-      console.log(`Campos editaveis do cliente criados: ${missingColumns.map(([column]) => column).join(", ")}`);
-    }
-  } catch (error) {
-    console.warn("Nao foi possivel garantir campos editaveis do cliente.", error.message);
-  }
-}
-
 let paymentsMetadataColumnsPromise = null;
 
 async function ensurePaymentsMetadataColumns() {
@@ -401,13 +382,6 @@ async function ensurePaymentsMetadataColumns() {
 
   paymentsMetadataColumnsPromise = (async () => {
     const databaseName = process.env.DB_NAME || "facilita_modern";
-    const paymentColumns = {
-      gateway: "VARCHAR(40) NULL",
-      gateway_payment_id: "VARCHAR(120) NULL",
-      competencia: "VARCHAR(7) NULL",
-      updated_at: "TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP",
-    };
-
     try {
       const [rows] = await dbPool.execute(
         `SELECT COLUMN_NAME
@@ -417,19 +391,9 @@ async function ensurePaymentsMetadataColumns() {
         { databaseName },
       );
       const existingColumns = new Set(rows.map((row) => row.COLUMN_NAME));
-      const missingColumns = Object.entries(paymentColumns).filter(([column]) => !existingColumns.has(column));
-
-      for (const [column, definition] of missingColumns) {
-        await dbPool.query(`ALTER TABLE payments ADD COLUMN ${column} ${definition}`);
-      }
-
-      if (!existingColumns.has("gateway_payment_id")) {
-        await dbPool.query("ALTER TABLE payments ADD INDEX payments_gateway_payment_idx (gateway_payment_id)");
-      }
-
-      if (missingColumns.length) {
-        console.log(`Campos de pagamento criados: ${missingColumns.map(([column]) => column).join(", ")}`);
-      }
+      const requiredColumns = ["gateway", "gateway_payment_id", "competencia", "updated_at", "status_token_hash", "status_token_expires_at"];
+      const missingColumns = requiredColumns.filter((column) => !existingColumns.has(column));
+      if (missingColumns.length) throw new Error(`Execute as migracoes: payments sem ${missingColumns.join(", ")}`);
     } catch (error) {
       paymentsMetadataColumnsPromise = null;
       throw error;
@@ -597,31 +561,35 @@ async function consultarOpenCnpj(cnpj) {
   }
 }
 
-async function vincularCnpjAoCliente({ customerId, subscriptionId, email, cnpj }) {
-  const cleanEmailValue = cleanEmail(email);
+async function vincularCnpjAoCliente({ customerId, cnpj }) {
   const cleanCnpj = normalizeDigits(cnpj);
 
-  if (!customerId || !subscriptionId || !cleanEmailValue) {
-    const error = new Error("Cliente, assinatura e e-mail sao obrigatorios para vincular o CNPJ.");
+  if (!customerId || !isValidCnpj(cleanCnpj)) {
+    const error = new Error("Informe um CNPJ valido.");
     error.status = 400;
     throw error;
   }
 
   const [rows] = await dbPool.execute(
-    `SELECT u.id, u.email, u.telefone, u.whatsapp
+    `SELECT u.id, u.cnpj, u.telefone, u.whatsapp
      FROM users u
-     JOIN subscriptions s ON s.user_id = u.id
      WHERE u.id = :customerId
-       AND s.id = :subscriptionId
-       AND LOWER(u.email) = :email
+       AND u.cliente_login_ativo = 1
+       AND u.status NOT IN ('blocked', 'cancelled')
      LIMIT 1`,
-    { customerId, subscriptionId, email: cleanEmailValue },
+    { customerId },
   );
 
   const user = rows[0];
   if (!user) {
-    const error = new Error("Nao foi possivel confirmar a assinatura para este cliente.");
+    const error = new Error("Cliente nao autorizado para alterar os dados empresariais.");
     error.status = 404;
+    throw error;
+  }
+  const currentCnpj = normalizeDigits(user.cnpj || "");
+  if (currentCnpj && currentCnpj !== cleanCnpj) {
+    const error = new Error("A troca de um CNPJ ja cadastrado exige confirmacao da equipe de atendimento.");
+    error.status = 409;
     throw error;
   }
 
@@ -738,41 +706,104 @@ app.get("/api/admin/env-check", requireAdminKey, (_request, response) => {
   });
 });
 
-function requireAdminSession(request, response, next) {
-  deleteExpiredAdminSessions();
+app.get("/api/admin/metrics", requireAdminKey, (_request, response) => response.json(snapshotMetrics()));
 
-  const authorization = request.get("authorization") || "";
-  const bearerToken = authorization.startsWith("Bearer ") ? authorization.slice(7).trim() : "";
-  const token = bearerToken || parseCookies(request.get("cookie") || "").facilita_admin;
-  const session = token ? adminSessions.get(token) : null;
+async function requireAdminSession(request, response, next) {
+  try {
+  const token = parseCookies(request.get("cookie") || "").facilita_admin || "";
+  const session = token ? await sessionStore.touch("admin", token, adminSessionDurationMs) : null;
 
   if (!session || session.expiresAt <= Date.now()) {
-    if (token) adminSessions.delete(token);
+    if (token) await sessionStore.delete("admin", token);
+    clearAdminCookie(response);
     return response.status(401).json({ error: "Sessao administrativa expirada. Faça login novamente." });
   }
 
-  session.expiresAt = Date.now() + adminSessionDurationMs;
   setAdminCookie(response, token, session.expiresAt);
   request.adminSession = session;
+  if (session.adminUserId && ["POST", "PUT", "PATCH", "DELETE"].includes(request.method) && !response.locals.auditAttached) {
+    response.locals.auditAttached = true;
+    response.on("finish", () => {
+      dbPool.execute(
+        `INSERT INTO admin_audit_logs (admin_user_id, request_id, action, resource, status_code, ip_hash)
+         VALUES (:adminUserId, :requestId, :action, :resource, :statusCode, :ipHash)`,
+        {
+          adminUserId: session.adminUserId || null,
+          requestId: request.requestId,
+          action: request.method,
+          resource: String(request.originalUrl || request.path).split("?")[0].slice(0, 255),
+          statusCode: response.statusCode,
+          ipHash: hashIp(requestIp(request)),
+        },
+      ).catch((error) => sendOperationalAlert("admin_audit_failed", { requestId: request.requestId, message: error.message }));
+    });
+  }
+  if (!isAdminAuthorized(session.role || "viewer", request.method, request.path)) {
+    return response.status(403).json({ error: "Seu papel administrativo nao permite esta operacao." });
+  }
   return next();
+  } catch (error) {
+    return next(error);
+  }
 }
 
-function requireClientSession(request, response, next) {
-  deleteExpiredClientSessions();
-
-  const authorization = request.get("authorization") || "";
-  const bearerToken = authorization.startsWith("Bearer ") ? authorization.slice(7).trim() : "";
-  const session = bearerToken ? clientSessions.get(bearerToken) : null;
+async function requireClientSession(request, response, next) {
+  try {
+  const token = parseCookies(request.get("cookie") || "").facilita_client || "";
+  const session = token ? await sessionStore.touch("client", token, clientSessionDurationMs) : null;
 
   if (!session || session.expiresAt <= Date.now()) {
-    if (bearerToken) clientSessions.delete(bearerToken);
+    if (token) await sessionStore.delete("client", token);
+    clearClientCookie(response);
     return response.status(401).json({ error: "Sessao do cliente expirada. Faca login novamente." });
   }
 
-  session.expiresAt = Date.now() + clientSessionDurationMs;
+  setClientCookie(response, token, session.expiresAt);
   request.clientSession = session;
   return next();
+  } catch (error) {
+    return next(error);
+  }
 }
+
+async function requireCsrfForAuthenticatedRoutes(request, response, next) {
+  if (!["POST", "PUT", "PATCH", "DELETE"].includes(request.method)) return next();
+
+  const routeType = request.path.startsWith("/api/admin/")
+    ? "admin"
+    : request.path.startsWith("/api/client/")
+      ? "client"
+      : null;
+  if (!routeType) return next();
+
+  const publicAuthPaths = new Set([
+    "/api/admin/auth/login",
+    "/api/client/auth/login",
+    "/api/client/auth/setup",
+    "/api/client/auth/setup/request",
+    "/api/client/auth/setup/confirm",
+    "/api/client/auth/recovery/request",
+    "/api/client/auth/recovery/confirm",
+  ]);
+  if (publicAuthPaths.has(request.path)) return next();
+
+  try {
+    const cookieName = routeType === "admin" ? "facilita_admin" : "facilita_client";
+    const token = parseCookies(request.get("cookie") || "")[cookieName] || "";
+    if (!token) return next();
+
+    const session = await sessionStore.get(routeType, token);
+    const providedToken = request.get("x-csrf-token") || "";
+    if (!session?.csrfToken || !safeCompare(providedToken, session.csrfToken)) {
+      return response.status(403).json({ error: "Token CSRF invalido ou ausente." });
+    }
+    return next();
+  } catch (error) {
+    return next(error);
+  }
+}
+
+app.use(requireCsrfForAuthenticatedRoutes);
 
 app.get("/api/plans", async (_request, response) => {
   try {
@@ -839,6 +870,13 @@ function getDefaultDasPeriodoApuracao(date = new Date()) {
   return `${year}${month}`;
 }
 
+function hasClientDasAccess(client) {
+  if (!client) return false;
+  if (Number(client.cliente_login_ativo) === 0) return false;
+  if (["blocked", "cancelled"].includes(String(client.status || ""))) return false;
+  return Boolean(Number(client.has_paid_payment) || Number(client.has_active_subscription));
+}
+
 function parseDasMeiDados(dados) {
   if (!dados) return null;
   if (Array.isArray(dados)) return dados[0] || null;
@@ -857,27 +895,7 @@ let customerDocumentFilesReady = false;
 
 async function ensureCustomerDocumentsTable() {
   if (customerDocumentsReady) return;
-
-  await dbPool.execute(`
-    CREATE TABLE IF NOT EXISTS customer_documents (
-      id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-      user_id BIGINT UNSIGNED NOT NULL,
-      titulo VARCHAR(160) NOT NULL,
-      tipo VARCHAR(80) NOT NULL DEFAULT 'documento',
-      status VARCHAR(40) NOT NULL DEFAULT 'pendente',
-      arquivo_url TEXT NULL,
-      observacao TEXT NULL,
-      data_emissao DATE NULL,
-      data_assinatura DATETIME NULL,
-      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-      KEY customer_documents_user_idx (user_id),
-      KEY customer_documents_status_idx (status),
-      KEY customer_documents_tipo_idx (tipo),
-      CONSTRAINT customer_documents_user_fk FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-    )
-  `);
-
+  await dbPool.query("SELECT id FROM customer_documents LIMIT 0");
   customerDocumentsReady = true;
 }
 
@@ -885,20 +903,7 @@ async function ensureCustomerDocumentFilesTable() {
   if (customerDocumentFilesReady) return;
   await ensureCustomerDocumentsTable();
 
-  await dbPool.execute(`
-    CREATE TABLE IF NOT EXISTS customer_document_files (
-      id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-      document_id BIGINT UNSIGNED NOT NULL,
-      file_name VARCHAR(180) NOT NULL,
-      mime_type VARCHAR(80) NOT NULL DEFAULT 'application/pdf',
-      base64_data MEDIUMTEXT NOT NULL,
-      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-      UNIQUE KEY customer_document_files_document_unique (document_id),
-      CONSTRAINT customer_document_files_document_fk FOREIGN KEY (document_id) REFERENCES customer_documents(id) ON DELETE CASCADE
-    )
-  `);
-
+  await dbPool.query("SELECT document_id, storage_key, sha256 FROM customer_document_files LIMIT 0");
   customerDocumentFilesReady = true;
 }
 
@@ -920,6 +925,28 @@ function sanitizeDownloadFileName(fileName = "documento") {
   return cleaned || "documento";
 }
 
+async function persistPrivateDocument({ buffer, extension, mimeType }) {
+  await scanDocumentBuffer(buffer);
+  const storageKey = await documentStorage.put({ buffer, extension, mimeType });
+  return {
+    storageDriver: documentStorage.driver,
+    storageKey,
+    fileSize: buffer.length,
+    sha256: documentSha256(buffer),
+  };
+}
+
+async function loadPrivateDocument(document) {
+  const buffer = document.storage_key
+    ? await documentStorage.get(document.storage_key)
+    : Buffer.from(String(document.base64_data || ""), "base64");
+  if (!buffer.length) throw Object.assign(new Error("Arquivo do documento nao encontrado."), { status: 404 });
+  if (document.sha256 && documentSha256(buffer) !== document.sha256) {
+    throw Object.assign(new Error("Integridade do documento comprometida."), { status: 500 });
+  }
+  return buffer;
+}
+
 function parseSerproDate(value = "") {
   const digits = normalizeDigits(value);
   if (digits.length !== 8) return null;
@@ -928,6 +955,10 @@ function parseSerproDate(value = "") {
 
 async function saveDasDocumentForClient({ userId, periodoApuracao, cnpjContribuinte, dasData, pdfBase64 }) {
   await ensureCustomerDocumentFilesTable();
+
+  const pdfBuffer = Buffer.from(String(pdfBase64 || ""), "base64");
+  const validatedFile = await validateUploadedDocument({ buffer: pdfBuffer, originalname: "documento.pdf" });
+  const storedFile = await persistPrivateDocument({ buffer: pdfBuffer, ...validatedFile });
 
   const competenciaLabel = formatDasCompetencia(periodoApuracao);
   const title = `DAS-MEI ${competenciaLabel}`;
@@ -978,20 +1009,42 @@ async function saveDasDocumentForClient({ userId, periodoApuracao, cnpjContribui
 
   const fileUrl = `/api/client/documents/${documentId}/download`;
 
-  await dbPool.execute(
-    `INSERT INTO customer_document_files (document_id, file_name, mime_type, base64_data)
-     VALUES (:documentId, :fileName, 'application/pdf', :pdfBase64)
+  const [previousFiles] = await dbPool.execute(
+    "SELECT storage_key FROM customer_document_files WHERE document_id = :documentId LIMIT 1",
+    { documentId },
+  );
+
+  try {
+    await dbPool.execute(
+    `INSERT INTO customer_document_files
+       (document_id, file_name, mime_type, base64_data, storage_driver, storage_key, file_size, sha256)
+     VALUES
+       (:documentId, :fileName, :mimeType, NULL, :storageDriver, :storageKey, :fileSize, :sha256)
      ON DUPLICATE KEY UPDATE
        file_name = VALUES(file_name),
        mime_type = VALUES(mime_type),
-       base64_data = VALUES(base64_data),
+       base64_data = NULL,
+       storage_driver = VALUES(storage_driver),
+       storage_key = VALUES(storage_key),
+       file_size = VALUES(file_size),
+       sha256 = VALUES(sha256),
        updated_at = CURRENT_TIMESTAMP`,
     {
       documentId,
       fileName,
-      pdfBase64,
+      mimeType: validatedFile.mimeType,
+      ...storedFile,
     },
-  );
+    );
+  } catch (error) {
+    await documentStorage.delete(storedFile.storageKey).catch(() => {});
+    throw error;
+  }
+
+  const previousStorageKey = previousFiles[0]?.storage_key;
+  if (previousStorageKey && previousStorageKey !== storedFile.storageKey) {
+    await documentStorage.delete(previousStorageKey).catch((error) => console.error("Erro ao remover arquivo substituido:", error));
+  }
 
   await dbPool.execute(
     `UPDATE customer_documents
@@ -1012,40 +1065,38 @@ async function saveDasDocumentForClient({ userId, periodoApuracao, cnpjContribui
   };
 }
 
-app.post("/api/das-mei/gerar", async (request, response) => {
-  try {
-    const resposta = await gerarDasMei({
-      cnpjContribuinte: request.body?.cnpjContribuinte,
-      periodoApuracao: request.body?.periodoApuracao,
-    });
-
-    response.json({ ok: true, resposta });
-  } catch (error) {
-    const status = error.status || 500;
-
-    response.status(status).json({
-      ok: false,
-      status,
-      mensagem: getSerproDasErrorMessage(status),
-      erro: error.details || error.message || "Erro desconhecido ao gerar DAS-MEI.",
-    });
-  }
+app.post("/api/das-mei/gerar", (_request, response) => {
+  response.status(410).json({ error: "Use a geracao de DAS autenticada na area do cliente." });
 });
 
-app.post("/api/client/das-mei/gerar", requireClientSession, async (request, response) => {
+app.post("/api/client/das-mei/gerar", requireClientSession, dasLimiter, async (request, response) => {
   try {
     const periodoApuracao = request.body?.periodoApuracao || getDefaultDasPeriodoApuracao();
+    if (!/^\d{6}$/.test(String(periodoApuracao))) {
+      return response.status(400).json({ error: "Competencia invalida. Use o formato AAAAMM." });
+    }
     const [rows] = await dbPool.execute(
-      `SELECT id, nome, cnpj, documento
-       FROM users
-       WHERE id = :userId
+      `SELECT u.id, u.nome, u.cnpj, u.status, u.cliente_login_ativo,
+              EXISTS(
+                SELECT 1 FROM payments p
+                WHERE p.user_id = u.id AND p.status IN ('approved', 'paid', 'pago')
+              ) AS has_paid_payment,
+              EXISTS(
+                SELECT 1 FROM subscriptions s
+                WHERE s.user_id = u.id AND s.status IN ('authorized', 'active')
+              ) AS has_active_subscription
+       FROM users u
+       WHERE u.id = :userId
        LIMIT 1`,
       { userId: request.clientSession.userId },
     );
     const client = rows[0];
-    const cnpjContribuinte = normalizeDigits(client?.cnpj || client?.documento || "");
+    const cnpjContribuinte = normalizeDigits(client?.cnpj || "");
 
     if (!client) return response.status(404).json({ error: "Cliente nao encontrado." });
+    if (!hasClientDasAccess(client)) {
+      return response.status(403).json({ error: "A geracao do DAS exige pagamento aprovado ou assinatura ativa." });
+    }
     if (cnpjContribuinte.length !== 14) {
       return response.status(400).json({ error: "Cadastre um CNPJ valido antes de solicitar o DAS-MEI." });
     }
@@ -1101,7 +1152,7 @@ app.get("/api/client/documents/:documentId/download", requireClientSession, asyn
     }
 
     const [rows] = await dbPool.execute(
-      `SELECT d.id, d.user_id, d.titulo, f.file_name, f.mime_type, f.base64_data
+      `SELECT d.id, d.user_id, d.titulo, f.file_name, f.mime_type, f.base64_data, f.storage_key, f.sha256
        FROM customer_documents d
        JOIN customer_document_files f ON f.document_id = d.id
        WHERE d.id = :documentId
@@ -1116,26 +1167,25 @@ app.get("/api/client/documents/:documentId/download", requireClientSession, asyn
     const document = rows[0];
     if (!document) return response.status(404).json({ error: "Documento nao encontrado." });
 
-    const buffer = Buffer.from(String(document.base64_data || ""), "base64");
+    const buffer = await loadPrivateDocument(document);
     response.setHeader("Content-Type", document.mime_type || "application/pdf");
     response.setHeader("Content-Disposition", `inline; filename="${String(document.file_name || "documento.pdf").replace(/"/g, "")}"`);
     response.send(buffer);
   } catch (error) {
     console.error("Erro ao baixar documento do cliente:", error);
-    response.status(500).json({ error: "Erro ao baixar documento." });
+    response.status(error.status || 500).json({ error: error.message || "Erro ao baixar documento." });
   }
 });
 
-app.get("/api/serpro/token/teste", async (_request, response) => {
+app.get("/api/serpro/token/teste", requireAdminKey, async (_request, response) => {
   try {
     const tokenData = await gerarTokenSerpro();
-    const accessToken = String(tokenData.access_token || "");
 
     response.json({
       ok: true,
       token_type: tokenData.token_type,
       expires_in: tokenData.expires_in,
-      access_token_preview: accessToken ? `${accessToken.slice(0, 20)}...` : "",
+      token_received: Boolean(tokenData.access_token),
     });
   } catch (error) {
     response.status(error.status || 500).json({
@@ -1145,27 +1195,11 @@ app.get("/api/serpro/token/teste", async (_request, response) => {
   }
 });
 
-app.post("/api/customers/cnpj", async (request, response) => {
-  try {
-    const body = request.body || {};
-    const customerId = Number(body.customerId || body.userId);
-    const subscriptionId = Number(body.subscriptionId || body.localSubscriptionId);
-    const email = body.email;
-    const cnpj = body.cnpj;
-    const cnpjData = await vincularCnpjAoCliente({ customerId, subscriptionId, email, cnpj });
-
-    response.json({
-      ok: true,
-      message: "CNPJ vinculado e dados publicos salvos com sucesso.",
-      company: cnpjData,
-    });
-  } catch (error) {
-    console.error("Erro ao vincular CNPJ:", error.message);
-    response.status(error.status || 500).json({ error: error.message || "Erro ao consultar CNPJ." });
-  }
+app.post("/api/customers/cnpj", (_request, response) => {
+  response.status(410).json({ error: "Cadastre o CNPJ pela area autenticada do cliente." });
 });
 
-app.post("/api/cnpj/consultar", async (request, response) => {
+app.post("/api/cnpj/consultar", cnpjLookupLimiter, async (request, response) => {
   try {
     const cnpj = normalizeDigits(request.body?.cnpj || "");
     const company = await consultarOpenCnpj(cnpj);
@@ -1180,78 +1214,164 @@ app.post("/api/cnpj/consultar", async (request, response) => {
   }
 });
 
-app.post("/api/client/auth/setup", async (request, response) => {
+const clientAuthNeutralMessage = "Se o cadastro estiver apto, enviaremos as instrucoes para o e-mail informado.";
+
+async function sendClientAuthToken(email, purpose) {
+  const normalizedPurpose = normalizeClientAuthPurpose(purpose);
+  const normalizedEmail = cleanEmail(email);
+  if (!normalizedPurpose || !normalizedEmail) return;
+
+  const [rows] = await dbPool.execute(
+    `SELECT u.id, u.nome, u.email, u.senha_hash
+     FROM users u
+     WHERE LOWER(u.email) = :email
+       AND u.cliente_login_ativo = 1
+       AND u.status NOT IN ('blocked', 'cancelled')
+       AND EXISTS (
+         SELECT 1 FROM subscriptions s
+         WHERE s.user_id = u.id AND s.status IN ('pending', 'authorized', 'active')
+         UNION ALL
+         SELECT 1 FROM payments p
+         WHERE p.user_id = u.id AND p.status IN ('approved', 'paid', 'pago')
+       )
+     LIMIT 1`,
+    { email: normalizedEmail },
+  );
+  const user = rows[0];
+  if (!user) return;
+  if (normalizedPurpose === "setup" && user.senha_hash) return;
+  if (normalizedPurpose === "recovery" && !user.senha_hash) return;
+
+  const authToken = createClientAuthToken();
+  await dbPool.execute(
+    `UPDATE client_auth_tokens
+     SET used_at = NOW()
+     WHERE user_id = :userId AND purpose = :purpose AND used_at IS NULL`,
+    { userId: user.id, purpose: normalizedPurpose },
+  );
+  await dbPool.execute(
+    `INSERT INTO client_auth_tokens (user_id, purpose, token_hash, expires_at)
+     VALUES (:userId, :purpose, :tokenHash, :expiresAt)`,
+    {
+      userId: user.id,
+      purpose: normalizedPurpose,
+      tokenHash: authToken.tokenHash,
+      expiresAt: authToken.expiresAt,
+    },
+  );
+
+  const actionLabel = normalizedPurpose === "setup" ? "criar seu acesso" : "redefinir sua senha";
+  const actionUrl = `${frontendUrl.replace(/\/$/, "")}/cliente/?auth_action=${normalizedPurpose}&auth_token=${authToken.token}`;
+  const safeName = escapeEmailHtml(user.nome || "cliente");
+  const safeUrl = escapeEmailHtml(actionUrl);
+  await enviarEmailSistema({
+    dedupeKey: `client-auth-${normalizedPurpose}-${authToken.tokenHash.slice(0, 32)}`,
+    tipo: `client_auth_${normalizedPurpose}`,
+    userId: user.id,
+    to: user.email,
+    subject: normalizedPurpose === "setup" ? "Crie seu acesso ao Facilita MEI" : "Redefina sua senha do Facilita MEI",
+    text: `Ola, ${user.nome || "cliente"}. Acesse ${actionUrl} para ${actionLabel}. O link expira em 30 minutos e pode ser usado uma unica vez.`,
+    html: `<p>Ola, ${safeName}.</p><p>Use o link abaixo para ${actionLabel}:</p><p><a href="${safeUrl}">${safeUrl}</a></p><p>O link expira em 30 minutos e pode ser usado uma unica vez.</p>`,
+  });
+}
+
+async function confirmClientAuthToken({ token, password, purpose }) {
+  const normalizedPurpose = normalizeClientAuthPurpose(purpose);
+  const normalizedToken = String(token || "").trim();
+  if (!normalizedPurpose || !/^[a-f0-9]{64}$/i.test(normalizedToken)) {
+    const error = new Error("Link invalido ou expirado.");
+    error.status = 400;
+    throw error;
+  }
+  if (String(password || "").length < 8) {
+    const error = new Error("A senha precisa ter pelo menos 8 caracteres.");
+    error.status = 400;
+    throw error;
+  }
+
+  const connection = await dbPool.getConnection();
   try {
-    const email = String(request.body?.email || "").trim().toLowerCase();
-    const documento = normalizeDigits(request.body?.documento || "");
-    const password = String(request.body?.password || "");
-
-    if (!email) return response.status(400).json({ error: "Informe o e-mail usado na assinatura." });
-    if (!documento) return response.status(400).json({ error: "Informe o CPF ou CNPJ usado na assinatura." });
-    if (password.length < 8) return response.status(400).json({ error: "A senha precisa ter pelo menos 8 caracteres." });
-
-    const [users] = await dbPool.execute(
-      `SELECT id, nome, email, documento, cnpj, cliente_login_ativo
-       FROM users
-       WHERE LOWER(email) = :email
-       LIMIT 1`,
-      { email },
+    await connection.beginTransaction();
+    const [rows] = await connection.execute(
+      `SELECT t.id, t.user_id, u.id AS user_id, u.nome, u.email, u.status, u.cliente_login_ativo
+       FROM client_auth_tokens t
+       JOIN users u ON u.id = t.user_id
+       WHERE t.token_hash = :tokenHash
+         AND t.purpose = :purpose
+         AND t.used_at IS NULL
+         AND t.expires_at > NOW()
+       LIMIT 1
+       FOR UPDATE`,
+      { tokenHash: hashClientAuthToken(normalizedToken), purpose: normalizedPurpose },
     );
-    const user = users[0];
-
-    if (!user) return response.status(404).json({ error: "Nao encontramos uma assinatura com este e-mail." });
-    if (Number(user.cliente_login_ativo) === 0) return response.status(403).json({ error: "O acesso deste cliente esta bloqueado. Fale com o atendimento." });
-
-    const storedDocuments = [user.documento, user.cnpj].map(normalizeDigits).filter(Boolean);
-    if (!storedDocuments.includes(documento)) {
-      return response.status(401).json({ error: "Documento nao confere com o cadastro da assinatura." });
-    }
-
-    const [[accessRows], [subscriptionRows]] = await Promise.all([
-      dbPool.execute(
-        `SELECT COUNT(*) AS total
-         FROM payments
-         WHERE user_id = :userId
-           AND status IN ('approved', 'paid', 'pago')`,
-        { userId: user.id },
-      ),
-      dbPool.execute(
-        `SELECT COUNT(*) AS total
-         FROM subscriptions
-         WHERE user_id = :userId
-           AND status IN ('pending', 'authorized', 'active')`,
-        { userId: user.id },
-      ),
-    ]);
-
-    if (!Number(accessRows[0]?.total || 0) && !Number(subscriptionRows[0]?.total || 0)) {
-      return response.status(403).json({ error: "Seu cadastro ainda nao tem assinatura vinculada." });
+    const user = rows[0];
+    if (!user || Number(user.cliente_login_ativo) === 0 || ["blocked", "cancelled"].includes(user.status)) {
+      const error = new Error("Link invalido ou expirado.");
+      error.status = 400;
+      throw error;
     }
 
     const { hash, salt } = hashPassword(password);
-    await dbPool.execute(
+    await connection.execute(
       `UPDATE users
-       SET senha_hash = :hash,
-           senha_salt = :salt,
-           cliente_login_ativo = 1,
-           updated_at = CURRENT_TIMESTAMP
+       SET senha_hash = :hash, senha_salt = :salt, updated_at = CURRENT_TIMESTAMP
        WHERE id = :userId`,
-      { hash, salt, userId: user.id },
+      { hash, salt, userId: user.user_id },
     );
-
-    const session = createClientSession(user);
-    response.json({
-      token: session.token,
-      expiresAt: new Date(session.expiresAt).toISOString(),
-      client: { id: user.id, nome: user.nome, email: user.email },
-    });
+    await connection.execute(
+      `UPDATE client_auth_tokens SET used_at = NOW()
+       WHERE user_id = :userId AND used_at IS NULL`,
+      { userId: user.user_id },
+    );
+    await connection.commit();
+    await sessionStore.deleteByUserId("client", user.user_id);
+    return user;
   } catch (error) {
-    console.error(error);
-    response.status(500).json({ error: "Erro ao criar acesso do cliente." });
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
   }
+}
+
+for (const purpose of ["setup", "recovery"]) {
+  app.post(`/api/client/auth/${purpose}/request`, clientAuthLimiter, async (request, response) => {
+    try {
+      await sendClientAuthToken(request.body?.email, purpose);
+    } catch (error) {
+      console.error(`Erro ao solicitar token de ${purpose}:`, error.message);
+    }
+    response.json({ ok: true, message: clientAuthNeutralMessage });
+  });
+
+  app.post(`/api/client/auth/${purpose}/confirm`, clientAuthLimiter, async (request, response) => {
+    try {
+      const user = await confirmClientAuthToken({
+        token: request.body?.token,
+        password: request.body?.password,
+        purpose,
+      });
+      const session = await createClientSession(user);
+      setClientCookie(response, session.token, session.expiresAt);
+      response.json({
+        ok: true,
+        csrfToken: session.csrfToken,
+        expiresAt: new Date(session.expiresAt).toISOString(),
+        client: { id: user.user_id, nome: user.nome, email: user.email, status: user.status },
+      });
+    } catch (error) {
+      response.status(error.status || 500).json({ error: error.message || "Nao foi possivel definir a senha." });
+    }
+  });
+}
+
+app.post("/api/client/auth/setup", async (_request, response) => {
+  return response.status(410).json({
+    error: "Fluxo descontinuado. Solicite um link de ativacao por e-mail.",
+  });
 });
 
-app.post("/api/client/auth/login", async (request, response) => {
+app.post("/api/client/auth/login", clientAuthLimiter, async (request, response) => {
   try {
     const email = String(request.body?.email || "").trim().toLowerCase();
     const password = String(request.body?.password || "");
@@ -1273,9 +1393,10 @@ app.post("/api/client/auth/login", async (request, response) => {
       return response.status(403).json({ error: "Acesso do cliente bloqueado. Fale com o atendimento." });
     }
 
-    const session = createClientSession(user);
+    const session = await createClientSession(user);
+    setClientCookie(response, session.token, session.expiresAt);
     response.json({
-      token: session.token,
+      csrfToken: session.csrfToken,
       expiresAt: new Date(session.expiresAt).toISOString(),
       client: { id: user.id, nome: user.nome, email: user.email, status: user.status },
     });
@@ -1285,11 +1406,15 @@ app.post("/api/client/auth/login", async (request, response) => {
   }
 });
 
-app.post("/api/client/auth/logout", requireClientSession, (request, response) => {
-  const authorization = request.get("authorization") || "";
-  const bearerToken = authorization.startsWith("Bearer ") ? authorization.slice(7).trim() : "";
-  if (bearerToken) clientSessions.delete(bearerToken);
+app.post("/api/client/auth/logout", requireClientSession, async (request, response, next) => {
+  try {
+  const token = parseCookies(request.get("cookie") || "").facilita_client || "";
+  if (token) await sessionStore.delete("client", token);
+  clearClientCookie(response);
   response.json({ ok: true });
+  } catch (error) {
+    next(error);
+  }
 });
 
 app.get("/api/client/auth/me", requireClientSession, async (request, response) => {
@@ -1306,10 +1431,23 @@ app.get("/api/client/auth/me", requireClientSession, async (request, response) =
       { userId: request.clientSession.userId },
     );
     if (!rows[0]) return response.status(404).json({ error: "Cliente nao encontrado." });
-    response.json({ client: rows[0] });
+    response.json({ client: decryptBankFields(rows[0]), csrfToken: request.clientSession.csrfToken });
   } catch (error) {
     console.error(error);
     response.status(500).json({ error: "Erro ao carregar cliente." });
+  }
+});
+
+app.patch("/api/client/settings/company", requireClientSession, companyLimiter, async (request, response) => {
+  try {
+    const company = await vincularCnpjAoCliente({
+      customerId: request.clientSession.userId,
+      cnpj: request.body?.cnpj,
+    });
+    response.json({ ok: true, message: "Dados empresariais atualizados com sucesso.", company });
+  } catch (error) {
+    console.error("Erro ao atualizar CNPJ autenticado:", error.message);
+    response.status(error.status || 500).json({ error: error.message || "Erro ao atualizar dados empresariais." });
   }
 });
 
@@ -1352,10 +1490,10 @@ app.patch("/api/client/settings/bank", requireClientSession, async (request, res
   try {
     const userId = request.clientSession.userId;
     const payload = {
-      banco: cleanText(request.body?.banco, 120),
-      agencia: cleanText(request.body?.agencia, 30),
-      conta: cleanText(request.body?.conta, 40),
-      tipoConta: cleanText(request.body?.tipo_conta || request.body?.tipoConta, 40),
+      banco: encryptSensitive(cleanText(request.body?.banco, 120)),
+      agencia: encryptSensitive(cleanText(request.body?.agencia, 30)),
+      conta: encryptSensitive(cleanText(request.body?.conta, 40)),
+      tipoConta: encryptSensitive(cleanText(request.body?.tipo_conta || request.body?.tipoConta, 40)),
       userId,
     };
 
@@ -1373,7 +1511,7 @@ app.patch("/api/client/settings/bank", requireClientSession, async (request, res
     response.json({ ok: true, message: "Dados bancarios atualizados com sucesso." });
   } catch (error) {
     console.error(error);
-    response.status(500).json({ error: "Erro ao salvar dados bancarios do cliente." });
+    response.status(error.status || 500).json({ error: error.message || "Erro ao salvar dados bancarios do cliente." });
   }
 });
 
@@ -1493,7 +1631,7 @@ app.get("/api/client/dashboard", requireClientSession, async (request, response)
     ]);
 
     const activeSubscription = subscriptionRows.find((subscription) => ["active", "authorized"].includes(subscription.status)) || subscriptionRows[0] || null;
-    const client = clientRows[0] || null;
+    const client = decryptBankFields(clientRows[0] || null);
     const paymentSummary = paymentSummaryRows[0] || {};
     const documentSummary = documentSummaryRows[0] || {};
     const contractSummary = contractSummaryRows[0] || {};
@@ -1603,47 +1741,91 @@ app.get("/api/client/dashboard", requireClientSession, async (request, response)
   }
 });
 
-app.post("/api/admin/auth/login", (request, response) => {
-  const adminEmail = process.env.ADMIN_EMAIL || "Atendimento@facilitameibr.com.br";
-  const adminPassword = process.env.ADMIN_PASSWORD || "";
-  const { email, password } = request.body || {};
-
-  if (!adminPassword) {
-    return response.status(503).json({ error: "ADMIN_PASSWORD nao configurada no servidor." });
+app.post("/api/admin/auth/login", adminLoginLimiter, async (request, response, next) => {
+  try {
+  const { email, password, mfaCode } = request.body || {};
+  let admin;
+  if (isProduction) {
+    const [rows] = await dbPool.execute(
+      `SELECT id, email, password_hash, password_salt, role, mfa_secret, mfa_enabled
+       FROM admin_users WHERE email = :email AND active = 1 LIMIT 1`,
+      { email: String(email || "").trim().toLowerCase() },
+    );
+    admin = rows[0];
+    const passwordMatches = admin && verifyAdminPassword(password, admin.password_hash, admin.password_salt);
+    const mfaMatches = admin?.mfa_enabled && verifyTotp(decryptSensitive(admin.mfa_secret), mfaCode);
+    if (!passwordMatches || !mfaMatches) return response.status(401).json({ error: "Credenciais ou MFA invalidos." });
+    await dbPool.execute("UPDATE admin_users SET last_login_at = NOW() WHERE id = :id", { id: admin.id });
+  } else {
+    const adminEmail = process.env.ADMIN_EMAIL || "Atendimento@facilitameibr.com.br";
+    const matches = String(email || "").trim().toLowerCase() === adminEmail.toLowerCase() && safeCompare(password || "", process.env.ADMIN_PASSWORD || "");
+    if (!matches) return response.status(401).json({ error: "E-mail ou senha invalidos." });
+    admin = { id: null, email: adminEmail, role: "owner" };
   }
 
-  const emailMatches = String(email || "").trim().toLowerCase() === adminEmail.toLowerCase();
-  const passwordMatches = safeCompare(password || "", adminPassword);
-
-  if (!emailMatches || !passwordMatches) {
-    return response.status(401).json({ error: "E-mail ou senha invalidos." });
-  }
-
-  const session = createAdminSession();
+  const session = await createAdminSession(admin);
   setAdminCookie(response, session.token, session.expiresAt);
 
   response.json({
-    token: session.token,
+    csrfToken: session.csrfToken,
     expiresAt: new Date(session.expiresAt).toISOString(),
-    admin: { email: adminEmail },
+    admin: { email: admin.email, role: admin.role },
   });
+  } catch (error) {
+    next(error);
+  }
 });
 
-app.post("/api/admin/auth/logout", requireAdminSession, (request, response) => {
-  const authorization = request.get("authorization") || "";
-  const bearerToken = authorization.startsWith("Bearer ") ? authorization.slice(7).trim() : "";
-  const cookieToken = parseCookies(request.get("cookie") || "").facilita_admin;
-  const token = bearerToken || cookieToken;
-
-  if (token) adminSessions.delete(token);
+app.post("/api/admin/auth/logout", requireAdminSession, async (request, response, next) => {
+  try {
+  const token = parseCookies(request.get("cookie") || "").facilita_admin || "";
+  if (token) await sessionStore.delete("admin", token);
   clearAdminCookie(response);
   response.json({ ok: true });
+  } catch (error) {
+    next(error);
+  }
 });
 
 app.get("/api/admin/auth/me", requireAdminSession, (_request, response) => {
   response.json({
-    admin: { email: process.env.ADMIN_EMAIL || "Atendimento@facilitameibr.com.br" },
+    admin: { email: _request.adminSession.email, role: _request.adminSession.role },
+    csrfToken: _request.adminSession.csrfToken,
   });
+});
+
+app.get("/api/admin/users", requireAdminSession, async (_request, response, next) => {
+  try {
+    const [rows] = await dbPool.execute(
+      "SELECT id, email, role, mfa_enabled, active, last_login_at, created_at FROM admin_users ORDER BY email",
+    );
+    response.json({ admins: rows });
+  } catch (error) { next(error); }
+});
+
+app.post("/api/admin/users", requireAdminSession, async (request, response, next) => {
+  try {
+    const { email, password, role = "viewer", mfaSecret } = request.body || {};
+    if (!String(email || "").includes("@") || String(password || "").length < 12) {
+      return response.status(400).json({ error: "Informe e-mail e senha com ao menos 12 caracteres." });
+    }
+    if (!isAdminAuthorized(role, "GET", "/api/admin/dashboard")) return response.status(400).json({ error: "Papel invalido." });
+    const normalizedSecret = String(mfaSecret || "").replace(/\s/g, "").toUpperCase();
+    if (!/^[A-Z2-7]{16,}$/.test(normalizedSecret)) return response.status(400).json({ error: "Segredo MFA Base32 invalido." });
+    const { hash, salt } = hashPassword(password);
+    const [result] = await dbPool.execute(
+      `INSERT INTO admin_users (email, password_hash, password_salt, role, mfa_secret, mfa_enabled, active)
+       VALUES (:email, :hash, :salt, :role, :mfaSecret, 1, 1)`,
+      {
+        email: String(email).trim().toLowerCase(), hash, salt, role,
+        mfaSecret: encryptSensitive(normalizedSecret),
+      },
+    );
+    response.status(201).json({ id: result.insertId, email: String(email).trim().toLowerCase(), role });
+  } catch (error) {
+    if (error.code === "ER_DUP_ENTRY") return response.status(409).json({ error: "Administrador ja cadastrado." });
+    next(error);
+  }
 });
 
 app.get("/api/admin/dashboard", requireAdminSession, async (_request, response) => {
@@ -1819,6 +2001,7 @@ app.post(
   requireAdminSession,
   upload.single("documento"),
   async (request, response) => {
+    let storedFile = null;
     try {
       await ensureCustomerDocumentFilesTable();
 
@@ -1839,7 +2022,8 @@ app.post(
       const observacao = String(request.body?.observacao || "").trim().slice(0, 1000) || null;
       const status = String(request.body?.status || "aprovado").trim().slice(0, 40) || "aprovado";
       const fileName = sanitizeDownloadFileName(request.file.originalname || `${titulo}.pdf`);
-      const base64Data = request.file.buffer.toString("base64");
+      const validatedFile = await validateUploadedDocument(request.file);
+      storedFile = await persistPrivateDocument({ buffer: request.file.buffer, ...validatedFile });
 
       const [insertResult] = await dbPool.execute(
         `INSERT INTO customer_documents
@@ -1853,13 +2037,15 @@ app.post(
       const fileUrl = `/api/client/documents/${documentId}/download`;
 
       await dbPool.execute(
-        `INSERT INTO customer_document_files (document_id, file_name, mime_type, base64_data)
-         VALUES (:documentId, :fileName, :mimeType, :base64Data)`,
+        `INSERT INTO customer_document_files
+          (document_id, file_name, mime_type, base64_data, storage_driver, storage_key, file_size, sha256)
+         VALUES
+          (:documentId, :fileName, :mimeType, NULL, :storageDriver, :storageKey, :fileSize, :sha256)`,
         {
           documentId,
           fileName,
-          mimeType: request.file.mimetype || "application/octet-stream",
-          base64Data,
+          mimeType: validatedFile.mimeType,
+          ...storedFile,
         },
       );
 
@@ -1885,8 +2071,9 @@ app.post(
         },
       });
     } catch (error) {
+      if (storedFile?.storageKey) await documentStorage.delete(storedFile.storageKey).catch(() => {});
       console.error("Erro ao enviar documento do cliente:", error);
-      response.status(500).json({ error: error.message || "Erro ao enviar documento." });
+      response.status(error.status || 500).json({ error: error.message || "Erro ao enviar documento." });
     }
   },
 );
@@ -1901,7 +2088,7 @@ app.get("/api/admin/documents/:documentId/download", requireAdminSession, async 
     }
 
     const [rows] = await dbPool.execute(
-      `SELECT d.id, d.titulo, f.file_name, f.mime_type, f.base64_data
+      `SELECT d.id, d.titulo, f.file_name, f.mime_type, f.base64_data, f.storage_key, f.sha256
        FROM customer_documents d
        JOIN customer_document_files f ON f.document_id = d.id
        WHERE d.id = :documentId
@@ -1912,7 +2099,7 @@ app.get("/api/admin/documents/:documentId/download", requireAdminSession, async 
     const document = rows[0];
     if (!document) return response.status(404).json({ error: "Documento nao encontrado." });
 
-    const buffer = Buffer.from(String(document.base64_data || ""), "base64");
+    const buffer = await loadPrivateDocument(document);
     response.setHeader("Content-Type", document.mime_type || "application/octet-stream");
     response.setHeader(
       "Content-Disposition",
@@ -1921,7 +2108,7 @@ app.get("/api/admin/documents/:documentId/download", requireAdminSession, async 
     response.send(buffer);
   } catch (error) {
     console.error("Erro ao baixar documento no admin:", error);
-    response.status(500).json({ error: "Erro ao baixar documento." });
+    response.status(error.status || 500).json({ error: error.message || "Erro ao baixar documento." });
   }
 });
 
@@ -2571,29 +2758,7 @@ let whatsappSettingsTableReady = false;
 
 async function ensureWhatsappSettingsTable() {
   if (whatsappSettingsTableReady) return;
-
-  await dbPool.execute(`
-    CREATE TABLE IF NOT EXISTS whatsapp_settings (
-      id TINYINT UNSIGNED PRIMARY KEY DEFAULT 1,
-      suporte_numero VARCHAR(30) NULL,
-      atendimento_numero VARCHAR(30) NULL,
-      abrir_mei_numero VARCHAR(30) NULL,
-      plataforma_numero VARCHAR(30) NULL,
-      lembretes_ativos TINYINT(1) NOT NULL DEFAULT 0,
-      lembretes_mensagem_padrao TEXT NULL,
-      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-    )
-  `);
-
-  await dbPool.execute(
-    `INSERT INTO whatsapp_settings
-      (id, suporte_numero, atendimento_numero, abrir_mei_numero, plataforma_numero, lembretes_ativos, lembretes_mensagem_padrao)
-     VALUES
-      (1, NULL, NULL, NULL, NULL, 0, 'Ola {{cliente_nome}}, passando para lembrar sobre sua assinatura Facilita MEI.')
-     ON DUPLICATE KEY UPDATE id = id`,
-  );
-
+  await dbPool.query("SELECT id FROM whatsapp_settings LIMIT 0");
   whatsappSettingsTableReady = true;
 }
 
@@ -2683,48 +2848,7 @@ let emailSettingsTableReady = false;
 
 async function ensureEmailSettingsTable() {
   if (emailSettingsTableReady) return;
-
-  await dbPool.execute(`
-    CREATE TABLE IF NOT EXISTS email_settings (
-      id TINYINT UNSIGNED PRIMARY KEY DEFAULT 1,
-      remetente_email VARCHAR(160) NOT NULL DEFAULT 'Atendimento@facilitameibr.com.br',
-      remetente_nome VARCHAR(160) NOT NULL DEFAULT 'Facilita MEI',
-      smtp_host VARCHAR(160) NULL,
-      smtp_port INT NULL,
-      smtp_secure TINYINT(1) NOT NULL DEFAULT 1,
-      smtp_user VARCHAR(160) NULL,
-      smtp_pass_configurado TINYINT(1) NOT NULL DEFAULT 0,
-      enviar_certificados TINYINT(1) NOT NULL DEFAULT 1,
-      enviar_documentos TINYINT(1) NOT NULL DEFAULT 1,
-      enviar_avisos TINYINT(1) NOT NULL DEFAULT 1,
-      assinatura_padrao TEXT NULL,
-      aviso_rodape TEXT NULL,
-      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-    )
-  `);
-
-  await dbPool.execute(
-    `INSERT INTO email_settings
-      (id, remetente_email, remetente_nome, smtp_secure, smtp_pass_configurado,
-       enviar_certificados, enviar_documentos, enviar_avisos, assinatura_padrao, aviso_rodape)
-     VALUES
-      (
-        1,
-        'Atendimento@facilitameibr.com.br',
-        'Facilita MEI',
-        1,
-        :smtpPassConfigurado,
-        1,
-        1,
-        1,
-        'Atenciosamente,\\nFACILITA ASSESSORIA E CONSULTORIA CONTABIL LTDA',
-        'Este e-mail foi enviado pela Facilita MEI para comunicacoes relacionadas aos servicos contratados.'
-      )
-     ON DUPLICATE KEY UPDATE id = id`,
-    { smtpPassConfigurado: process.env.EMAIL_PASS ? 1 : 0 },
-  );
-
+  await dbPool.query("SELECT id FROM email_settings LIMIT 0");
   emailSettingsTableReady = true;
 }
 
@@ -2854,29 +2978,7 @@ let emailLogsTableReady = false;
 
 async function ensureEmailLogsTable() {
   if (emailLogsTableReady) return;
-
-  await dbPool.execute(`
-    CREATE TABLE IF NOT EXISTS email_logs (
-      id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-      dedupe_key VARCHAR(190) NOT NULL,
-      user_id BIGINT UNSIGNED NULL,
-      subscription_id BIGINT UNSIGNED NULL,
-      payment_id BIGINT UNSIGNED NULL,
-      tipo VARCHAR(80) NOT NULL,
-      destinatario VARCHAR(180) NOT NULL,
-      assunto VARCHAR(180) NOT NULL,
-      status VARCHAR(40) NOT NULL DEFAULT 'preparando',
-      provider_message_id VARCHAR(180) NULL,
-      erro_mensagem TEXT NULL,
-      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-      UNIQUE KEY email_logs_dedupe_unique (dedupe_key),
-      KEY email_logs_user_idx (user_id),
-      KEY email_logs_subscription_idx (subscription_id),
-      KEY email_logs_payment_idx (payment_id)
-    )
-  `);
-
+  await dbPool.query("SELECT id FROM email_logs LIMIT 0");
   emailLogsTableReady = true;
 }
 
@@ -2955,6 +3057,8 @@ async function enviarEmailSistema({ dedupeKey, tipo, userId = null, subscription
     host: smtp.host,
     port: smtp.port,
     secure: smtp.secure,
+    disableFileAccess: true,
+    disableUrlAccess: true,
     auth: {
       user: smtp.user,
       pass: smtp.pass,
@@ -4099,22 +4203,10 @@ async function upsertCustomer({ userId, name, email, phone, document }) {
   return rows[0]?.id;
 }
 
-function getUserStatusFromPaymentStatus(status) {
-  if (status === "approved") return "active";
-  if (["rejected", "cancelled", "refunded", "charged_back"].includes(status)) return "blocked";
-  return "pending";
-}
-
-function getUserStatusFromSubscriptionStatus(status) {
-  if (["authorized", "active"].includes(status)) return "active";
-  if (status === "cancelled") return "cancelled";
-  if (["paused", "expired", "rejected"].includes(status)) return "blocked";
-  return "pending";
-}
-
 function normalizeSubscriptionStatus(status) {
   const allowedStatuses = ["pending", "authorized", "active", "paused", "cancelled", "expired", "rejected"];
   if (allowedStatuses.includes(status)) return status;
+  if (status === "canceled") return "cancelled";
   if (status === "approved") return "active";
   return "pending";
 }
@@ -4132,14 +4224,60 @@ async function updateUserStatus(userId, status) {
 }
 
 async function updateUserStatusFromPayment(userId, paymentStatus) {
-  await updateUserStatus(userId, getUserStatusFromPaymentStatus(paymentStatus));
+  await refreshUserFinancialStatus(userId, { paymentStatus });
 }
 
 async function updateUserStatusFromSubscription(userId, subscriptionStatus) {
-  await updateUserStatus(userId, getUserStatusFromSubscriptionStatus(subscriptionStatus));
+  await refreshUserFinancialStatus(userId, { subscriptionStatus: normalizeSubscriptionStatus(subscriptionStatus) });
 }
 
-async function savePaymentRecord({ customerId, plan, paymentData, paymentMethod }) {
+function resolveUserFinancialStatus({ currentStatus, hasPaidPayment, hasActiveSubscription, paymentStatus, subscriptionStatus }) {
+  if (hasPaidPayment || hasActiveSubscription) return "active";
+  if (["refunded", "charged_back"].includes(paymentStatus)) return "blocked";
+  if (subscriptionStatus === "cancelled") return "cancelled";
+  if (["paused", "expired", "rejected"].includes(subscriptionStatus)) return "blocked";
+  if (["blocked", "cancelled"].includes(currentStatus)) return currentStatus;
+  return "pending";
+}
+
+async function refreshUserFinancialStatus(userId, event = {}) {
+  if (!userId) return;
+  const [rows] = await dbPool.execute(
+    `SELECT u.status,
+            EXISTS(SELECT 1 FROM payments p WHERE p.user_id = u.id AND p.status IN ('approved', 'paid', 'pago')) AS has_paid_payment,
+            EXISTS(SELECT 1 FROM subscriptions s WHERE s.user_id = u.id AND s.status IN ('authorized', 'active')) AS has_active_subscription
+     FROM users u WHERE u.id = :userId LIMIT 1`,
+    { userId },
+  );
+  const user = rows[0];
+  if (!user) return;
+  await updateUserStatus(userId, resolveUserFinancialStatus({
+    currentStatus: user.status,
+    hasPaidPayment: Boolean(Number(user.has_paid_payment)),
+    hasActiveSubscription: Boolean(Number(user.has_active_subscription)),
+    ...event,
+  }));
+}
+
+function serializeMinimalGatewayPayload(data = {}, type = "payment") {
+  const metadata = data.metadata || {};
+  const minimal = {
+    type,
+    id: data.id ?? null,
+    status: data.status ?? null,
+    status_detail: data.status_detail ?? null,
+    date_created: data.date_created ?? null,
+    date_approved: data.date_approved ?? null,
+    next_payment_date: data.next_payment_date ?? null,
+    payment_method_id: data.payment_method_id ?? null,
+    transaction_amount: data.transaction_amount ?? null,
+    plan_id: metadata.plan_id ?? null,
+    service_code: metadata.service_code ?? null,
+  };
+  return JSON.stringify(Object.fromEntries(Object.entries(minimal).filter(([, value]) => value !== null && value !== undefined)));
+}
+
+async function savePaymentRecord({ customerId, plan, paymentData, paymentMethod: _paymentMethod }) {
   await ensurePaymentsMetadataColumns();
 
   const [result] = await dbPool.execute(
@@ -4164,7 +4302,7 @@ async function savePaymentRecord({ customerId, plan, paymentData, paymentMethod 
       competencia: paymentData.date_approved
         ? new Date(paymentData.date_approved).toISOString().slice(0, 7)
         : new Date().toISOString().slice(0, 7),
-      rawPayload: JSON.stringify(paymentData),
+      rawPayload: serializeMinimalGatewayPayload(paymentData, "payment"),
     },
   );
 
@@ -4177,6 +4315,32 @@ async function savePaymentRecord({ customerId, plan, paymentData, paymentMethod 
     { paymentId: String(paymentData.id) },
   );
   return rows[0]?.id || null;
+}
+
+async function issuePaymentStatusToken(localPaymentId) {
+  if (!localPaymentId) throw new Error("Pagamento local necessario para emitir token de acompanhamento.");
+  const statusToken = createPaymentStatusToken();
+  await dbPool.execute(
+    `UPDATE payments
+     SET status_token_hash = :tokenHash,
+         status_token_expires_at = :expiresAt,
+         updated_at = CURRENT_TIMESTAMP
+     WHERE id = :paymentId`,
+    { tokenHash: statusToken.tokenHash, expiresAt: statusToken.expiresAt, paymentId: localPaymentId },
+  );
+  return statusToken.token;
+}
+
+function safePaymentStatusResponse(paymentData, localPaymentId = null) {
+  const paymentMethod = paymentData.metadata?.payment_method ||
+    (paymentData.payment_method_id === "bolbradesco" ? "boleto" : paymentData.payment_method_id);
+  return {
+    id: localPaymentId,
+    status: paymentData.status,
+    statusDetail: paymentData.status_detail,
+    message: getPaymentMessage(paymentData.status, paymentMethod),
+    paymentMethod,
+  };
 }
 
 async function saveSubscriptionRecord({ customerId, plan, subscriptionData, paymentMethod }) {
@@ -4202,7 +4366,7 @@ async function saveSubscriptionRecord({ customerId, plan, subscriptionData, paym
       startAt: subscriptionData.date_created ? new Date(subscriptionData.date_created) : new Date(),
       nextChargeAt: subscriptionData.next_payment_date ? new Date(subscriptionData.next_payment_date) : null,
       initPoint: subscriptionData.init_point || subscriptionData.sandbox_init_point || null,
-      rawPayload: JSON.stringify(subscriptionData),
+      rawPayload: serializeMinimalGatewayPayload(subscriptionData, "subscription"),
     },
   );
 
@@ -4237,7 +4401,7 @@ async function updatePaymentStatus(paymentData) {
       competencia: paymentData.date_approved
         ? new Date(paymentData.date_approved).toISOString().slice(0, 7)
         : new Date().toISOString().slice(0, 7),
-      rawPayload: JSON.stringify(paymentData),
+      rawPayload: serializeMinimalGatewayPayload(paymentData, "payment"),
     },
   );
 
@@ -4310,7 +4474,7 @@ async function updatePaymentStatus(paymentData) {
           competencia: paymentData.date_approved
             ? new Date(paymentData.date_approved).toISOString().slice(0, 7)
             : new Date().toISOString().slice(0, 7),
-          rawPayload: JSON.stringify(paymentData),
+          rawPayload: serializeMinimalGatewayPayload(paymentData, "payment"),
         },
       );
     }
@@ -4336,7 +4500,7 @@ async function updateSubscriptionStatus(subscriptionData) {
       subscriptionId: String(subscriptionData.id),
       status: normalizeSubscriptionStatus(subscriptionData.status),
       nextChargeAt: subscriptionData.next_payment_date ? new Date(subscriptionData.next_payment_date) : null,
-      rawPayload: JSON.stringify(subscriptionData),
+      rawPayload: serializeMinimalGatewayPayload(subscriptionData, "subscription"),
     },
   );
 
@@ -4480,7 +4644,7 @@ async function createMercadoPagoSinglePayment({ customerId, customer, plan, paym
       payment_method_id: isBoleto ? "bolbradesco" : "pix",
       ...(isBoleto ? { date_of_expiration: getBoletoExpirationDate() } : {}),
       external_reference: externalReference,
-      notification_url: `${apiPublicUrl}/api/webhooks/mercadopago`,
+      notification_url: mercadoPagoWebhookUrl,
       payer,
       metadata: {
         origin: "admin",
@@ -4554,7 +4718,7 @@ function ensureMercadoPagoPlan(plan) {
 function isMercadoPagoSignatureValid(request, paymentId) {
   const webhookSecret = process.env.MERCADO_PAGO_WEBHOOK_SECRET || process.env.WEBHOOK_SECRET;
 
-  if (!webhookSecret) return true;
+  if (!webhookSecret) return false;
 
   const signature = request.get("x-signature") || "";
   const requestId = request.get("x-request-id") || "";
@@ -4569,7 +4733,9 @@ function isMercadoPagoSignatureValid(request, paymentId) {
     return false;
   }
 
-  const manifest = `id:${paymentId};request-id:${requestId};ts:${signatureParts.ts};`;
+  // O Mercado Pago especifica que data.id deve ser normalizado para minusculas.
+  const normalizedPaymentId = String(paymentId).toLowerCase();
+  const manifest = `id:${normalizedPaymentId};request-id:${requestId};ts:${signatureParts.ts};`;
   const expectedSignature = crypto.createHmac("sha256", webhookSecret).update(manifest).digest("hex");
 
   try {
@@ -4579,7 +4745,161 @@ function isMercadoPagoSignatureValid(request, paymentId) {
   }
 }
 
-app.post("/api/payments/pix", async (request, response) => {
+function getMercadoPagoWebhookDescriptor(request) {
+  const topic = String(request.query.topic || request.query.type || request.body?.type || "");
+  const action = String(request.body?.action || "");
+  const resource = String(request.query.resource || request.body?.resource || "");
+  const resourceFromUrl = resource.match(/\/([^/?#]+)(?:[?#].*)?$/)?.[1] || "";
+  const resourceId = String(
+    request.query["data.id"] ||
+      request.query.data_id ||
+      request.body?.data?.id ||
+      request.query.preapproval_id ||
+      request.query.id ||
+      request.body?.id ||
+      resourceFromUrl ||
+      "",
+  );
+  const type = topic === "payment" || action.startsWith("payment.")
+    ? "payment"
+    : topic === "subscription_preapproval" || topic === "preapproval" || action.startsWith("preapproval.")
+      ? "subscription"
+      : null;
+  return { type, topic: topic || action || "unknown", action, resourceId };
+}
+
+async function recordMercadoPagoWebhookReceipt({ request, descriptor, status, httpStatus, errorCode = null }) {
+  const receiptId = crypto.randomUUID();
+  const requestId = String(request.get("x-request-id") || "").slice(0, 120) || null;
+  try {
+    await dbPool.execute(
+      `INSERT INTO mercado_pago_webhook_receipts
+        (receipt_id, request_id, topic, resource_id, signature_present, status, http_status, error_code)
+       VALUES (:receiptId, :requestId, :topic, :resourceId, :signaturePresent, :status, :httpStatus, :errorCode)`,
+      {
+        receiptId,
+        requestId,
+        topic: String(descriptor.topic || "unknown").slice(0, 120),
+        resourceId: String(descriptor.resourceId || "").slice(0, 180) || null,
+        signaturePresent: Boolean(request.get("x-signature")),
+        status,
+        httpStatus,
+        errorCode,
+      },
+    );
+  } catch (error) {
+    console.error("Falha ao registrar recebimento do webhook Mercado Pago:", { receiptId, message: error.message });
+  }
+  return receiptId;
+}
+
+async function claimMercadoPagoWebhookEvent({ requestId, topic, resourceId }) {
+  const eventKey = crypto.createHash("sha256").update(`${requestId}:${topic}:${resourceId}`).digest("hex");
+  const [result] = await dbPool.execute(
+    `INSERT IGNORE INTO mercado_pago_webhook_events
+      (event_key, request_id, topic, resource_id, status)
+     VALUES (:eventKey, :requestId, :topic, :resourceId, 'processing')`,
+    { eventKey, requestId, topic, resourceId },
+  );
+  if (result.affectedRows === 1) return { claimed: true, eventKey };
+
+  const [rows] = await dbPool.execute(
+    "SELECT status, updated_at FROM mercado_pago_webhook_events WHERE event_key = :eventKey LIMIT 1",
+    { eventKey },
+  );
+  const existing = rows[0];
+  const processingIsStale = existing?.status === "processing" &&
+    Date.now() - new Date(existing.updated_at).getTime() > 5 * 60 * 1000;
+  if (existing?.status !== "failed" && !processingIsStale) return { claimed: false, eventKey };
+
+  const [retryResult] = await dbPool.execute(
+    `UPDATE mercado_pago_webhook_events
+     SET status = 'processing', attempts = attempts + 1, error_message = NULL
+     WHERE event_key = :eventKey
+       AND (status = 'failed' OR (status = 'processing' AND updated_at < DATE_SUB(NOW(), INTERVAL 5 MINUTE)))`,
+    { eventKey },
+  );
+  return { claimed: retryResult.affectedRows === 1, eventKey };
+}
+
+async function finishMercadoPagoWebhookEvent(eventKey, error = null) {
+  await dbPool.execute(
+    `UPDATE mercado_pago_webhook_events
+     SET status = :status,
+         error_message = :errorMessage,
+         processed_at = :processedAt
+     WHERE event_key = :eventKey`,
+    {
+      eventKey,
+      status: error ? "failed" : "processed",
+      errorMessage: error ? String(error.message || error).slice(0, 1000) : null,
+      processedAt: error ? null : new Date(),
+    },
+  );
+}
+
+function assertMoneyMatches(actual, expected, message) {
+  if (!Number.isFinite(Number(actual)) || Math.abs(Number(actual) - Number(expected)) > 0.01) {
+    const error = new Error(message);
+    error.status = 422;
+    throw error;
+  }
+}
+
+async function validateMercadoPagoPayment(paymentData) {
+  if (!paymentData?.id) throw Object.assign(new Error("Pagamento sem identificador."), { status: 422 });
+  if (paymentData.currency_id && paymentData.currency_id !== "BRL") {
+    throw Object.assign(new Error("Moeda do pagamento divergente."), { status: 422 });
+  }
+
+  const [localRows] = await dbPool.execute(
+    `SELECT p.valor, s.plan_id
+     FROM payments p
+     LEFT JOIN subscriptions s ON s.id = p.subscription_id
+     WHERE p.mercado_pago_payment_id = :paymentId
+     LIMIT 1`,
+    { paymentId: String(paymentData.id) },
+  );
+  let expectedAmount = localRows[0]?.valor;
+  const expectedPlanId = localRows[0]?.plan_id || paymentData.metadata?.plan_id || null;
+
+  if (expectedAmount === undefined && expectedPlanId) {
+    const plan = await getPlanById(expectedPlanId);
+    if (!plan) throw Object.assign(new Error("Plano do pagamento nao encontrado."), { status: 422 });
+    expectedAmount = plan.price;
+  }
+  if (expectedAmount === undefined) {
+    throw Object.assign(new Error("Pagamento sem vinculo local ou plano valido."), { status: 422 });
+  }
+  assertMoneyMatches(paymentData.transaction_amount, expectedAmount, "Valor do pagamento divergente.");
+}
+
+async function validateMercadoPagoSubscription(subscriptionData) {
+  if (!subscriptionData?.id) throw Object.assign(new Error("Assinatura sem identificador."), { status: 422 });
+  const [rows] = await dbPool.execute(
+    `SELECT s.valor, s.plan_id, p.mercado_pago_plan_id
+     FROM subscriptions s
+     JOIN plans p ON p.id = s.plan_id
+     WHERE s.mercado_pago_subscription_id = :subscriptionId
+     LIMIT 1`,
+    { subscriptionId: String(subscriptionData.id) },
+  );
+  const local = rows[0];
+  if (!local) throw Object.assign(new Error("Assinatura nao encontrada no sistema."), { status: 404 });
+  if (subscriptionData.preapproval_plan_id && local.mercado_pago_plan_id &&
+      String(subscriptionData.preapproval_plan_id) !== String(local.mercado_pago_plan_id)) {
+    throw Object.assign(new Error("Plano Mercado Pago divergente."), { status: 422 });
+  }
+  const recurring = subscriptionData.auto_recurring || {};
+  if (recurring.currency_id && recurring.currency_id !== "BRL") {
+    throw Object.assign(new Error("Moeda da assinatura divergente."), { status: 422 });
+  }
+  if (recurring.transaction_amount !== undefined) {
+    assertMoneyMatches(recurring.transaction_amount, local.valor, "Valor da assinatura divergente.");
+  }
+}
+
+app.post("/api/payments/pix", paymentCreationLimiter, async (request, response) => {
   try {
     const body = request.body || {};
     const { planId, userId, email } = body;
@@ -4623,7 +4943,7 @@ app.post("/api/payments/pix", async (request, response) => {
         description: `${plan.title} - Facilita MEI`,
         payment_method_id: "pix",
         external_reference: externalReference,
-        notification_url: `${apiPublicUrl}/api/webhooks/mercadopago`,
+        notification_url: mercadoPagoWebhookUrl,
         payer: {
           email,
           first_name: firstName,
@@ -4660,13 +4980,15 @@ app.post("/api/payments/pix", async (request, response) => {
 
     storePayment(data);
     const customerId = await upsertCustomer({ userId, name, email, phone, document });
-    await savePaymentRecord({ customerId, plan, paymentData: data, paymentMethod: "pix" });
+    const localPaymentId = await savePaymentRecord({ customerId, plan, paymentData: data, paymentMethod: "pix" });
+    const paymentStatusToken = await issuePaymentStatusToken(localPaymentId);
 
     const transactionData = data.point_of_interaction?.transaction_data || {};
 
     response.json({
       customerId,
       paymentId: data.id,
+      paymentStatusToken,
       status: data.status,
       statusDetail: data.status_detail,
       message: getPaymentMessage(data.status),
@@ -4681,7 +5003,7 @@ app.post("/api/payments/pix", async (request, response) => {
   }
 });
 
-app.post("/api/payments/boleto", async (request, response) => {
+app.post("/api/payments/boleto", paymentCreationLimiter, async (request, response) => {
   try {
     const body = request.body || {};
     const { planId, userId, email } = body;
@@ -4734,7 +5056,7 @@ app.post("/api/payments/boleto", async (request, response) => {
         payment_method_id: "bolbradesco",
         date_of_expiration: getBoletoExpirationDate(),
         external_reference: externalReference,
-        notification_url: `${apiPublicUrl}/api/webhooks/mercadopago`,
+        notification_url: mercadoPagoWebhookUrl,
         payer: {
           email,
           first_name: firstName,
@@ -4782,11 +5104,13 @@ app.post("/api/payments/boleto", async (request, response) => {
 
     storePayment(data);
     const customerId = await upsertCustomer({ userId, name, email, phone, document });
-    await savePaymentRecord({ customerId, plan, paymentData: data, paymentMethod: "boleto" });
+    const localPaymentId = await savePaymentRecord({ customerId, plan, paymentData: data, paymentMethod: "boleto" });
+    const paymentStatusToken = await issuePaymentStatusToken(localPaymentId);
 
     response.json({
       customerId,
       paymentId: data.id,
+      paymentStatusToken,
       status: data.status,
       statusDetail: data.status_detail,
       message: getPaymentMessage(data.status, "boleto"),
@@ -4800,7 +5124,7 @@ app.post("/api/payments/boleto", async (request, response) => {
   }
 });
 
-app.post("/api/payments/card", async (request, response) => {
+app.post("/api/payments/card", paymentCreationLimiter, async (request, response) => {
   try {
     const body = request.body || {};
     const { planId, userId, email, paymentMethodId, issuerId, installments = 1 } = body;
@@ -4852,7 +5176,7 @@ app.post("/api/payments/card", async (request, response) => {
         payment_method_id: paymentMethodId,
         issuer_id: issuerId,
         external_reference: externalReference,
-        notification_url: `${apiPublicUrl}/api/webhooks/mercadopago`,
+        notification_url: mercadoPagoWebhookUrl,
         payer: {
           email,
           first_name: firstName,
@@ -4889,10 +5213,12 @@ app.post("/api/payments/card", async (request, response) => {
 
     storePayment(data);
     const customerId = await upsertCustomer({ userId, name, email, phone, document });
-    await savePaymentRecord({ customerId, plan, paymentData: data, paymentMethod: "card" });
+    const localPaymentId = await savePaymentRecord({ customerId, plan, paymentData: data, paymentMethod: "card" });
+    const paymentStatusToken = await issuePaymentStatusToken(localPaymentId);
 
     response.json({
       paymentId: data.id,
+      paymentStatusToken,
       status: data.status,
       statusDetail: data.status_detail,
       message: getPaymentMessage(data.status),
@@ -4904,7 +5230,7 @@ app.post("/api/payments/card", async (request, response) => {
   }
 });
 
-app.post("/api/subscriptions/card", async (request, response) => {
+app.post("/api/subscriptions/card", paymentCreationLimiter, async (request, response) => {
   try {
     const body = request.body || {};
     const {
@@ -5010,7 +5336,7 @@ app.post("/api/subscriptions/card", async (request, response) => {
   }
 });
 
-app.post("/api/subscriptions/pix-auto", async (request, response) => {
+app.post("/api/subscriptions/pix-auto", paymentCreationLimiter, async (request, response) => {
   try {
     const body = request.body || {};
     const { planId, userId, email } = body;
@@ -5103,42 +5429,66 @@ app.post("/api/subscriptions/pix-auto", async (request, response) => {
   }
 });
 
-app.get("/api/payments/:id/status", async (request, response) => {
+app.post("/api/payments/status", paymentStatusLimiter, async (request, response) => {
   try {
-    const { id } = request.params;
+    const token = String(request.body?.token || "").trim();
+    if (!/^[a-f0-9]{64}$/i.test(token)) {
+      return response.status(401).json({ error: "Token de acompanhamento invalido ou expirado." });
+    }
+    const [rows] = await dbPool.execute(
+      `SELECT id, mercado_pago_payment_id, status, valor
+       FROM payments
+       WHERE status_token_hash = :tokenHash
+         AND status_token_expires_at > NOW()
+       LIMIT 1`,
+      { tokenHash: hashPaymentStatusToken(token) },
+    );
+    const localPayment = rows[0];
+    if (!localPayment) return response.status(401).json({ error: "Token de acompanhamento invalido ou expirado." });
+
     const client = getMercadoPagoClient();
     const payment = new Payment(client);
-    const paymentData = await payment.get({ id });
+    const paymentData = await payment.get({ id: localPayment.mercado_pago_payment_id });
 
     storePayment(paymentData);
-
-    response.json({
-      id: paymentData.id,
-      status: paymentData.status,
-      statusDetail: paymentData.status_detail,
-      message: getPaymentMessage(
-        paymentData.status,
-        paymentData.metadata?.payment_method || (paymentData.payment_method_id === "bolbradesco" ? "boleto" : paymentData.payment_method_id),
-      ),
-      metadata: paymentData.metadata,
-      paymentMethod: paymentData.metadata?.payment_method || paymentData.payment_method_id,
-    });
+    await updatePaymentStatus(paymentData);
+    response.json(safePaymentStatusResponse(paymentData, localPayment.id));
   } catch (error) {
-    const cachedPayment = paymentStore.get(String(request.params.id));
-
-    if (cachedPayment) {
-      return response.json({
-        ...cachedPayment,
-        message: getPaymentMessage(cachedPayment.status, cachedPayment.paymentMethod === "bolbradesco" ? "boleto" : cachedPayment.paymentMethod),
-      });
-    }
-
-    console.error(error);
+    console.error("Erro ao consultar pagamento por token:", error.message);
     response.status(500).json({ error: error.message || "Erro ao consultar pagamento." });
   }
 });
 
-app.post("/api/checkout", async (request, response) => {
+app.get("/api/payments/:id/status", (_request, response) => {
+  response.status(410).json({ error: "Consulta por ID descontinuada. Use token temporario ou area autenticada." });
+});
+
+app.get("/api/client/payments/:paymentId/status", requireClientSession, paymentStatusLimiter, async (request, response) => {
+  try {
+    const paymentId = Number(request.params.paymentId);
+    if (!Number.isSafeInteger(paymentId) || paymentId <= 0) return response.status(400).json({ error: "Pagamento invalido." });
+    const [rows] = await dbPool.execute(
+      `SELECT id, mercado_pago_payment_id, status
+       FROM payments
+       WHERE id = :paymentId AND user_id = :userId
+       LIMIT 1`,
+      { paymentId, userId: request.clientSession.userId },
+    );
+    const localPayment = rows[0];
+    if (!localPayment) return response.status(404).json({ error: "Pagamento nao encontrado." });
+
+    const client = getMercadoPagoClient();
+    const payment = new Payment(client);
+    const paymentData = await payment.get({ id: localPayment.mercado_pago_payment_id });
+    await updatePaymentStatus(paymentData);
+    response.json(safePaymentStatusResponse(paymentData, localPayment.id));
+  } catch (error) {
+    console.error("Erro ao consultar pagamento autenticado:", error.message);
+    response.status(500).json({ error: "Erro ao consultar pagamento." });
+  }
+});
+
+app.post("/api/checkout", paymentCreationLimiter, async (request, response) => {
   try {
     const { planId, name, email, phone } = request.body || {};
     const plan = await getPlanById(planId);
@@ -5188,7 +5538,7 @@ app.post("/api/checkout", async (request, response) => {
           failure: `${mercadoPagoBackUrl}/?payment=failure#checkout`,
         },
         auto_return: "approved",
-        notification_url: `${apiPublicUrl}/api/webhooks/mercadopago`,
+        notification_url: mercadoPagoWebhookUrl,
       },
     });
 
@@ -5203,146 +5553,130 @@ app.post("/api/checkout", async (request, response) => {
   }
 });
 
-app.post("/api/subscription", async (request, response) => {
-  try {
-    return response.status(410).json({
-      error: "Rota descontinuada. Use /api/subscriptions/card com planId e cardTokenId para plano associado.",
-    });
-
-    const { planId, name, email, phone } = request.body || {};
-    const plan = await getPlanById(planId);
-    const accessToken = process.env.MERCADO_PAGO_ACCESS_TOKEN;
-
-    if (!plan) {
-      return response.status(400).json({ error: "Plano invalido." });
-    }
-
-    ensureSubscriptionPlan(plan);
-
-    if (!name || !email || !phone) {
-      return response.status(400).json({ error: "Nome, e-mail e WhatsApp sao obrigatorios." });
-    }
-
-    if (!accessToken || accessToken.includes("SEU_ACCESS_TOKEN_AQUI")) {
-      throw new Error("Configure MERCADO_PAGO_ACCESS_TOKEN no arquivo .env");
-    }
-
-    const mercadoPagoResponse = await fetch("https://api.mercadopago.com/preapproval", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        reason: plan.title,
-        external_reference: `${plan.id}-${Date.now()}`,
-        payer_email: email,
-        back_url: `${mercadoPagoBackUrl}/?subscription=return#checkout`,
-        status: "pending",
-        auto_recurring: {
-          frequency: plan.frequency,
-          frequency_type: plan.frequencyType,
-          transaction_amount: plan.price,
-          currency_id: "BRL",
-        },
-        metadata: {
-          plan_id: plan.id,
-          plan_name: plan.title,
-          service_code: plan.serviceCode,
-          customer_name: name,
-          customer_email: email,
-          customer_phone: phone,
-        },
-      }),
-    });
-
-    const data = await mercadoPagoResponse.json();
-
-    if (!mercadoPagoResponse.ok) {
-      return response.status(mercadoPagoResponse.status).json({
-        error: data.message || "Erro ao criar assinatura no Mercado Pago.",
-        details: data,
-      });
-    }
-
-    const customerId = await upsertCustomer({ userId: null, name, email, phone, document: "" });
-    const localSubscriptionId = await saveSubscriptionRecord({ customerId, plan, subscriptionData: data, paymentMethod: "mercado_pago" });
-    enviarEmailAssinaturaCriada(localSubscriptionId).catch((error) => {
-      console.error("Falha ao disparar e-mail de assinatura:", error);
-    });
-
-    response.json({
-      subscriptionId: data.id,
-      initPoint: data.init_point,
-      sandboxInitPoint: data.sandbox_init_point,
-      status: data.status,
-    });
-  } catch (error) {
-    console.error(error);
-    response.status(500).json({ error: error.message || "Erro ao criar assinatura." });
-  }
+app.post("/api/subscription", paymentCreationLimiter, async (request, response) => {
+  response.status(410).json({
+    error: "Rota descontinuada. Use /api/subscriptions/card com planId e cardTokenId para plano associado.",
+  });
 });
 
-app.post("/api/webhooks/mercadopago", async (request, response) => {
+app.post("/api/webhooks/mercadopago", webhookLimiter, async (request, response) => {
+  const descriptor = getMercadoPagoWebhookDescriptor(request);
+  console.log("Webhook Mercado Pago recebido:", {
+    topic: descriptor.topic,
+    resourceId: descriptor.resourceId || null,
+    requestId: request.get("x-request-id") || null,
+    signaturePresent: Boolean(request.get("x-signature")),
+  });
+  if (!descriptor.type) {
+    await recordMercadoPagoWebhookReceipt({ request, descriptor, status: "ignored", httpStatus: 200, errorCode: "unsupported_topic" });
+    return response.status(200).json({ ok: true, ignored: true });
+  }
+
+  const requestId = String(request.get("x-request-id") || "");
+  if (!descriptor.resourceId || !isMercadoPagoSignatureValid(request, descriptor.resourceId)) {
+    await recordMercadoPagoWebhookReceipt({
+      request, descriptor, status: "rejected", httpStatus: 401,
+      errorCode: descriptor.resourceId ? "invalid_signature" : "missing_resource_id",
+    });
+    return response.status(401).json({ error: "Assinatura do webhook invalida." });
+  }
+
+  let eventKey = null;
+  const receiptId = await recordMercadoPagoWebhookReceipt({ request, descriptor, status: "accepted", httpStatus: 200 });
   try {
-    const topic = request.query.topic || request.query.type || request.body.type;
-    const action = request.body.action || "";
-    const paymentId = request.query.id || request.query["data.id"] || request.body?.data?.id;
-    const subscriptionId = request.query.preapproval_id || request.query.id || request.body?.data?.id;
-    const isPaymentEvent = topic === "payment" || action.startsWith("payment.");
-    const isSubscriptionEvent =
-      topic === "subscription_preapproval" || topic === "preapproval" || action.startsWith("preapproval.");
+    const claim = await claimMercadoPagoWebhookEvent({
+      requestId,
+      topic: descriptor.topic,
+      resourceId: descriptor.resourceId,
+    });
+    eventKey = claim.eventKey;
+    if (!claim.claimed) return response.status(200).json({ ok: true, duplicate: true });
 
-    if (isPaymentEvent && !isMercadoPagoSignatureValid(request, paymentId)) {
-      return response.sendStatus(401);
-    }
-
-    if (isPaymentEvent && paymentId) {
+    if (descriptor.type === "payment") {
       const client = getMercadoPagoClient();
       const payment = new Payment(client);
-      const paymentData = await payment.get({ id: paymentId });
+      const paymentData = await payment.get({ id: descriptor.resourceId });
 
+      await validateMercadoPagoPayment(paymentData);
       storePayment(paymentData);
       const localPaymentId = await updatePaymentStatus(paymentData);
       if (localPaymentId && paymentData.status === "approved") {
         enviarEmailPagamentoAprovado(localPaymentId).catch((error) => {
           console.error("Falha ao disparar e-mail de pagamento aprovado:", error);
         });
+        const setupEmail = paymentData.metadata?.customer_email || paymentData.payer?.email;
+        if (setupEmail) {
+          sendClientAuthToken(setupEmail, "setup").catch((error) => {
+            console.error("Falha ao enviar ativacao da area do cliente:", error.message);
+          });
+        }
       }
 
-      console.log("Pagamento Mercado Pago recebido:", {
-        id: paymentData.id,
-        status: paymentData.status,
-        statusDetail: paymentData.status_detail,
-        externalReference: paymentData.external_reference,
-        metadata: paymentData.metadata,
-      });
+      console.log("Webhook Mercado Pago processado:", { type: "payment", id: String(paymentData.id), status: paymentData.status });
     }
 
-    if (isSubscriptionEvent && subscriptionId) {
-      const accessToken = process.env.MERCADO_PAGO_ACCESS_TOKEN;
-      const mercadoPagoResponse = await fetch(`https://api.mercadopago.com/preapproval/${subscriptionId}`, {
+    if (descriptor.type === "subscription") {
+      const accessToken = getAccessTokenOrThrow();
+      const mercadoPagoResponse = await fetch(`https://api.mercadopago.com/preapproval/${encodeURIComponent(descriptor.resourceId)}`, {
         headers: {
           Authorization: `Bearer ${accessToken}`,
         },
       });
       const subscriptionData = await mercadoPagoResponse.json();
-
-      if (mercadoPagoResponse.ok) {
-        await updateSubscriptionStatus(subscriptionData);
+      if (!mercadoPagoResponse.ok) {
+        const error = new Error(subscriptionData.message || "Erro ao consultar assinatura no Mercado Pago.");
+        error.status = mercadoPagoResponse.status;
+        throw error;
       }
-
-      console.log("Evento de assinatura Mercado Pago recebido:", {
-        id: subscriptionData.id || subscriptionId,
-        status: subscriptionData.status,
-      });
+      await validateMercadoPagoSubscription(subscriptionData);
+      await updateSubscriptionStatus(subscriptionData);
+      console.log("Webhook Mercado Pago processado:", { type: "subscription", id: String(subscriptionData.id), status: subscriptionData.status });
     }
 
-    response.sendStatus(200);
+    await finishMercadoPagoWebhookEvent(eventKey);
+    await dbPool.execute("UPDATE mercado_pago_webhook_receipts SET status = 'processed' WHERE receipt_id = :receiptId", { receiptId });
+    return response.status(200).json({ ok: true });
   } catch (error) {
-    console.error(error);
-    response.sendStatus(200);
+    if (eventKey) {
+      try {
+        await finishMercadoPagoWebhookEvent(eventKey, error);
+      } catch (eventError) {
+        console.error("Falha ao registrar erro do webhook:", eventError.message);
+      }
+    }
+    console.error("Falha no webhook Mercado Pago:", {
+      type: descriptor.type,
+      resourceId: descriptor.resourceId,
+      message: error.message,
+    });
+    try {
+      await dbPool.execute(
+        `UPDATE mercado_pago_webhook_receipts SET status = 'failed', http_status = :httpStatus,
+         error_code = :errorCode WHERE receipt_id = :receiptId`,
+        { receiptId, httpStatus: Number(error.status || 500), errorCode: String(error.code || "processing_failed").slice(0, 120) },
+      );
+    } catch (receiptError) {
+      console.error("Falha ao atualizar recebimento do webhook:", receiptError.message);
+    }
+    return response.status(error.status || 500).json({ error: "Falha ao processar webhook." });
   }
+});
+
+app.get("/api/admin/webhooks/mercadopago/diagnostics", requireAdminSession, async (_request, response, next) => {
+  try {
+    const [receipts] = await dbPool.execute(
+      `SELECT receipt_id, request_id, topic, resource_id, signature_present, status, http_status, error_code, created_at
+       FROM mercado_pago_webhook_receipts ORDER BY created_at DESC LIMIT 100`,
+    );
+    response.json({
+      configuration: {
+        notificationUrl: mercadoPagoWebhookUrl,
+        https: mercadoPagoWebhookUrl.startsWith("https://"),
+        secretConfigured: Boolean(process.env.MERCADO_PAGO_WEBHOOK_SECRET || process.env.WEBHOOK_SECRET),
+      },
+      receipts,
+    });
+  } catch (error) { next(error); }
 });
 
 app.post("/api/testes/webhook/mercadopago/payment", requireAdminKey, async (request, response) => {
@@ -5432,6 +5766,18 @@ app.use((error, _request, response, next) => {
   return next(error);
 });
 
+app.use((error, request, response, next) => {
+  if (!error) return next();
+  if (response.headersSent) return next(error);
+  const status = Number(error.status || 500);
+  if (status >= 500) void sendOperationalAlert("unhandled_http_error", {
+    requestId: request.requestId,
+    path: request.path,
+    message: error.message,
+  });
+  response.status(status).json({ error: status >= 500 ? "Erro interno do servidor." : error.message });
+});
+
 app.use("/api", (_request, response) => {
   response.status(404).json({ error: "Rota nao encontrada." });
 });
@@ -5440,8 +5786,35 @@ app.get("*", (_request, response) => {
   response.sendFile(path.join(__dirname, "index.html"));
 });
 
-ensureClientEditableUserFields().finally(() => {
-  app.listen(port, () => {
+async function startServer() {
+  assertProductionConfig();
+  await sessionStore.connect();
+  await rateLimitStore.connect();
+
+  return app.listen(port, () => {
     console.log(`Facilita Modern API em ${apiPublicUrl}`);
   });
+}
+
+const isMainModule = process.argv[1] && path.resolve(process.argv[1]) === __filename;
+
+if (isMainModule) {
+  startServer().catch((error) => {
+    console.error("Nao foi possivel iniciar o servidor:", error);
+    process.exitCode = 1;
+  });
+}
+
+const testSupport = Object.freeze({
+  assertMoneyMatches,
+  getMercadoPagoWebhookDescriptor,
+  resolveUserFinancialStatus,
+  hashPassword,
+  hasClientDasAccess,
+  isMercadoPagoSignatureValid,
+  mercadoPagoWebhookUrl,
+  safeCompare,
+  verifyPassword,
 });
+
+export { app, startServer, testSupport };

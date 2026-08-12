@@ -1,520 +1,92 @@
-# Facilita Modern - Status tecnico
+# Facilita MEI - Status tecnico atual
 
-Este documento resume o que ja foi preparado no sistema Facilita Modern, como o fluxo esta estruturado e quais pontos ainda precisam ser finalizados antes de producao.
+Atualizado em 10/08/2026. Este documento substitui o status legado que ainda indicava o painel administrativo e a hospedagem como pendentes.
 
-## 1. Visao geral
+## Estado atual
 
-O projeto atual fica em:
+O projeto usa frontend HTML/CSS/JavaScript e backend Node.js/Express, com MySQL, Redis, armazenamento privado S3, ClamAV, Mercado Pago, SMTP e SERPRO. Em producao, o Node serve site, `/admin/`, `/cliente/`, arquivos estaticos e API no mesmo dominio HTTPS.
 
-```text
-C:\xampp\htdocs\Facilita\facilita-modern
-```
-
-A proposta atual e substituir a base WordPress por uma aplicacao mais controlada, com frontend proprio, backend Node/Express, banco MySQL administrado pelo phpMyAdmin e integracao com Mercado Pago para assinaturas.
-
-O site preserva a estetica principal do site original:
-
-- visual escuro com destaque dourado;
-- cards de planos;
-- imagens reaproveitadas do WordPress;
-- checkout em gaveta lateral;
-- fluxo de assinatura ligado ao Mercado Pago.
-
-## 2. Frontend
-
-Arquivos principais:
+Diretorio local atual:
 
 ```text
-index.html
-styles.css
-app.js
-assets/
+C:\xampp\htdocs\projetos\facilitamei
 ```
 
-O frontend exibe os planos e abre uma gaveta lateral quando o cliente clica em `Assinar`.
-
-Ponto importante de seguranca:
-
-O frontend nao envia preco como autoridade. Ele envia apenas o ID interno do plano:
-
-```json
-{
-  "planId": "premium"
-}
-```
-
-O preco exibido no frontend e apenas visual. O valor real usado para criar assinatura vem do backend, consultando o banco MySQL.
-
-IDs internos atuais dos planos:
-
-```text
-start-mei
-servicos
-premium
-comercio
-full
-```
-
-## 3. Checkout
-
-O checkout atual funciona como uma gaveta lateral.
-
-Campos principais:
-
-- nome completo;
-- WhatsApp;
-- e-mail;
-- CPF ou CNPJ;
-- plano selecionado;
-- dados do cartao.
-
-Para assinaturas mensais, o fluxo principal e:
-
-```text
-Cliente escolhe plano
-Frontend envia planId
-Backend busca plano no banco
-Backend usa mercado_pago_plan_id
-Mercado Pago cria assinatura associada ao plano
-Backend salva assinatura no banco
-Webhook atualiza status
-```
-
-## 4. Banco de dados
-
-O banco usado e MySQL, administravel pelo phpMyAdmin.
-
-Arquivo de criacao:
-
-```text
-database/schema.sql
-```
-
-Banco:
-
-```text
-facilita_modern
-```
-
-### Tabela users
-
-Armazena os clientes.
-
-Campos principais:
-
-```text
-id
-nome
-email
-telefone
-documento
-status
-created_at
-updated_at
-```
-
-Status possiveis:
-
-```text
-pending
-active
-blocked
-cancelled
-```
-
-Uso:
-
-- `pending`: cliente iniciou fluxo, mas ainda nao tem assinatura/pagamento aprovado;
-- `active`: cliente liberado;
-- `blocked`: pagamento recusado, vencido ou assinatura pausada/expirada;
-- `cancelled`: assinatura cancelada.
-
-### Tabela plans
-
-Armazena os planos internos.
-
-Campos principais:
-
-```text
-id
-nome
-descricao
-valor
-frequencia
-tipo_frequencia
-servico
-mercado_pago_plan_id
-tipo_cobranca
-ativo
-ordem
-created_at
-updated_at
-```
-
-Campo mais importante para Mercado Pago:
-
-```text
-mercado_pago_plan_id
-```
-
-Esse campo guarda o `preapproval_plan_id` retornado pelo Mercado Pago.
-
-Planos atuais:
-
-```text
-start-mei  -> Start MEI             -> R$ 89,99/mes
-servicos   -> Facilita MEI Servicos -> R$ 99,99/mes
-premium    -> Facilita Premium      -> R$ 149,99/mes
-comercio   -> Facilita MEI Comercio -> R$ 110,00/mes
-full       -> Facilita MEI Full     -> R$ 199,99/mes
-```
-
-Todos estao configurados como:
-
-```text
-tipo_cobranca = subscription
-frequencia = 1
-tipo_frequencia = months
-```
-
-### Tabela subscriptions
-
-Armazena as assinaturas dos clientes.
-
-Campos principais:
-
-```text
-id
-user_id
-plan_id
-mercado_pago_subscription_id
-status
-valor
-data_inicio
-data_proxima_cobranca
-metodo_pagamento
-init_point
-raw_payload
-created_at
-updated_at
-```
-
-Status previstos:
-
-```text
-pending
-authorized
-active
-paused
-cancelled
-expired
-rejected
-```
-
-Uso:
-
-- saber qual cliente assinou qual plano;
-- saber status atual da assinatura;
-- controlar data da proxima cobranca;
-- bloquear ou liberar acesso conforme status.
-
-### Tabela payments
-
-Registra pagamentos e cobrancas mensais.
-
-Campos principais:
-
-```text
-id
-user_id
-subscription_id
-mercado_pago_payment_id
-valor
-status
-data_pagamento
-created_at
-raw_payload
-```
-
-Uso:
-
-- saber quem pagou;
-- saber quem esta atrasado;
-- auditar cobrancas;
-- acompanhar eventos recebidos por webhook.
-
-## 5. Mercado Pago
-
-O fluxo adotado e assinatura com plano associado.
-
-Isso significa:
-
-```text
-Plano interno
-↓
-Plano no Mercado Pago
-↓
-preapproval_plan_id
-↓
-plans.mercado_pago_plan_id
-↓
-Assinatura do cliente
-```
-
-Endpoint usado para criar plano no Mercado Pago:
-
-```text
-POST https://api.mercadopago.com/preapproval_plan
-```
-
-Endpoint usado para criar assinatura:
-
-```text
-POST https://api.mercadopago.com/preapproval
-```
-
-Na assinatura, o backend envia:
-
-```json
-{
-  "preapproval_plan_id": "...",
-  "card_token_id": "...",
-  "status": "authorized"
-}
-```
-
-Assim, valor e recorrencia ficam controlados pelo plano associado no Mercado Pago.
-
-Contrato entre frontend e backend para assinatura por cartao:
-
-```json
-{
-  "planId": "premium",
-  "nome": "Joao da Silva",
-  "email": "cliente@email.com",
-  "telefone": "67999999999",
-  "documento": "12345678900",
-  "cardTokenId": "TOKEN_GERADO_PELO_MERCADO_PAGO"
-}
-```
-
-O frontend nunca deve enviar numero do cartao, CVV ou validade para o backend. Esses dados sao usados apenas no navegador para gerar o `cardTokenId` com MercadoPago.js.
-
-## 6. Planos ja criados no Mercado Pago
-
-Os cinco planos foram criados usando o token de teste informado e os IDs foram salvos no banco.
-
-Tabela atual:
-
-```text
-start-mei   89.99   subscription   dc3d44a153e14f5f9d1c2561f2ace154
-servicos    99.99   subscription   b68b4b5a64e844299ba2d66c5c9b4058
-premium     149.99  subscription   a22d80ae99784b019cd404401b5d0a32
-comercio    110.00  subscription   53523a09860e4c68991d606c3ec8265d
-full        199.99  subscription   761bbfc2d3f142cabdf9ceffd400f8da
-```
-
-O `back_url` desses planos tambem foi atualizado para:
+Dominio de producao planejado:
 
 ```text
 https://facilitameibr.com.br
 ```
 
-## 7. Backend
+## Interfaces
 
-Arquivo principal:
+- `/`: site e checkout.
+- `/cliente/`: painel autenticado do cliente.
+- `/admin/`: painel administrativo completo para clientes, planos, pagamentos, contratos, documentos, relatorios e configuracoes.
+- `/health/live`: processo HTTP ativo.
+- `/health/ready`: MySQL e Redis prontos.
 
-```text
-server.js
+O frontend usa `window.location.origin`; nao existe URL Railway fixa no codigo.
+
+## Seguranca implementada
+
+- sessoes por cookie `HttpOnly`, `Secure` em producao, CSRF e Redis;
+- nenhuma sessao/token em `localStorage`;
+- rate limiting distribuido;
+- CNPJ e DAS vinculados ao cliente autenticado e financeiramente habilitado;
+- status de pagamento por token aleatorio ou sessao proprietaria;
+- webhook Mercado Pago assinado, idempotente e com validacao do recurso;
+- uploads por assinatura binaria, ClamAV e bucket privado;
+- dados bancarios com AES-256-GCM e chave externa;
+- payloads de gateway minimizados e politica de retencao;
+- administradores persistidos, senha scrypt, TOTP, papeis e auditoria;
+- logs estruturados com request ID e mascaramento de dados pessoais;
+- configuracao de producao validada antes de abrir a porta.
+
+## Banco e migracoes
+
+`database/railway-schema.sql` e o baseline 001. Alteracoes posteriores ficam em `database/migrations/` e sao registradas em `schema_migrations` com checksum. Instancias web nao alteram schema.
+
+Comandos:
+
+```powershell
+npm run db:migrate
+npm run db:verify
+npm run db:encrypt-legacy
+npm run migrate:documents-storage
+npm run db:purge-expired
 ```
 
-Tecnologias:
+Migracoes e scripts que alteram dados devem ser usados somente depois de backup e teste de restauracao em homologacao.
 
-```text
-Node.js
-Express
-MySQL mysql2
-Mercado Pago API
+## Qualidade
+
+```powershell
+npm ci
+npm run check
+npm run lint
+npm test
+npm audit --audit-level=high
 ```
 
-Scripts:
+O GitHub Actions executa essas verificacoes no Node 24. Na ultima validacao local havia 65 testes aprovados, lint sem avisos e auditoria npm sem vulnerabilidades conhecidas.
 
-```bash
-npm run dev
-npm run sync:mp-plans
-```
+## Pendencias externas antes da producao
 
-### Rotas principais
+- criar recursos separados de homologacao e producao;
+- configurar DNS e dominio personalizado no Railway;
+- aplicar migracoes em clone anonimizado e testar restauracao;
+- configurar bucket privado, ClamAV e Redis reais;
+- criar o primeiro `owner` e remover variaveis de bootstrap;
+- testar SMTP real e sandbox Mercado Pago (Pix, boleto, cartao, assinatura, cancelamento e webhook);
+- testar SERPRO com certificado/credenciais de homologacao;
+- conectar health, metricas e alertas ao monitor escolhido;
+- aprovar prazos definitivos de retencao com responsavel LGPD.
 
-Carregar planos:
+## Referencias
 
-```text
-GET /api/plans
-```
-
-Configuracao publica para frontend:
-
-```text
-GET /api/config
-```
-
-Criar plano no Mercado Pago:
-
-```text
-POST /api/admin/plans/:planId/mercado-pago-plan
-```
-
-Sincronizar todos os planos ativos:
-
-```text
-POST /api/admin/plans/mercado-pago/sync
-```
-
-Criar assinatura por cartao com plano associado:
-
-```text
-POST /api/subscriptions/card
-```
-
-Webhook Mercado Pago:
-
-```text
-POST /api/webhooks/mercadopago
-```
-
-Rotas antigas/alternativas ainda existem para apoio, mas o fluxo principal agora e assinatura com plano associado.
-
-## 8. Webhook
-
-URL de webhook para configurar no painel do Mercado Pago:
-
-```text
-https://facilitameibr.com.br/api/webhooks/mercadopago
-```
-
-O webhook recebe eventos de:
-
-- pagamentos;
-- assinaturas/preapproval.
-
-Quando chega pagamento:
-
-- consulta dados completos do pagamento no Mercado Pago;
-- atualiza tabela `payments`;
-- atualiza status do usuario.
-
-Quando chega assinatura:
-
-- consulta assinatura no Mercado Pago;
-- atualiza tabela `subscriptions`;
-- atualiza status do usuario.
-
-## 9. Variaveis de ambiente
-
-Arquivo local:
-
-```text
-.env
-```
-
-Exemplo:
-
-```env
-PORT=3000
-SITE_URL=https://facilitameibr.com.br
-MERCADO_PAGO_BACK_URL=https://facilitameibr.com.br
-
-DB_HOST=127.0.0.1
-DB_PORT=3306
-DB_USER=root
-DB_PASSWORD=
-DB_NAME=facilita_modern
-
-MERCADO_PAGO_ACCESS_TOKEN=...
-MERCADO_PAGO_PUBLIC_KEY=...
-MERCADO_PAGO_WEBHOOK_SECRET=
-```
-
-Observacao:
-
-O token informado atualmente e de teste. Antes de producao, e recomendado gerar/usar credenciais de producao e rotacionar qualquer token que tenha sido exposto em conversa ou ambiente inseguro.
-
-## 10. Dominio configurado
-
-Dominio definitivo informado:
-
-```text
-https://facilitameibr.com.br
-```
-
-Usado em:
-
-- `SITE_URL`;
-- `MERCADO_PAGO_BACK_URL`;
-- webhook documentado;
-- planos do Mercado Pago atualizados.
-
-## 11. O que ainda falta
-
-### Publicacao
-
-Ainda precisa decidir onde o backend Node vai rodar em producao.
-
-Opcoes comuns:
-
-- VPS;
-- painel com Node.js;
-- Render/Railway/Fly.io;
-- servidor proprio.
-
-O dominio `https://facilitameibr.com.br` precisa apontar para onde o backend estiver hospedado.
-
-### Mercado Pago
-
-Falta configurar no painel:
-
-```text
-https://facilitameibr.com.br/api/webhooks/mercadopago
-```
-
-Tambem falta testar assinatura real ou de sandbox com cartao de teste.
-
-### Public Key
-
-Ainda precisa confirmar `MERCADO_PAGO_PUBLIC_KEY`, usada no frontend para tokenizar cartao com MercadoPago.js.
-
-Sem essa chave, o frontend nao consegue gerar `card_token_id`.
-
-### Painel administrativo
-
-Ainda nao foi criado painel visual para administrar:
-
-- usuarios;
-- assinaturas;
-- pagamentos;
-- status pendente/pago/bloqueado/cancelado.
-
-O banco ja esta preparado para isso.
-
-### Regras de bloqueio
-
-O backend ja atualiza status conforme webhook, mas ainda falta criar as telas/regras finais de acesso conforme o servico real que o cliente vai usar.
-
-Exemplo:
-
-```text
-status active -> acesso liberado
-status pending -> aguardando pagamento
-status blocked -> acesso bloqueado
-status cancelled -> acesso cancelado
-```
-
-## 12. Proximos comandos sugeridos
-
-1. Confirmar se o checkout deve aceitar somente cartao recorrente ou se vamos manter alternativa Pix.
-2. Informar a `MERCADO_PAGO_PUBLIC_KEY` correta.
-3. Criar painel administrativo.
-4. Fazer teste real de assinatura com cartao de teste.
-5. Definir hospedagem do backend Node.
-6. Configurar webhook no painel do Mercado Pago.
-7. Publicar em `https://facilitameibr.com.br`.
+- [Arquitetura](arquitetura.md)
+- [Instalacao e ambientes](instalacao-ambientes.md)
+- [Deploy e rollback](deploy-rollback.md)
+- [Plano de seguranca](plano-seguranca-producao.md)
+- Registros das etapas 0 a 13 neste diretorio.

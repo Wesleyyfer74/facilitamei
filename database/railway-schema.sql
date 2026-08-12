@@ -37,6 +37,20 @@ CREATE TABLE IF NOT EXISTS users (
   UNIQUE KEY users_email_unique (email)
 );
 
+CREATE TABLE IF NOT EXISTS client_auth_tokens (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  user_id BIGINT UNSIGNED NOT NULL,
+  purpose ENUM('setup', 'recovery') NOT NULL,
+  token_hash CHAR(64) NOT NULL,
+  expires_at DATETIME NOT NULL,
+  used_at DATETIME NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY client_auth_tokens_hash_unique (token_hash),
+  KEY client_auth_tokens_user_purpose_idx (user_id, purpose),
+  KEY client_auth_tokens_expires_idx (expires_at),
+  CONSTRAINT client_auth_tokens_user_fk FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
 CREATE TABLE IF NOT EXISTS plans (
   id VARCHAR(60) PRIMARY KEY,
   nome VARCHAR(120) NOT NULL,
@@ -99,6 +113,8 @@ CREATE TABLE IF NOT EXISTS payments (
   status VARCHAR(40) NOT NULL DEFAULT 'pending',
   data_pagamento DATETIME NULL,
   competencia VARCHAR(7) NULL,
+  status_token_hash CHAR(64) NULL,
+  status_token_expires_at DATETIME NULL,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   raw_payload JSON NULL,
@@ -107,8 +123,41 @@ CREATE TABLE IF NOT EXISTS payments (
   KEY payments_user_idx (user_id),
   KEY payments_subscription_idx (subscription_id),
   KEY payments_status_idx (status),
+  KEY payments_status_token_idx (status_token_hash),
   CONSTRAINT payments_user_fk FOREIGN KEY (user_id) REFERENCES users(id),
   CONSTRAINT payments_subscription_fk FOREIGN KEY (subscription_id) REFERENCES subscriptions(id)
+);
+
+CREATE TABLE IF NOT EXISTS mercado_pago_webhook_events (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  event_key CHAR(64) NOT NULL,
+  request_id VARCHAR(180) NOT NULL,
+  topic VARCHAR(80) NOT NULL,
+  resource_id VARCHAR(180) NOT NULL,
+  status ENUM('processing', 'processed', 'failed') NOT NULL DEFAULT 'processing',
+  attempts INT UNSIGNED NOT NULL DEFAULT 1,
+  error_message VARCHAR(1000) NULL,
+  processed_at DATETIME NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY mercado_pago_webhook_event_key_unique (event_key),
+  KEY mercado_pago_webhook_status_idx (status)
+);
+
+CREATE TABLE IF NOT EXISTS mercado_pago_webhook_receipts (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  receipt_id CHAR(36) NOT NULL,
+  request_id VARCHAR(120) NULL,
+  topic VARCHAR(120) NOT NULL,
+  resource_id VARCHAR(180) NULL,
+  signature_present TINYINT(1) NOT NULL DEFAULT 0,
+  status ENUM('accepted', 'processed', 'rejected', 'ignored', 'failed') NOT NULL,
+  http_status SMALLINT UNSIGNED NOT NULL,
+  error_code VARCHAR(120) NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY mercado_pago_receipt_id_unique (receipt_id),
+  KEY mercado_pago_receipt_created_idx (created_at),
+  KEY mercado_pago_receipt_status_created_idx (status, created_at)
 );
 
 CREATE TABLE IF NOT EXISTS customer_documents (
@@ -134,10 +183,15 @@ CREATE TABLE IF NOT EXISTS customer_document_files (
   document_id BIGINT UNSIGNED NOT NULL,
   file_name VARCHAR(180) NOT NULL,
   mime_type VARCHAR(80) NOT NULL DEFAULT 'application/pdf',
-  base64_data MEDIUMTEXT NOT NULL,
+  base64_data MEDIUMTEXT NULL,
+  storage_driver VARCHAR(20) NULL,
+  storage_key VARCHAR(255) NULL,
+  file_size BIGINT UNSIGNED NULL,
+  sha256 CHAR(64) NULL,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   UNIQUE KEY customer_document_files_document_unique (document_id),
+  UNIQUE KEY customer_document_files_storage_key_unique (storage_key),
   CONSTRAINT customer_document_files_document_fk FOREIGN KEY (document_id) REFERENCES customer_documents(id) ON DELETE CASCADE
 );
 

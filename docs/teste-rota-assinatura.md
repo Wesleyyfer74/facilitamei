@@ -1,4 +1,6 @@
-# Teste da rota /api/subscriptions/card
+# Registro historico - teste da rota /api/subscriptions/card
+
+> Este documento registra um teste de 06/06/2026 e nao descreve o estado operacional atual. IDs, resultados e proximos passos abaixo nao devem ser reutilizados em producao. Para validacao atual, use homologacao isolada e o checklist de `deploy-rollback.md`.
 
 Data do teste: 2026-06-06
 

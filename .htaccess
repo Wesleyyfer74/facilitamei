@@ -5,7 +5,7 @@ DirectoryIndex index.html
   RewriteEngine On
 
   RewriteRule ^(\.env|\.env\..*|server\.js|backend\.log|package\.json|package-lock\.json|DEPLOYMENT\.md|HOSTINGER_DEPLOY\.md)$ - [F,L,NC]
-  RewriteRule ^(database|docs|scripts|node_modules|\.git|\.agents|\.codex)(/|$) - [F,L,NC]
+  RewriteRule ^(data|database|docs|scripts|node_modules|\.git|\.agents|\.codex)(/|$) - [F,L,NC]
   RewriteRule ^areaadmin/?$ areaadmin/index.html [L]
 
   RewriteCond %{REQUEST_FILENAME} !-f

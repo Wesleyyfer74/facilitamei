@@ -68,7 +68,6 @@ const API_BASE =
     : isFacilitaDomain
       ? productionApiBase
       : "");
-const SESSION_KEY = "facilita_admin_session";
 
 if (window.location.search) {
   window.history.replaceState(null, "", window.location.pathname);
@@ -83,18 +82,7 @@ let selectedCustomerId = null;
 let selectedPlanId = null;
 let currentPaymentFilter = "";
 let notificationTimer = null;
-
-function getToken() {
-  return localStorage.getItem(SESSION_KEY) || "";
-}
-
-function setToken(token) {
-  localStorage.setItem(SESSION_KEY, token);
-}
-
-function clearToken() {
-  localStorage.removeItem(SESSION_KEY);
-}
+let csrfToken = "";
 
 function money(value) {
   return Number(value || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -206,16 +194,17 @@ async function apiRequest(path, options = {}) {
     "Content-Type": "application/json",
     ...(options.headers || {}),
   };
-  const token = getToken();
-
-  if (token) headers.Authorization = `Bearer ${token}`;
-
+  const method = String(options.method || "GET").toUpperCase();
+  if (!["GET", "HEAD", "OPTIONS"].includes(method) && csrfToken) {
+    headers["X-CSRF-Token"] = csrfToken;
+  }
   let response;
 
   try {
     response = await fetch(`${API_BASE}${path}`, {
       ...options,
       headers,
+      credentials: "include",
     });
   } catch {
     throw new Error("Nao consegui conectar ao backend. Verifique se o servidor esta rodando e se o CORS local foi liberado.");
@@ -231,8 +220,10 @@ async function apiRequest(path, options = {}) {
     throw new Error(`A API retornou uma resposta invalida. Confira se o backend esta em ${target}.`);
   }
 
+  if (data.csrfToken) csrfToken = data.csrfToken;
+
   if (response.status === 401) {
-    clearToken();
+    csrfToken = "";
     showLogin();
     throw new Error(data.error || "Sessao expirada.");
   }
@@ -352,7 +343,6 @@ function renderDashboardHome(data) {
 
   const monthlyRevenue = Number(data.payments?.monthlyApprovedAmount || 0);
   const annualRevenue = monthlyRevenue * 12;
-  const approvedPayments = Number(data.payments?.approved || 0);
   const totalUsers = Number(data.users?.total || 0);
   const activeUsers = Number(data.users?.active || 0);
   const conversionRate = totalUsers ? `${((activeUsers / totalUsers) * 100).toFixed(1).replace(".", ",")}%` : "0%";
@@ -1935,18 +1925,18 @@ function openPasswordInfo() {
       <div>
         <p class="eyebrow">Seguranca</p>
         <h2>Alterar senha administrativa</h2>
-        <p>A senha do admin nao fica salva no frontend nem solta no banco. Ela deve ser alterada nas variaveis do Railway.</p>
+        <p>Administradores usam senha derivada, papel de acesso e autenticacao em dois fatores. A senha nao fica salva no frontend.</p>
       </div>
       <article class="panel">
-        <h3>Variaveis usadas</h3>
+        <h3>Modelo de acesso</h3>
         <div class="detail-grid">
-          <p><span>Login</span><strong>ADMIN_EMAIL</strong></p>
-          <p><span>Senha</span><strong>ADMIN_PASSWORD</strong></p>
-          <p><span>Chave interna</span><strong>ADMIN_API_KEY</strong></p>
+          <p><span>Identidade</span><strong>admin_users</strong></p>
+          <p><span>Segundo fator</span><strong>TOTP obrigatorio</strong></p>
+          <p><span>Permissoes</span><strong>owner, finance, support ou viewer</strong></p>
         </div>
       </article>
       <div class="drawer-helper">
-        Apos alterar a senha no Railway, faca redeploy do backend para a nova variavel entrar em uso.
+        O primeiro owner e criado com <strong>npm run admin:bootstrap</strong>. Remova as variaveis de bootstrap logo depois.
       </div>
     </div>
   `);
@@ -2553,7 +2543,6 @@ function openUploadDocument(customerId) {
 async function uploadCustomerDocument(form) {
   const customerId = form.dataset.customerId;
   const submitButton = form.querySelector("[type='submit']");
-  const token = getToken();
   const formData = new FormData(form);
 
   if (!customerId) throw new Error("Cliente invalido para upload.");
@@ -2565,7 +2554,8 @@ async function uploadCustomerDocument(form) {
 
     const response = await fetch(`${API_BASE}/api/admin/customers/${customerId}/documents`, {
       method: "POST",
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      credentials: "include",
+      headers: csrfToken ? { "X-CSRF-Token": csrfToken } : {},
       body: formData,
     });
 
@@ -2578,7 +2568,7 @@ async function uploadCustomerDocument(form) {
     }
 
     if (response.status === 401) {
-      clearToken();
+      csrfToken = "";
       showLogin();
       throw new Error(data.error || "Sessao expirada.");
     }
@@ -2596,17 +2586,16 @@ async function uploadCustomerDocument(form) {
 }
 
 async function downloadAdminDocument(documentId, fileName = "documento") {
-  const token = getToken();
   if (!documentId) throw new Error("Documento invalido.");
 
   setStatus("Baixando documento...");
 
   const response = await fetch(`${API_BASE}/api/admin/documents/${documentId}/download`, {
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    credentials: "include",
   });
 
   if (response.status === 401) {
-    clearToken();
+    csrfToken = "";
     showLogin();
     throw new Error("Sessao expirada.");
   }
@@ -2857,11 +2846,10 @@ loginForm.addEventListener("submit", async (event) => {
 
   try {
     const formData = new FormData(loginForm);
-    const data = await apiRequest("/api/admin/auth/login", {
+    await apiRequest("/api/admin/auth/login", {
       method: "POST",
       body: JSON.stringify(Object.fromEntries(formData.entries())),
     });
-    setToken(data.token);
     loginStatus.textContent = "";
     showDashboard();
     try {
@@ -2882,7 +2870,7 @@ document.querySelector("[data-logout]").addEventListener("click", async () => {
   } catch {
     // The local session should be cleared even if the network request fails.
   }
-  clearToken();
+  csrfToken = "";
   showLogin();
 });
 
@@ -3107,18 +3095,12 @@ document.addEventListener("submit", (event) => {
 closeDrawerButtons.forEach((button) => button.addEventListener("click", closeDrawer));
 
 (async function bootAdmin() {
-  if (!getToken()) {
-    showLogin();
-    return;
-  }
-
   try {
     await apiRequest("/api/admin/auth/me");
     showDashboard();
     await loadPlans();
     activateView("overview");
   } catch {
-    clearToken();
     showLogin();
   }
 })();
