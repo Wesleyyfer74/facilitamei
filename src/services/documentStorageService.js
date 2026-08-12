@@ -51,7 +51,7 @@ class S3PrivateDocumentStorage {
     this.client = new S3Client({
       region: config.region,
       endpoint: config.endpoint || undefined,
-      forcePathStyle: Boolean(config.endpoint),
+      forcePathStyle: Boolean(config.forcePathStyle),
       credentials: config.accessKeyId && config.secretAccessKey
         ? { accessKeyId: config.accessKeyId, secretAccessKey: config.secretAccessKey }
         : undefined,
@@ -60,12 +60,13 @@ class S3PrivateDocumentStorage {
 
   async put({ buffer, extension, mimeType }) {
     const key = createStorageKey(extension);
+    const encryption = process.env.S3_DOCUMENTS_SERVER_SIDE_ENCRYPTION;
     await this.client.send(new PutObjectCommand({
       Bucket: this.bucket,
       Key: key,
       Body: buffer,
       ContentType: mimeType,
-      ServerSideEncryption: "AES256",
+      ...(encryption ? { ServerSideEncryption: encryption } : {}),
     }));
     return key;
   }
@@ -93,6 +94,7 @@ function createDocumentStorage({ nodeEnv = process.env.NODE_ENV, rootPath } = {}
     bucket: process.env.S3_DOCUMENTS_BUCKET,
     region: process.env.S3_DOCUMENTS_REGION || "us-east-1",
     endpoint: process.env.S3_DOCUMENTS_ENDPOINT || "",
+    forcePathStyle: String(process.env.S3_DOCUMENTS_FORCE_PATH_STYLE || "false").toLowerCase() === "true",
     accessKeyId: process.env.S3_DOCUMENTS_ACCESS_KEY_ID || "",
     secretAccessKey: process.env.S3_DOCUMENTS_SECRET_ACCESS_KEY || "",
   };

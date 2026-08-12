@@ -50,6 +50,13 @@ test("armazenamento local privado grava, le e remove mantendo integridade", asyn
   await assert.rejects(storage.get("../segredo.txt"), /invalida/i);
 });
 
+test("configuracao S3 aceita URL virtual e criptografia opcional", async () => {
+  const source = await fs.readFile(path.resolve(import.meta.dirname, "..", "src", "services", "documentStorageService.js"), "utf8");
+  assert.match(source, /forcePathStyle: Boolean\(config\.forcePathStyle\)/);
+  assert.match(source, /S3_DOCUMENTS_SERVER_SIDE_ENCRYPTION/);
+  assert.doesNotMatch(source, /ServerSideEncryption: "AES256"/);
+});
+
 test("antivirus pode ser opcional fora de producao e falha fechado quando obrigatorio", async () => {
   assert.deepEqual(await scanDocumentBuffer(Buffer.from("limpo"), { host: "", required: false }), {
     scanned: false,

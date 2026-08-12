@@ -38,7 +38,7 @@ if (external && configErrors.length === 0) {
   const s3 = new S3Client({
     region: process.env.S3_DOCUMENTS_REGION,
     endpoint: process.env.S3_DOCUMENTS_ENDPOINT || undefined,
-    forcePathStyle: Boolean(process.env.S3_DOCUMENTS_ENDPOINT),
+    forcePathStyle: String(process.env.S3_DOCUMENTS_FORCE_PATH_STYLE || "false").toLowerCase() === "true",
     credentials: process.env.S3_DOCUMENTS_ACCESS_KEY_ID ? {
       accessKeyId: process.env.S3_DOCUMENTS_ACCESS_KEY_ID,
       secretAccessKey: process.env.S3_DOCUMENTS_SECRET_ACCESS_KEY,
