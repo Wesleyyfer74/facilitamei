@@ -667,7 +667,11 @@ function completeApprovedPayment(data = {}) {
   }
   if (paymentInstructions) paymentInstructions.hidden = true;
   postPaymentRedirectId = window.setTimeout(() => {
-    window.location.assign("./cliente/?payment=approved");
+    const onboarding = data.onboarding || {};
+    const target = onboarding.action === "setup" && /^[a-f0-9]{64}$/i.test(onboarding.token || "")
+      ? `./cliente/?auth_action=setup&auth_token=${encodeURIComponent(onboarding.token)}&payment=approved`
+      : "./cliente/?payment=approved";
+    window.location.assign(target);
   }, 1800);
 }
 

@@ -4,6 +4,7 @@ const loginForm = document.querySelector("[data-login-form]");
 const setupForm = document.querySelector("[data-setup-form]");
 const recoveryForm = document.querySelector("[data-recovery-form]");
 const confirmPasswordForm = document.querySelector("[data-confirm-password-form]");
+const setupCnpjField = document.querySelector("[data-setup-cnpj-field]");
 const statusBox = document.querySelector("[data-client-status]");
 const tabButtons = document.querySelectorAll("[data-access-tab]");
 const routeButtons = document.querySelectorAll("[data-client-route]");
@@ -1041,7 +1042,7 @@ confirmPasswordForm.addEventListener("submit", async (event) => {
   try {
     await apiRequest(`/api/client/auth/${payload.purpose}/confirm`, {
       method: "POST",
-      body: JSON.stringify({ token: payload.token, password: payload.password }),
+      body: JSON.stringify({ token: payload.token, password: payload.password, cnpj: payload.cnpj }),
     });
     window.history.replaceState(null, "", window.location.pathname);
     confirmPasswordForm.reset();
@@ -1084,7 +1085,9 @@ requestDasButton?.addEventListener("click", async () => {
     confirmPasswordForm.classList.add("is-active");
     confirmPasswordForm.elements.token.value = authToken;
     confirmPasswordForm.elements.purpose.value = authAction;
-    setStatus(authAction === "setup" ? "Crie sua senha para ativar o acesso." : "Defina uma nova senha.");
+    if (setupCnpjField) setupCnpjField.hidden = authAction !== "setup";
+    if (confirmPasswordForm.elements.cnpj) confirmPasswordForm.elements.cnpj.required = authAction === "setup";
+    setStatus(authAction === "setup" ? "Informe o CNPJ e crie sua senha para ativar o acesso." : "Defina uma nova senha.");
     return;
   }
 

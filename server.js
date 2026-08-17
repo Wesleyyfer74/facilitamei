@@ -1216,6 +1216,18 @@ app.post("/api/cnpj/consultar", cnpjLookupLimiter, async (request, response) => 
 
 const clientAuthNeutralMessage = "Se o cadastro estiver apto, enviaremos as instrucoes para o e-mail informado.";
 
+async function issueClientAuthToken(userId, purpose) {
+  const normalizedPurpose = normalizeClientAuthPurpose(purpose);
+  if (!normalizedPurpose || !userId) return null;
+  const authToken = createClientAuthToken();
+  await dbPool.execute(
+    `INSERT INTO client_auth_tokens (user_id, purpose, token_hash, expires_at)
+     VALUES (:userId, :purpose, :tokenHash, :expiresAt)`,
+    { userId, purpose: normalizedPurpose, tokenHash: authToken.tokenHash, expiresAt: authToken.expiresAt },
+  );
+  return authToken;
+}
+
 async function sendClientAuthToken(email, purpose) {
   const normalizedPurpose = normalizeClientAuthPurpose(purpose);
   const normalizedEmail = cleanEmail(email);
@@ -1242,23 +1254,7 @@ async function sendClientAuthToken(email, purpose) {
   if (normalizedPurpose === "setup" && user.senha_hash) return;
   if (normalizedPurpose === "recovery" && !user.senha_hash) return;
 
-  const authToken = createClientAuthToken();
-  await dbPool.execute(
-    `UPDATE client_auth_tokens
-     SET used_at = NOW()
-     WHERE user_id = :userId AND purpose = :purpose AND used_at IS NULL`,
-    { userId: user.id, purpose: normalizedPurpose },
-  );
-  await dbPool.execute(
-    `INSERT INTO client_auth_tokens (user_id, purpose, token_hash, expires_at)
-     VALUES (:userId, :purpose, :tokenHash, :expiresAt)`,
-    {
-      userId: user.id,
-      purpose: normalizedPurpose,
-      tokenHash: authToken.tokenHash,
-      expiresAt: authToken.expiresAt,
-    },
-  );
+  const authToken = await issueClientAuthToken(user.id, normalizedPurpose);
 
   const actionLabel = normalizedPurpose === "setup" ? "criar seu acesso" : "redefinir sua senha";
   const actionUrl = `${frontendUrl.replace(/\/$/, "")}/cliente/?auth_action=${normalizedPurpose}&auth_token=${authToken.token}`;
@@ -1275,7 +1271,7 @@ async function sendClientAuthToken(email, purpose) {
   });
 }
 
-async function confirmClientAuthToken({ token, password, purpose }) {
+async function confirmClientAuthToken({ token, password, purpose, cnpj }) {
   const normalizedPurpose = normalizeClientAuthPurpose(purpose);
   const normalizedToken = String(token || "").trim();
   if (!normalizedPurpose || !/^[a-f0-9]{64}$/i.test(normalizedToken)) {
@@ -1324,6 +1320,9 @@ async function confirmClientAuthToken({ token, password, purpose }) {
       { userId: user.user_id },
     );
     await connection.commit();
+    if (normalizedPurpose === "setup") {
+      await vincularCnpjAoCliente({ customerId: user.user_id, cnpj });
+    }
     await sessionStore.deleteByUserId("client", user.user_id);
     return user;
   } catch (error) {
@@ -1349,6 +1348,7 @@ for (const purpose of ["setup", "recovery"]) {
       const user = await confirmClientAuthToken({
         token: request.body?.token,
         password: request.body?.password,
+        cnpj: request.body?.cnpj,
         purpose,
       });
       const session = await createClientSession(user);
@@ -5471,7 +5471,7 @@ app.post("/api/payments/status", paymentStatusLimiter, async (request, response)
       return response.status(401).json({ error: "Token de acompanhamento invalido ou expirado." });
     }
     const [rows] = await dbPool.execute(
-      `SELECT id, mercado_pago_payment_id, status, valor
+      `SELECT id, user_id, mercado_pago_payment_id, status, valor
        FROM payments
        WHERE status_token_hash = :tokenHash
          AND status_token_expires_at > NOW()
@@ -5498,7 +5498,18 @@ app.post("/api/payments/status", paymentStatusLimiter, async (request, response)
         });
       }
     }
-    response.json(safePaymentStatusResponse(paymentData, localPayment.id));
+    const statusResponse = safePaymentStatusResponse(paymentData, localPayment.id);
+    if (paymentData.status === "approved" && localPayment.user_id) {
+      const [userRows] = await dbPool.execute(
+        "SELECT id, senha_hash FROM users WHERE id = :userId LIMIT 1",
+        { userId: localPayment.user_id },
+      );
+      if (userRows[0] && !userRows[0].senha_hash) {
+        const onboardingToken = await issueClientAuthToken(userRows[0].id, "setup");
+        statusResponse.onboarding = { action: "setup", token: onboardingToken.token };
+      }
+    }
+    response.json(statusResponse);
   } catch (error) {
     console.error("Erro ao consultar pagamento por token:", error.message);
     response.status(500).json({ error: error.message || "Erro ao consultar pagamento." });

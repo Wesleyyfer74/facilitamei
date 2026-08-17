@@ -42,6 +42,7 @@
           <form class="access-form" data-confirm-password-form>
             <input name="token" type="hidden" />
             <input name="purpose" type="hidden" />
+            <label data-setup-cnpj-field hidden>CNPJ<input name="cnpj" inputmode="numeric" maxlength="18" autocomplete="off" /></label>
             <label>Nova senha<input name="password" type="password" minlength="8" autocomplete="new-password" required /></label>
             <label>Confirme a nova senha<input name="passwordConfirm" type="password" minlength="8" autocomplete="new-password" required /></label>
             <button class="gold-button" type="submit">Salvar senha e entrar</button>
