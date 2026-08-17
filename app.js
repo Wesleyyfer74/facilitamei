@@ -1334,6 +1334,7 @@ function renderOneTimePayment(data, planId, customer, method) {
 function startPaymentStatusPolling(paymentStatusToken) {
   window.clearInterval(statusPollingId);
   let intervalMs = 3000;
+  let consecutiveFailures = 0;
 
   const poll = async () => {
     try {
@@ -1345,8 +1346,13 @@ function startPaymentStatusPolling(paymentStatusToken) {
       const data = await parseJsonResponse(response, "Nao foi possivel consultar o status do pagamento.");
 
       if (!response.ok) {
-        if ([401, 410, 429].includes(response.status)) return;
+        consecutiveFailures += 1;
+        if (resultStatus && consecutiveFailures >= 2) {
+          resultStatus.textContent = data.error || "Nao foi possivel confirmar o pagamento. Tentando novamente...";
+        }
+        if ([401, 410].includes(response.status)) return;
       } else {
+        consecutiveFailures = 0;
         if (resultStatus) resultStatus.textContent = data.message || "Aguardando confirmacao.";
 
         if (data.status === "approved") {
@@ -1361,7 +1367,10 @@ function startPaymentStatusPolling(paymentStatusToken) {
         }
       }
     } catch {
-      // O webhook continua sendo a confirmacao principal; a consulta local e apenas apoio visual.
+      consecutiveFailures += 1;
+      if (resultStatus && consecutiveFailures >= 2) {
+        resultStatus.textContent = "Conexao com a confirmacao indisponivel. Tentando novamente...";
+      }
     }
     intervalMs = Math.min(intervalMs + 2000, 15000);
     statusPollingId = window.setTimeout(poll, intervalMs);

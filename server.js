@@ -22,7 +22,7 @@ import { createPaymentStatusToken, hashPaymentStatusToken } from "./src/services
 import { validateUploadedDocument } from "./src/services/documentFileService.js";
 import { createDocumentStorage, documentSha256 } from "./src/services/documentStorageService.js";
 import { scanDocumentBuffer } from "./src/services/antivirusService.js";
-import { assertProductionConfig } from "./src/services/productionConfigService.js";
+import { assertProductionConfig, isProductionEnvironment } from "./src/services/productionConfigService.js";
 import { decryptBankFields, decryptSensitive, encryptSensitive } from "./src/services/dataEncryptionService.js";
 import { isAdminAuthorized, verifyAdminPassword, verifyTotp } from "./src/services/adminAuthService.js";
 import { hashIp, requestContextMiddleware } from "./src/services/structuredLogger.js";
@@ -47,7 +47,8 @@ const frontendUrl = process.env.FRONTEND_URL || process.env.SITE_URL || localUrl
 const apiPublicUrl = process.env.API_PUBLIC_URL || railwayPublicUrl || frontendUrl;
 const mercadoPagoWebhookUrl = new URL("/api/webhooks/mercadopago", `${apiPublicUrl.replace(/\/$/, "")}/`).toString();
 const mercadoPagoBackUrl = process.env.MERCADO_PAGO_BACK_URL || frontendUrl;
-const isProduction = process.env.NODE_ENV === "production";
+const isProduction = isProductionEnvironment();
+if (isProduction && process.env.NODE_ENV !== "production") process.env.NODE_ENV = "production";
 const paymentStore = new Map();
 const adminSessionDurationMs = 1000 * 60 * 60 * 8;
 const clientSessionDurationMs = 1000 * 60 * 60 * 24 * 7;
@@ -83,14 +84,29 @@ const dbPool = mysql.createPool({
   connectionLimit: 10,
   namedPlaceholders: true,
 });
+function originVariants(value) {
+  try {
+    const url = new URL(value);
+    const origins = [url.origin];
+    if (url.protocol === "https:" && !url.hostname.endsWith(".up.railway.app")) {
+      url.hostname = url.hostname.startsWith("www.") ? url.hostname.slice(4) : `www.${url.hostname}`;
+      origins.push(url.origin);
+    }
+    return origins;
+  } catch {
+    return [];
+  }
+}
+
+const configuredCorsOrigins = (process.env.CORS_ORIGINS || "")
+  .split(",")
+  .map((origin) => origin.trim())
+  .filter(Boolean);
 const allowedOrigins = new Set([
-  frontendUrl,
-  apiPublicUrl,
+  ...originVariants(frontendUrl),
+  ...originVariants(apiPublicUrl),
   ...(!isProduction ? ["http://localhost", "http://127.0.0.1", "http://localhost:80", "http://127.0.0.1:80", "http://localhost:3000", "http://127.0.0.1:3000"] : []),
-  ...(process.env.CORS_ORIGINS || "")
-    .split(",")
-    .map((origin) => origin.trim())
-    .filter(Boolean),
+  ...configuredCorsOrigins.flatMap(originVariants),
 ]);
 
 app.disable("x-powered-by");

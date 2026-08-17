@@ -2,8 +2,12 @@ function isHttpsUrl(value) {
   try { return new URL(value).protocol === "https:"; } catch { return false; }
 }
 
+function isProductionEnvironment(env = process.env) {
+  return env.NODE_ENV === "production" || Boolean(env.RAILWAY_ENVIRONMENT_ID || env.RAILWAY_SERVICE_ID);
+}
+
 function validateProductionConfig(env = process.env) {
-  if (env.NODE_ENV !== "production") return [];
+  if (!isProductionEnvironment(env)) return [];
   const required = [
     "SITE_URL", "API_PUBLIC_URL", "DB_HOST", "DB_USER", "DB_PASSWORD", "DB_NAME", "REDIS_URL",
     "MERCADO_PAGO_ACCESS_TOKEN", "MERCADO_PAGO_PUBLIC_KEY", "MERCADO_PAGO_WEBHOOK_SECRET",
@@ -31,4 +35,4 @@ function assertProductionConfig(env = process.env) {
   if (errors.length) throw new Error(`Configuracao de producao invalida: ${errors.join("; ")}`);
 }
 
-export { assertProductionConfig, validateProductionConfig };
+export { assertProductionConfig, isProductionEnvironment, validateProductionConfig };
