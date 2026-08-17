@@ -46,9 +46,6 @@ const subscriptionMessage = document.querySelector("[data-subscription-message]"
 const paymentInstructions = document.querySelector("[data-payment-instructions]");
 const cnpjLinkForm = document.querySelector("[data-cnpj-link-form]");
 const cnpjLinkStatus = document.querySelector("[data-cnpj-link-status]");
-const postSubscriptionActions = document.querySelector("[data-post-subscription-actions]");
-const backToPaymentButton = document.querySelector("[data-back-to-payment]");
-const whatsappAttendance = document.querySelector("[data-whatsapp-attendance]");
 const planButtons = document.querySelectorAll("[data-plan-id]");
 const planCards = document.querySelectorAll(".plan-card");
 const plansSection = document.querySelector(".plans");
@@ -164,6 +161,7 @@ let planDetails = {
 };
 
 let statusPollingId;
+let postPaymentRedirectId;
 let mercadoPagoInstance;
 let mercadoPagoCardForm;
 let aboutRevealObserver;
@@ -609,22 +607,6 @@ function updateCheckoutPaymentMethod() {
   }
 }
 
-function getAttendanceUrl({ planId, customer }) {
-  const details = planDetails[planId] || planDetails["start-mei"];
-  const message = [
-    "Ola, acabei de assinar um plano no site Facilita MEI.",
-    "",
-    `Nome: ${customer.name || customer.nome || ""}`,
-    `Plano: ${details.title}`,
-    `Valor: ${details.price}`,
-    `WhatsApp: ${customer.phone || customer.telefone || ""}`,
-    `E-mail: ${customer.email || ""}`,
-    `CPF/CNPJ: ${customer.document || customer.documento || ""}`,
-  ].join("\n");
-
-  return `https://wa.me/5567996750853?text=${encodeURIComponent(message)}`;
-}
-
 function formatPrice(value) {
   return new Intl.NumberFormat("pt-BR", {
     style: "currency",
@@ -657,7 +639,9 @@ async function loadPlansFromBackend() {
 
 function resetPaymentResult() {
   window.clearInterval(statusPollingId);
+  window.clearTimeout(postPaymentRedirectId);
   statusPollingId = null;
+  postPaymentRedirectId = null;
 
   if (paymentResult) paymentResult.hidden = true;
   if (resultKicker) resultKicker.textContent = "Assinatura";
@@ -673,7 +657,18 @@ function resetPaymentResult() {
     cnpjLinkForm.classList.remove("is-processing");
   }
   if (cnpjLinkStatus) cnpjLinkStatus.textContent = "";
-  if (postSubscriptionActions) postSubscriptionActions.hidden = true;
+}
+
+function completeApprovedPayment(data = {}) {
+  if (resultKicker) resultKicker.textContent = "Pagamento confirmado";
+  if (resultStatus) resultStatus.textContent = data.message || "Pagamento aprovado. Acesso liberado.";
+  if (subscriptionMessage) {
+    subscriptionMessage.textContent = "Pagamento confirmado. Redirecionando para a area do cliente...";
+  }
+  if (paymentInstructions) paymentInstructions.hidden = true;
+  postPaymentRedirectId = window.setTimeout(() => {
+    window.location.assign("./cliente/?payment=approved");
+  }, 1800);
 }
 
 function openCheckout(planName) {
@@ -1275,13 +1270,14 @@ function renderSubscription(data, planId, customer) {
   if (subscriptionMessage) {
     subscriptionMessage.textContent = "Ative seu acesso pelo e-mail e cadastre o CNPJ com seguranca na area do cliente.";
   }
-  if (whatsappAttendance) whatsappAttendance.href = getAttendanceUrl({ planId, customer });
   if (cnpjLinkForm) {
     cnpjLinkForm.hidden = true;
   }
-  if (postSubscriptionActions) postSubscriptionActions.hidden = false;
 
   checkoutForm?.classList.remove("is-processing");
+  if (["approved", "authorized", "active"].includes(String(data.status || "").toLowerCase())) {
+    completeApprovedPayment(data);
+  }
 }
 
 function renderOneTimePayment(data, planId, customer, method) {
@@ -1299,9 +1295,7 @@ function renderOneTimePayment(data, planId, customer, method) {
         ? "Pague o Pix pelo QR Code ou copie o codigo abaixo. A confirmacao sera enviada pelo Mercado Pago."
         : "Abra o boleto em uma nova aba para pagar. A confirmacao sera enviada pelo Mercado Pago.";
   }
-  if (whatsappAttendance) whatsappAttendance.href = getAttendanceUrl({ planId, customer });
   if (cnpjLinkForm) cnpjLinkForm.hidden = true;
-  if (postSubscriptionActions) postSubscriptionActions.hidden = false;
 
   if (paymentInstructions) {
     const pixImage = data.qrCodeBase64
@@ -1330,22 +1324,12 @@ function renderOneTimePayment(data, planId, customer, method) {
   if (data.paymentStatusToken) {
     startPaymentStatusPolling(data.paymentStatusToken);
   }
+  if (data.status === "approved") completeApprovedPayment(data);
 }
 
 function startPaymentStatusPolling(paymentStatusToken) {
   window.clearInterval(statusPollingId);
   let intervalMs = 3000;
-
-  const completeApprovedPayment = (data) => {
-    if (resultKicker) resultKicker.textContent = "Pagamento confirmado";
-    if (resultStatus) resultStatus.textContent = data.message || "Pagamento aprovado. Acesso liberado.";
-    if (subscriptionMessage) {
-      subscriptionMessage.textContent = "Pagamento confirmado. Redirecionando para a area do cliente...";
-    }
-    if (paymentInstructions) paymentInstructions.hidden = true;
-    if (postSubscriptionActions) postSubscriptionActions.hidden = true;
-    window.setTimeout(() => window.location.assign("./cliente/?payment=approved"), 1800);
-  };
 
   const poll = async () => {
     try {
@@ -1577,11 +1561,6 @@ async function ensureMercadoPagoCardForm() {
 
   return mercadoPagoCardForm;
 }
-
-backToPaymentButton?.addEventListener("click", () => {
-  resetPaymentResult();
-  if (checkoutForm) checkoutForm.hidden = false;
-});
 
 updateCheckout("start-mei");
 loadPlansFromBackend();
