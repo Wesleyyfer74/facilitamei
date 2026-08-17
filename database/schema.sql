@@ -417,7 +417,8 @@ VALUES
   ('servicos', 'Facilita MEI Servicos', 'Ate 10 NFS-e por mes, suporte e PGDAS anual.', 99.99, 1, 'months', 'mei_servicos', NULL, 'subscription', 1, 20),
   ('premium', 'Facilita Premium', 'Ate 20 NFS-e por mes, contador e certificado digital PF.', 149.99, 1, 'months', 'mei_premium', NULL, 'subscription', 1, 30),
   ('comercio', 'Facilita MEI Comercio', 'Ate 10 notas fiscais, suporte, PGDAS e inscricao estadual.', 110.00, 1, 'months', 'mei_comercio', NULL, 'subscription', 1, 40),
-  ('full', 'Facilita MEI Full', 'Abertura completa, NFS-e ilimitada, funcionario ou pro-labore.', 199.99, 1, 'months', 'mei_full', NULL, 'subscription', 1, 50)
+  ('full', 'Facilita MEI Full', 'Abertura completa, NFS-e ilimitada, funcionario ou pro-labore.', 199.99, 1, 'months', 'mei_full', NULL, 'subscription', 1, 50),
+  ('teste-pagamento-5', 'Teste de Pagamento', 'Plano temporario para validar pagamentos reais e o processamento do webhook.', 5.00, 1, 'months', 'payment_test', NULL, 'single', 1, 999)
 ON DUPLICATE KEY UPDATE
   nome = VALUES(nome),
   descricao = VALUES(descricao),

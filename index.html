@@ -427,6 +427,26 @@
         <div class="plan-grid">
           <article class="plan-card">
             <div>
+              <span class="plan-kicker">Teste real</span>
+              <h3>Teste de Pagamento</h3>
+              <div class="plan-price-box">
+                <span class="plan-price-currency">R$</span>
+                <span class="plan-price">5,00</span>
+                <span class="plan-price-month">pagamento unico</span>
+              </div>
+              <p class="plan-desc">Cobranca real de baixo valor para validar todo o fluxo de pagamento.</p>
+            </div>
+            <ul class="plan-features">
+              <li>Pagamento real processado pelo Mercado Pago</li>
+              <li>Teste com Pix, boleto ou cartao</li>
+              <li>Confirmacao automatica pelo webhook</li>
+              <li>Vinculo do plano e valor ao cliente</li>
+            </ul>
+            <button class="button primary" type="button" data-plan-id="teste-pagamento-5">Testar pagamento por R$ 5,00</button>
+          </article>
+
+          <article class="plan-card">
+            <div>
               <span class="plan-kicker">Inicio</span>
               <h3>Start MEI</h3>
               <div class="plan-price-box">
@@ -765,6 +785,7 @@
                   <option value="premium">Facilita Premium</option>
                   <option value="comercio">Facilita MEI Comércio</option>
                   <option value="full">Facilita MEI Full</option>
+                  <option value="teste-pagamento-5">Teste de Pagamento - R$ 5,00</option>
                 </select>
               </label>
               <div class="boleto-fields" data-boleto-payment-field hidden>

@@ -155,6 +155,12 @@ let planDetails = {
     amount: 199.99,
     billing: "subscription",
   },
+  "teste-pagamento-5": {
+    title: "Teste de Pagamento",
+    price: "R$ 5,00 (pagamento unico)",
+    amount: 5,
+    billing: "single",
+  },
 };
 
 let statusPollingId;
@@ -636,7 +642,7 @@ async function loadPlansFromBackend() {
     planDetails = data.plans.reduce((accumulator, plan) => {
       accumulator[plan.id] = {
         title: plan.title,
-        price: `${formatPrice(plan.price)} /mes`,
+        price: plan.billing === "single" ? `${formatPrice(plan.price)} (pagamento unico)` : `${formatPrice(plan.price)} /mes`,
         amount: Number(plan.price),
         billing: plan.billing,
       };
