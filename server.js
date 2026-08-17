@@ -5486,7 +5486,18 @@ app.post("/api/payments/status", paymentStatusLimiter, async (request, response)
     const paymentData = await payment.get({ id: localPayment.mercado_pago_payment_id });
 
     storePayment(paymentData);
-    await updatePaymentStatus(paymentData);
+    const localPaymentId = await updatePaymentStatus(paymentData);
+    if (paymentData.status === "approved" && localPayment.status !== "approved") {
+      enviarEmailPagamentoAprovado(localPaymentId).catch((error) => {
+        console.error("Falha ao disparar e-mail de pagamento aprovado pelo polling:", error);
+      });
+      const setupEmail = paymentData.metadata?.customer_email || paymentData.payer?.email;
+      if (setupEmail) {
+        sendClientAuthToken(setupEmail, "setup").catch((error) => {
+          console.error("Falha ao enviar ativacao da area do cliente pelo polling:", error.message);
+        });
+      }
+    }
     response.json(safePaymentStatusResponse(paymentData, localPayment.id));
   } catch (error) {
     console.error("Erro ao consultar pagamento por token:", error.message);
@@ -5633,9 +5644,13 @@ app.post("/api/webhooks/mercadopago", webhookLimiter, async (request, response) 
       const paymentData = await payment.get({ id: descriptor.resourceId });
 
       await validateMercadoPagoPayment(paymentData);
+      const [previousPaymentRows] = await dbPool.execute(
+        "SELECT status FROM payments WHERE mercado_pago_payment_id = :paymentId LIMIT 1",
+        { paymentId: String(paymentData.id) },
+      );
       storePayment(paymentData);
       const localPaymentId = await updatePaymentStatus(paymentData);
-      if (localPaymentId && paymentData.status === "approved") {
+      if (localPaymentId && paymentData.status === "approved" && previousPaymentRows[0]?.status !== "approved") {
         enviarEmailPagamentoAprovado(localPaymentId).catch((error) => {
           console.error("Falha ao disparar e-mail de pagamento aprovado:", error);
         });

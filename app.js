@@ -1334,7 +1334,18 @@ function renderOneTimePayment(data, planId, customer, method) {
 
 function startPaymentStatusPolling(paymentStatusToken) {
   window.clearInterval(statusPollingId);
-  let intervalMs = 8000;
+  let intervalMs = 3000;
+
+  const completeApprovedPayment = (data) => {
+    if (resultKicker) resultKicker.textContent = "Pagamento confirmado";
+    if (resultStatus) resultStatus.textContent = data.message || "Pagamento aprovado. Acesso liberado.";
+    if (subscriptionMessage) {
+      subscriptionMessage.textContent = "Pagamento confirmado. Redirecionando para a area do cliente...";
+    }
+    if (paymentInstructions) paymentInstructions.hidden = true;
+    if (postSubscriptionActions) postSubscriptionActions.hidden = true;
+    window.setTimeout(() => window.location.assign("./cliente/?payment=approved"), 1800);
+  };
 
   const poll = async () => {
     try {
@@ -1350,7 +1361,13 @@ function startPaymentStatusPolling(paymentStatusToken) {
       } else {
         if (resultStatus) resultStatus.textContent = data.message || "Aguardando confirmacao.";
 
-        if (["approved", "rejected", "cancelled", "refunded"].includes(data.status)) {
+        if (data.status === "approved") {
+          statusPollingId = null;
+          completeApprovedPayment(data);
+          return;
+        }
+
+        if (["rejected", "cancelled", "refunded"].includes(data.status)) {
           statusPollingId = null;
           return;
         }
@@ -1358,7 +1375,7 @@ function startPaymentStatusPolling(paymentStatusToken) {
     } catch {
       // O webhook continua sendo a confirmacao principal; a consulta local e apenas apoio visual.
     }
-    intervalMs = Math.min(intervalMs + 4000, 30000);
+    intervalMs = Math.min(intervalMs + 2000, 15000);
     statusPollingId = window.setTimeout(poll, intervalMs);
   };
 
