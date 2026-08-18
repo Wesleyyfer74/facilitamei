@@ -5,6 +5,11 @@ const setupForm = document.querySelector("[data-setup-form]");
 const recoveryForm = document.querySelector("[data-recovery-form]");
 const confirmPasswordForm = document.querySelector("[data-confirm-password-form]");
 const setupCnpjField = document.querySelector("[data-setup-cnpj-field]");
+const accessTitle = document.querySelector("[data-access-title]");
+const accessIntro = document.querySelector("[data-access-intro]");
+const accessTabs = document.querySelector("[data-access-tabs]");
+const passwordConfirmField = document.querySelector("[data-password-confirm-field]");
+const confirmSubmit = document.querySelector("[data-confirm-submit]");
 const statusBox = document.querySelector("[data-client-status]");
 const tabButtons = document.querySelectorAll("[data-access-tab]");
 const routeButtons = document.querySelectorAll("[data-client-route]");
@@ -1033,7 +1038,7 @@ recoveryForm.addEventListener("submit", async (event) => {
 confirmPasswordForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   const payload = Object.fromEntries(new FormData(confirmPasswordForm).entries());
-  if (payload.password !== payload.passwordConfirm) {
+  if (payload.purpose !== "setup" && payload.password !== payload.passwordConfirm) {
     setStatus("As senhas nao conferem.", "error");
     return;
   }
@@ -1087,7 +1092,14 @@ requestDasButton?.addEventListener("click", async () => {
     confirmPasswordForm.elements.purpose.value = authAction;
     if (setupCnpjField) setupCnpjField.hidden = authAction !== "setup";
     if (confirmPasswordForm.elements.cnpj) confirmPasswordForm.elements.cnpj.required = authAction === "setup";
-    setStatus(authAction === "setup" ? "Informe o CNPJ e crie sua senha para ativar o acesso." : "Defina uma nova senha.");
+    const isSetup = authAction === "setup";
+    if (accessTitle) accessTitle.textContent = isSetup ? "Crie seu acesso" : "Recupere sua senha";
+    if (accessIntro) accessIntro.hidden = isSetup;
+    if (accessTabs) accessTabs.hidden = isSetup;
+    if (passwordConfirmField) passwordConfirmField.hidden = isSetup;
+    if (confirmPasswordForm.elements.passwordConfirm) confirmPasswordForm.elements.passwordConfirm.required = !isSetup;
+    if (confirmSubmit) confirmSubmit.textContent = isSetup ? "Criar acesso" : "Salvar nova senha";
+    setStatus(authAction === "setup" ? "" : "Defina uma nova senha.");
     return;
   }
 

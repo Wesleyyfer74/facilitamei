@@ -14,10 +14,10 @@
         <div class="access-card">
           <img src="../assets/logo.png" alt="Facilita MEI" />
           <p class="eyebrow">Area do cliente</p>
-          <h1>Acompanhe sua assinatura</h1>
-          <p>Crie sua senha depois da assinatura ou entre para ver plano, pagamentos, contratos e documentos.</p>
+          <h1 data-access-title>Acompanhe sua assinatura</h1>
+          <p data-access-intro>Crie sua senha depois da assinatura ou entre para ver plano, pagamentos, contratos e documentos.</p>
 
-          <div class="access-tabs">
+          <div class="access-tabs" data-access-tabs>
             <button class="is-active" type="button" data-access-tab="login">Entrar</button>
             <button type="button" data-access-tab="setup">Criar acesso</button>
             <button type="button" data-access-tab="recovery">Recuperar senha</button>
@@ -43,9 +43,9 @@
             <input name="token" type="hidden" />
             <input name="purpose" type="hidden" />
             <label data-setup-cnpj-field hidden>CNPJ<input name="cnpj" inputmode="numeric" maxlength="18" autocomplete="off" /></label>
-            <label>Nova senha<input name="password" type="password" minlength="8" autocomplete="new-password" required /></label>
-            <label>Confirme a nova senha<input name="passwordConfirm" type="password" minlength="8" autocomplete="new-password" required /></label>
-            <button class="gold-button" type="submit">Salvar senha e entrar</button>
+            <label>Criar senha<input name="password" type="password" minlength="8" autocomplete="new-password" required /></label>
+            <label data-password-confirm-field>Confirme a nova senha<input name="passwordConfirm" type="password" minlength="8" autocomplete="new-password" required /></label>
+            <button class="gold-button" type="submit" data-confirm-submit>Salvar senha e entrar</button>
           </form>
 
           <div class="client-status" data-client-status></div>
@@ -576,6 +576,6 @@
     </div>
 
     <script src="../config.js?v=20260817-payment-confirmation"></script>
-    <script src="./cliente.js?v=20260817-payment-onboarding"></script>
+    <script src="./cliente.js?v=20260818-simple-onboarding"></script>
   </body>
 </html>
