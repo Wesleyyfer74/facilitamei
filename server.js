@@ -3882,7 +3882,7 @@ app.post("/api/admin/customers/:id/payments/:method", requireAdminSession, async
   try {
     const userId = Number(request.params.id);
     const method = String(request.params.method || "").toLowerCase();
-    const { planId, endereco, address } = request.body || {};
+    const { planId, endereco, address, dueDate } = request.body || {};
 
     if (!Number.isFinite(userId) || userId <= 0) {
       return response.status(400).json({ error: "Cliente invalido." });
@@ -3929,6 +3929,7 @@ app.post("/api/admin/customers/:id/payments/:method", requireAdminSession, async
       plan,
       paymentMethod: method,
       address: endereco || address || {},
+      dueDate,
     });
 
     response.status(201).json({ ok: true, payment });
@@ -4150,10 +4151,26 @@ function validateBoletoAddress(address = {}) {
   return { normalizedAddress, missingFields };
 }
 
-function getBoletoExpirationDate() {
-  const expirationDate = new Date();
-  expirationDate.setDate(expirationDate.getDate() + 3);
-  return expirationDate.toISOString();
+function getSaoPauloDateString(date = new Date()) {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Sao_Paulo", year: "numeric", month: "2-digit", day: "2-digit",
+  }).format(date);
+}
+
+function addCalendarDays(dateString, days) {
+  const [year, month, day] = dateString.split("-").map(Number);
+  return new Date(Date.UTC(year, month - 1, day + days)).toISOString().slice(0, 10);
+}
+
+function getBoletoExpirationDate(requestedDate, now = new Date()) {
+  const today = getSaoPauloDateString(now);
+  const selectedDate = String(requestedDate || addCalendarDays(today, 3)).trim();
+  const minimumDate = addCalendarDays(today, 1);
+  const maximumDate = addCalendarDays(today, 30);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(selectedDate) || selectedDate < minimumDate || selectedDate > maximumDate) {
+    throw Object.assign(new Error("Escolha o vencimento do boleto entre 1 e 30 dias a partir de hoje."), { status: 400 });
+  }
+  return `${selectedDate}T23:59:59.000-03:00`;
 }
 
 function statusLabelForApi(status = "") {
@@ -4299,6 +4316,7 @@ function serializeMinimalGatewayPayload(data = {}, type = "payment") {
     status_detail: data.status_detail ?? null,
     date_created: data.date_created ?? null,
     date_approved: data.date_approved ?? null,
+    date_of_expiration: data.date_of_expiration ?? null,
     next_payment_date: data.next_payment_date ?? null,
     payment_method_id: data.payment_method_id ?? null,
     transaction_amount: data.transaction_amount ?? null,
@@ -4622,7 +4640,7 @@ function buildCustomerPaymentProfile(customer = {}) {
   };
 }
 
-async function createMercadoPagoSinglePayment({ customerId, customer, plan, paymentMethod, address = {} }) {
+async function createMercadoPagoSinglePayment({ customerId, customer, plan, paymentMethod, address = {}, dueDate }) {
   const accessToken = process.env.MERCADO_PAGO_ACCESS_TOKEN;
   const profile = buildCustomerPaymentProfile(customer);
   const { firstName, lastName } = splitName(profile.name);
@@ -4643,6 +4661,7 @@ async function createMercadoPagoSinglePayment({ customerId, customer, plan, paym
   }
 
   const isBoleto = paymentMethod === "boleto";
+  const boletoExpiration = isBoleto ? getBoletoExpirationDate(dueDate) : null;
   const methodAddress = isBoleto ? { ...profile.address, ...address } : {};
   const { normalizedAddress, missingFields } = isBoleto
     ? validateBoletoAddress(methodAddress)
@@ -4688,7 +4707,7 @@ async function createMercadoPagoSinglePayment({ customerId, customer, plan, paym
       transaction_amount: plan.price,
       description: `${plan.title} - Facilita MEI`,
       payment_method_id: isBoleto ? "bolbradesco" : "pix",
-      ...(isBoleto ? { date_of_expiration: getBoletoExpirationDate() } : {}),
+      ...(isBoleto ? { date_of_expiration: boletoExpiration } : {}),
       external_reference: externalReference,
       notification_url: mercadoPagoWebhookUrl,
       payer,
@@ -4744,6 +4763,9 @@ async function createMercadoPagoSinglePayment({ customerId, customer, plan, paym
     amount: plan.price,
     planName: plan.title,
     paymentMethod,
+    dueDate: isBoleto ? String(data.date_of_expiration || boletoExpiration).slice(0, 10) : null,
+    customerName: profile.name,
+    customerPhone: profile.phone,
   };
 }
 
@@ -5052,7 +5074,7 @@ app.post("/api/payments/pix", paymentCreationLimiter, async (request, response) 
 app.post("/api/payments/boleto", paymentCreationLimiter, async (request, response) => {
   try {
     const body = request.body || {};
-    const { planId, userId, email } = body;
+    const { planId, userId, email, dueDate } = body;
     const name = body.nome || body.name;
     const phone = body.telefone || body.phone;
     const document = body.documento || body.document;
@@ -5100,7 +5122,7 @@ app.post("/api/payments/boleto", paymentCreationLimiter, async (request, respons
         transaction_amount: plan.price,
         description: `${plan.title} - Facilita MEI`,
         payment_method_id: "bolbradesco",
-        date_of_expiration: getBoletoExpirationDate(),
+        date_of_expiration: getBoletoExpirationDate(dueDate),
         external_reference: externalReference,
         notification_url: mercadoPagoWebhookUrl,
         payer: {
@@ -5163,6 +5185,7 @@ app.post("/api/payments/boleto", paymentCreationLimiter, async (request, respons
       ticketUrl: data.transaction_details?.external_resource_url || data.transaction_details?.ticket_url,
       externalResourceUrl: data.transaction_details?.external_resource_url,
       externalReference,
+      dueDate: String(data.date_of_expiration || getBoletoExpirationDate(dueDate)).slice(0, 10),
     });
   } catch (error) {
     console.error(error);
@@ -5882,6 +5905,7 @@ if (isMainModule) {
 
 const testSupport = Object.freeze({
   assertMoneyMatches,
+  getBoletoExpirationDate,
   getMercadoPagoWebhookDescriptor,
   resolveUserFinancialStatus,
   hashPassword,

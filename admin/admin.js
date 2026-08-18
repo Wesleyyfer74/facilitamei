@@ -100,6 +100,18 @@ function formatDateOnly(value) {
   return new Date(value).toLocaleDateString("pt-BR");
 }
 
+function dateInputWithOffset(days) {
+  const date = new Date();
+  date.setHours(12, 0, 0, 0);
+  date.setDate(date.getDate() + days);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+function formatDateInput(value) {
+  const [year, month, day] = String(value || "").slice(0, 10).split("-");
+  return year && month && day ? `${day}/${month}/${year}` : "-";
+}
+
 function relativeDate(value) {
   if (!value) return "-";
   const date = new Date(value);
@@ -2414,7 +2426,12 @@ async function openCustomerPaymentManager(customerId, method = "pix") {
           </article>
 
           <fieldset class="boleto-address-fields" data-boleto-address-fields ${method === "boleto" ? "" : "hidden"}>
-            <legend>Endereco para boleto</legend>
+            <legend>Dados do boleto</legend>
+            <label>Data de vencimento
+              <input name="dueDate" type="date" value="${dateInputWithOffset(3)}" min="${dateInputWithOffset(1)}" max="${dateInputWithOffset(30)}" />
+              <small>Permitido entre 1 e 30 dias. Recomendamos pelo menos 3 dias.</small>
+            </label>
+            <p class="checkout-field-title">Endereco do pagador</p>
             <div class="form-grid two-cols">
               <label>CEP<input name="cep" value="${escapeHtml(customer.cep || "")}" placeholder="79940000" /></label>
               <label>UF<input name="uf" value="${escapeHtml(customer.uf || "")}" maxlength="2" placeholder="MS" /></label>
@@ -2452,12 +2469,21 @@ async function openCustomerPaymentManager(customerId, method = "pix") {
 function renderAdminPaymentResult(resultNode, payment) {
   const isPix = payment.paymentMethod === "pix";
   const qrImage = isPix && payment.qrCodeBase64 ? `data:image/png;base64,${payment.qrCodeBase64}` : "";
+  const boletoLink = payment.ticketUrl || payment.externalResourceUrl || "";
+  const boletoMessage = !isPix && boletoLink
+    ? `Olá, *${payment.customerName || "Cliente"}*! Tudo bem? 😊\n\nA sua fatura da *Facilita MEI*, no valor de *${money(payment.amount)}*, está com vencimento programado para o dia *${formatDateInput(payment.dueDate)}*.\n\nPara evitar atrasos, você pode realizar o pagamento pelo link abaixo:\n\n🔗 *${boletoLink}*\n\nSe o pagamento já foi realizado, desconsidere esta mensagem.\n\n*Facilita MEI*\nSimplificando a vida de quem empreende.`
+    : "";
+  const whatsappPhone = String(payment.customerPhone || "").replace(/\D/g, "");
+  const whatsappLink = boletoMessage && whatsappPhone
+    ? `https://wa.me/${whatsappPhone.startsWith("55") ? whatsappPhone : `55${whatsappPhone}`}?text=${encodeURIComponent(boletoMessage)}`
+    : "";
   resultNode.hidden = false;
   resultNode.innerHTML = `
     <h4>${isPix ? "Pix gerado" : "Boleto gerado"}</h4>
     <p>${escapeHtml(payment.message || "Cobranca criada no Mercado Pago.")}</p>
     <p><strong>${escapeHtml(payment.planName || "Plano")}</strong> &bull; ${money(payment.amount)}</p>
     <p>ID Mercado Pago: <strong>${escapeHtml(payment.paymentId || "-")}</strong></p>
+    ${!isPix && payment.dueDate ? `<p>Vencimento: <strong>${escapeHtml(formatDateInput(payment.dueDate))}</strong></p>` : ""}
     ${
       qrImage
         ? `<img src="${qrImage}" alt="QR Code Pix" class="admin-payment-qr" />`
@@ -2471,6 +2497,15 @@ function renderAdminPaymentResult(resultNode, payment) {
     ${
       payment.ticketUrl
         ? `<a class="gold-button compact" href="${escapeHtml(payment.ticketUrl)}" target="_blank" rel="noopener">${isPix ? "Abrir pagamento" : "Abrir boleto"}</a>`
+        : ""
+    }
+    ${
+      boletoMessage
+        ? `<label>Mensagem para o cliente<textarea readonly rows="12" data-boleto-message>${escapeHtml(boletoMessage)}</textarea></label>
+           <div class="drawer-actions">
+             <button class="ghost-button compact" type="button" data-copy-boleto-message>Copiar mensagem</button>
+             ${whatsappLink ? `<a class="gold-button compact" href="${escapeHtml(whatsappLink)}" target="_blank" rel="noopener">Enviar pelo WhatsApp</a>` : ""}
+           </div>`
         : ""
     }
   `;
@@ -2487,6 +2522,7 @@ async function generateAdminCustomerPayment(form) {
   };
 
   if (method === "boleto") {
+    payload.dueDate = formData.get("dueDate");
     payload.endereco = {
       cep: formData.get("cep"),
       logradouro: formData.get("logradouro"),
@@ -2944,6 +2980,7 @@ viewButtons.forEach((button) => {
 });
 
 document.addEventListener("click", (event) => {
+  const copyBoletoMessageButton = event.target.closest("[data-copy-boleto-message]");
   const customerButton = event.target.closest("[data-open-customer]");
   const previewButton = event.target.closest("[data-preview-customer]");
   const planButton = event.target.closest("[data-open-plan]");
@@ -2967,6 +3004,13 @@ document.addEventListener("click", (event) => {
   const notificationsButton = event.target.closest("[data-notifications-button]");
   const dynamicViewButton = event.target.closest("[data-view-button]");
   const collapseButton = event.target.closest("[data-collapse-detail]");
+  if (copyBoletoMessageButton) {
+    const message = copyBoletoMessageButton.closest("[data-admin-payment-result]")?.querySelector("[data-boleto-message]")?.value || "";
+    navigator.clipboard.writeText(message)
+      .then(() => setStatus("Mensagem do boleto copiada."))
+      .catch(() => setStatus("Nao foi possivel copiar a mensagem.", "error"));
+    return;
+  }
   const closeAdminNoticeButton = event.target.closest("[data-close-admin-notice]");
   const closeButton = event.target.closest("[data-close-drawer]");
 

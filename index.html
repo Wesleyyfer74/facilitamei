@@ -791,6 +791,11 @@
               <div class="boleto-fields" data-boleto-payment-field hidden>
                 <p class="checkout-field-title">Dados para boleto</p>
                 <label>
+                  Data de vencimento
+                  <input name="boletoDueDate" type="date" data-boleto-due-date data-boleto-required />
+                  <small>Escolha entre 1 e 30 dias. Recomendamos pelo menos 3 dias.</small>
+                </label>
+                <label>
                   CEP
                   <input name="boletoZipCode" inputmode="numeric" autocomplete="postal-code" placeholder="Preenchido pelo CNPJ" data-boleto-required />
                 </label>
@@ -906,6 +911,6 @@
     <script src="./config.js?v=20260817-payment-confirmation"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
-    <script src="./app.js?v=20260817-payment-confirmation-4"></script>
+    <script src="./app.js?v=20260818-boleto-due-date"></script>
   </body>
 </html>

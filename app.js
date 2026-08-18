@@ -38,6 +38,7 @@ const cardPaymentFields = document.querySelectorAll("[data-card-payment-field]")
 const cardRequiredFields = document.querySelectorAll("[data-card-required]");
 const boletoPaymentFields = document.querySelectorAll("[data-boleto-payment-field]");
 const boletoRequiredFields = document.querySelectorAll("[data-boleto-required]");
+const boletoDueDateInput = document.querySelector("[data-boleto-due-date]");
 const paymentResult = document.querySelector("[data-payment-result]");
 const resultKicker = document.querySelector("[data-result-kicker]");
 const resultPlan = document.querySelector("[data-result-plan]");
@@ -55,6 +56,24 @@ const pageLoader = document.querySelector("[data-page-loader]");
 const loaderStartedAt = performance.now();
 let lastBoletoCnpjLookup = "";
 let boletoCnpjLookupTimeout = null;
+
+function dateInputWithOffset(days) {
+  const date = new Date();
+  date.setHours(12, 0, 0, 0);
+  date.setDate(date.getDate() + days);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+function formatBrazilianDateString(value) {
+  const [year, month, day] = String(value || "").slice(0, 10).split("-");
+  return year && month && day ? `${day}/${month}/${year}` : "";
+}
+
+if (boletoDueDateInput) {
+  boletoDueDateInput.min = dateInputWithOffset(1);
+  boletoDueDateInput.max = dateInputWithOffset(30);
+  boletoDueDateInput.value = dateInputWithOffset(3);
+}
 
 function preloadImage(src) {
   return new Promise((resolve) => {
@@ -1318,7 +1337,7 @@ function renderOneTimePayment(data, planId, customer, method) {
           : `<p class="payment-warning">Pix gerado, mas o Mercado Pago nao retornou o QR Code. Aguarde a confirmacao ou tente gerar novamente.</p>`;
     } else {
       paymentInstructions.innerHTML = paymentLink
-        ? `<a class="button primary" href="${escapeHtml(paymentLink)}" target="_blank" rel="noopener noreferrer">Abrir boleto</a>`
+        ? `${data.dueDate ? `<p><strong>Vencimento:</strong> ${escapeHtml(formatBrazilianDateString(data.dueDate))}</p>` : ""}<a class="button primary" href="${escapeHtml(paymentLink)}" target="_blank" rel="noopener noreferrer">Abrir boleto</a>`
         : `<p class="payment-warning">Boleto gerado, mas o Mercado Pago nao retornou o link. Aguarde a confirmacao ou tente gerar novamente.</p>`;
     }
   }
@@ -1468,6 +1487,7 @@ async function submitOneTimePayment(method) {
       email: payload.email,
       telefone: payload.phone,
       documento: payload.document,
+      dueDate: method === "boleto" ? payload.boletoDueDate : undefined,
       endereco: {
         cep: payload.boletoZipCode,
         logradouro: payload.boletoStreetName,
