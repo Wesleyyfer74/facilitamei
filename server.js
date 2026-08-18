@@ -1867,7 +1867,7 @@ app.get("/api/admin/dashboard", requireAdminSession, async (_request, response) 
       dbPool.execute(
         `SELECT
            u.id, u.nome, u.email, u.telefone, u.status, u.created_at,
-           pl.nome AS plan_name
+            COALESCE(pl.nome, pay_pl.nome) AS plan_name
          FROM users u
          LEFT JOIN subscriptions s ON s.id = (
            SELECT s2.id
@@ -1876,7 +1876,12 @@ app.get("/api/admin/dashboard", requireAdminSession, async (_request, response) 
            ORDER BY s2.created_at DESC
            LIMIT 1
          )
-         LEFT JOIN plans pl ON pl.id = s.plan_id
+          LEFT JOIN plans pl ON pl.id = s.plan_id
+          LEFT JOIN payments pay ON pay.id = (
+            SELECT p2.id FROM payments p2 WHERE p2.user_id = u.id
+            ORDER BY (p2.status IN ('approved', 'paid', 'pago')) DESC, COALESCE(p2.data_pagamento, p2.created_at) DESC LIMIT 1
+          )
+          LEFT JOIN plans pay_pl ON pay_pl.id = pay.plan_id
          ORDER BY u.created_at DESC
          LIMIT 8`,
       ),
@@ -1884,11 +1889,12 @@ app.get("/api/admin/dashboard", requireAdminSession, async (_request, response) 
         `SELECT
            p.id, p.valor, p.status, p.data_pagamento, p.created_at,
            u.nome AS user_name, u.email,
-           pl.nome AS plan_name
+            COALESCE(pl.nome, pay_pl.nome) AS plan_name
          FROM payments p
          JOIN users u ON u.id = p.user_id
          LEFT JOIN subscriptions s ON s.id = p.subscription_id
-         LEFT JOIN plans pl ON pl.id = s.plan_id
+          LEFT JOIN plans pl ON pl.id = s.plan_id
+          LEFT JOIN plans pay_pl ON pay_pl.id = p.plan_id
          ORDER BY p.created_at DESC
          LIMIT 8`,
       ),
@@ -4417,8 +4423,9 @@ async function updatePaymentStatus(paymentData) {
 
   const [result] = await dbPool.execute(
     `UPDATE payments
-     SET status = :status,
-         gateway = 'mercado_pago',
+      SET status = :status,
+          valor = :amount,
+          gateway = 'mercado_pago',
          gateway_payment_id = :paymentId,
          plan_id = COALESCE(plan_id, :planId),
          payment_method = COALESCE(:paymentMethod, payment_method),
@@ -4430,6 +4437,7 @@ async function updatePaymentStatus(paymentData) {
     {
       paymentId: String(paymentData.id),
       status: paymentData.status || "pending",
+      amount: Number(paymentData.transaction_amount),
       planId: metadata.plan_id || null,
       paymentMethod,
       paidAt: paymentData.date_approved ? new Date(paymentData.date_approved) : null,

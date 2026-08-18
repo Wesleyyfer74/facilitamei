@@ -82,6 +82,8 @@ let selectedCustomerId = null;
 let selectedPlanId = null;
 let currentPaymentFilter = "";
 let notificationTimer = null;
+let adminDataTimer = null;
+let adminRefreshInProgress = false;
 let csrfToken = "";
 
 function money(value) {
@@ -252,6 +254,10 @@ function showLogin() {
     window.clearInterval(notificationTimer);
     notificationTimer = null;
   }
+  if (adminDataTimer) {
+    window.clearInterval(adminDataTimer);
+    adminDataTimer = null;
+  }
 }
 
 function showDashboard() {
@@ -262,6 +268,11 @@ function showDashboard() {
     notificationTimer = window.setInterval(() => {
       refreshNotifications({ silent: true }).catch(() => {});
     }, 60000);
+  }
+  if (!adminDataTimer) {
+    adminDataTimer = window.setInterval(() => {
+      refreshVisibleAdminData();
+    }, 15000);
   }
 }
 
@@ -289,7 +300,7 @@ function activateView(viewName) {
   loadCurrentView();
 }
 
-function statusPill(status) {
+function statusLabel(status) {
   const labels = {
     active: "Ativo",
     authorized: "Ativo",
@@ -306,6 +317,11 @@ function statusPill(status) {
     cancelled: "Cancelado",
     canceled: "Cancelado",
     rejected: "Recusado",
+    blocked: "Bloqueado",
+    refunded: "Estornado",
+    charged_back: "Contestado",
+    paused: "Pausado",
+    expired: "Expirado",
     assinado: "Assinado",
     enviado: "Enviado",
     expirado: "Expirado",
@@ -314,7 +330,12 @@ function statusPill(status) {
   const key = String(status || "")
     .trim()
     .toLowerCase();
-  return `<span class="status-pill ${escapeHtml(key)}">${escapeHtml(labels[key] || status || "-")}</span>`;
+  return labels[key] || status || "-";
+}
+
+function statusPill(status) {
+  const key = String(status || "").trim().toLowerCase();
+  return `<span class="status-pill ${escapeHtml(key)}">${escapeHtml(statusLabel(status))}</span>`;
 }
 
 function renderMetrics(data) {
@@ -792,7 +813,7 @@ function renderCustomers(customers = []) {
               </td>
               <td>
                 ${escapeHtml(customer.plan_name || "Sem plano")}
-                <small>${escapeHtml(customer.subscription_status || "-")} ${customer.subscription_value ? `- ${money(customer.subscription_value)}` : ""}</small>
+                <small>${escapeHtml(statusLabel(customer.subscription_status))} ${customer.subscription_value ? `- ${money(customer.subscription_value)}` : ""}</small>
               </td>
               <td>${statusPill(customer.status)}</td>
               <td>${formatDateOnly(customer.data_proxima_cobranca)}</td>
@@ -1989,6 +2010,19 @@ async function loadCurrentView() {
     refreshNotifications({ silent: true }).catch(() => {});
   } catch (error) {
     setStatus(error.message, "error");
+  }
+}
+
+async function refreshVisibleAdminData() {
+  if (adminRefreshInProgress || document.visibilityState === "hidden" || dashboardView.hidden) return;
+  adminRefreshInProgress = true;
+  try {
+    await loadCurrentView();
+    if (currentView === "customers" && selectedCustomerId) await loadCustomerPreview(selectedCustomerId);
+  } catch (error) {
+    setStatus(error.message, "error");
+  } finally {
+    adminRefreshInProgress = false;
   }
 }
 
