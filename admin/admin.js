@@ -84,10 +84,18 @@ let currentPaymentFilter = "";
 let notificationTimer = null;
 let adminDataTimer = null;
 let adminRefreshInProgress = false;
+const adminViewSnapshots = new Map();
 let csrfToken = "";
 
 function money(value) {
   return Number(value || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+}
+
+function rememberAdminSnapshot(view, data) {
+  const snapshot = JSON.stringify(data);
+  const changed = adminViewSnapshots.get(view) !== snapshot;
+  adminViewSnapshots.set(view, snapshot);
+  return changed;
 }
 
 function formatDate(value) {
@@ -284,7 +292,7 @@ function showDashboard() {
   if (!adminDataTimer) {
     adminDataTimer = window.setInterval(() => {
       refreshVisibleAdminData();
-    }, 15000);
+    }, 30000);
   }
 }
 
@@ -297,7 +305,7 @@ function activateView(viewName) {
 
   currentView = viewName;
   const titles = {
-    overview: "Dashboard",
+    overview: "Visão geral",
     customers: "Clientes",
     plans: "Planos",
     payments: "Pagamentos",
@@ -306,7 +314,7 @@ function activateView(viewName) {
     settings: "Configuracoes",
   };
 
-  viewTitle.textContent = titles[viewName] || "Dashboard";
+  viewTitle.textContent = titles[viewName] || "Visão geral";
   viewButtons.forEach((button) => button.classList.toggle("is-active", button.dataset.viewButton === viewName));
   viewPanels.forEach((panel) => panel.classList.toggle("is-active", panel.dataset.view === viewName));
   loadCurrentView();
@@ -348,6 +356,24 @@ function statusLabel(status) {
 function statusPill(status) {
   const key = String(status || "").trim().toLowerCase();
   return `<span class="status-pill ${escapeHtml(key)}">${escapeHtml(statusLabel(status))}</span>`;
+}
+
+function paymentMethodLabel(method) {
+  const labels = {
+    pix: "Pix",
+    boleto: "Boleto",
+    bolbradesco: "Boleto",
+    card: "Cartão de crédito",
+    credit_card: "Cartão de crédito",
+    debit_card: "Cartão de débito",
+    account_money: "Saldo Mercado Pago",
+  };
+  const key = String(method || "").trim().toLowerCase();
+  return labels[key] || method || "Não informado";
+}
+
+function billingTypeLabel(type) {
+  return ({ subscription: "Assinatura", single: "Pagamento único" })[String(type || "").toLowerCase()] || type || "-";
 }
 
 function renderMetrics(data) {
@@ -467,7 +493,7 @@ function renderDashboardHome(data) {
 
   dashboardFinancial.innerHTML = [
     ["cube", "Receita Anual", money(annualRevenue)],
-    ["ticket", "Ticket Medio", money(data.payments?.averageApprovedAmount)],
+    ["ticket", "Valor médio", money(data.payments?.averageApprovedAmount)],
     ["growth", "Taxa de Conversao", conversionRate],
     ["money", "Clientes Cancelados", data.users?.cancelled || 0],
   ]
@@ -549,7 +575,7 @@ function renderAdminCommandCenter(data) {
       <button class="admin-hub-row" type="button" data-open-plan="${escapeHtml(plan.id)}">
         <span>
           <strong>${escapeHtml(plan.nome)}</strong>
-          <small>${escapeHtml(plan.tipo_cobranca || "-")}</small>
+          <small>${escapeHtml(billingTypeLabel(plan.tipo_cobranca))}</small>
         </span>
         <span>
           <strong>${money(plan.valor)}</strong>
@@ -598,15 +624,16 @@ function renderCompactPayments(rows = []) {
     : "<p>Nenhum pagamento registrado ainda.</p>";
 }
 
-async function loadOverview() {
-  setStatus("Carregando dashboard...");
+async function loadOverview({ silent = false } = {}) {
+  if (!silent) setStatus("Carregando dashboard...");
   const data = await apiRequest("/api/admin/dashboard");
+  rememberAdminSnapshot("overview", data);
   renderDashboardHome(data);
   renderMetrics(data);
   renderAdminCommandCenter(data);
   renderCompactCustomers(data.latestCustomers);
   renderCompactPayments(data.latestPayments);
-  setStatus("");
+  if (!silent) setStatus("");
 }
 
 function getInitials(name = "") {
@@ -708,7 +735,7 @@ function renderCustomerPreview(data) {
             ${renderDetailItem("WhatsApp", customer.whatsapp || customer.telefone)}
             ${renderDetailItem("Documento", customer.documento)}
             ${customer.cnpj ? renderDetailItem("CNPJ", customer.cnpj) : ""}
-            ${renderDetailItem("Status do cliente", customer.status)}
+            ${renderDetailItem("Status do cliente", statusLabel(customer.status))}
             ${renderDetailItem("Login ativo", Number(customer.cliente_login_ativo) === 0 ? "Nao" : "Sim")}
             ${renderDetailItem("Cadastro", formatDateOnly(customer.created_at))}
             ${renderDetailItem("Atualizado em", formatDateOnly(customer.updated_at))}
@@ -717,9 +744,9 @@ function renderCustomerPreview(data) {
             ${renderDetailItem("ID assinatura", subscription.id)}
             ${renderDetailItem("Plano", effectivePlanName)}
             ${renderDetailItem("Plano ID", effectivePlanId)}
-            ${renderDetailItem(subscription.id ? "Status assinatura" : "Status pagamento", effectiveStatus)}
+            ${renderDetailItem(subscription.id ? "Status assinatura" : "Status pagamento", statusLabel(effectiveStatus))}
             ${renderDetailItem("Valor", effectiveValue ? money(effectiveValue) : "")}
-            ${renderDetailItem("Metodo de pagamento", effectivePaymentMethod)}
+            ${renderDetailItem("Metodo de pagamento", paymentMethodLabel(effectivePaymentMethod))}
             ${renderDetailItem("Inicio", formatDateOnly(subscription.data_inicio))}
             ${renderDetailItem("Proxima cobranca", formatDateOnly(subscription.data_proxima_cobranca))}
             ${renderDetailItem("Criada em", formatDateOnly(subscription.created_at))}
@@ -746,7 +773,7 @@ function renderCustomerPreview(data) {
             <p><span>Total Pago</span><strong>${money(totalPaid)}</strong></p>
             <p><span>Ultimo Pagamento</span><strong>${formatDateOnly(latestPayment?.data_pagamento || latestPayment?.created_at)}</strong></p>
             <p><span>Situacao</span>${statusPill(latestPayment?.status || "pending")}</p>
-            <p><span>Forma de Pagamento</span><strong>${escapeHtml(latestPayment?.payment_method || subscription.metodo_pagamento || "Nao informado")}</strong></p>
+            <p><span>Forma de Pagamento</span><strong>${escapeHtml(paymentMethodLabel(latestPayment?.payment_method || subscription.metodo_pagamento))}</strong></p>
           </div>
         </div>
 
@@ -849,14 +876,15 @@ function renderCustomers(customers = []) {
   }
 }
 
-async function loadCustomers() {
-  setStatus("Carregando clientes...");
+async function loadCustomers({ silent = false } = {}) {
+  if (!silent) setStatus("Carregando clientes...");
   const params = new URLSearchParams();
   if (customerSearch.value.trim()) params.set("search", customerSearch.value.trim());
   if (customerStatus.value) params.set("status", customerStatus.value);
   const data = await apiRequest(`/api/admin/customers?${params.toString()}`);
+  rememberAdminSnapshot("customers", data);
   renderCustomers(data.customers);
-  setStatus("");
+  if (!silent) setStatus("");
 }
 
 function getPlanIcon(planId = "") {
@@ -1055,14 +1083,15 @@ function renderPayments(payments = [], summary = {}) {
   }
 }
 
-async function loadPayments() {
-  setStatus("Carregando pagamentos...");
+async function loadPayments({ silent = false } = {}) {
+  if (!silent) setStatus("Carregando pagamentos...");
   const params = new URLSearchParams();
   const status = paymentStatus?.value || currentPaymentFilter;
   if (status) params.set("status", status);
   const data = await apiRequest(`/api/admin/payments?${params.toString()}`);
+  rememberAdminSnapshot("payments", data);
   renderPayments(data.payments, data.summary);
-  setStatus("");
+  if (!silent) setStatus("");
 }
 
 function renderContracts(contracts = [], summary = {}) {
@@ -2027,12 +2056,39 @@ async function loadCurrentView() {
 
 async function refreshVisibleAdminData() {
   if (adminRefreshInProgress || document.visibilityState === "hidden" || dashboardView.hidden) return;
+  if (!["overview", "customers", "payments"].includes(currentView)) return;
   adminRefreshInProgress = true;
+  const scrollX = window.scrollX;
+  const scrollY = window.scrollY;
   try {
-    await loadCurrentView();
-    if (currentView === "customers" && selectedCustomerId) await loadCustomerPreview(selectedCustomerId);
+    if (currentView === "overview") {
+      const data = await apiRequest("/api/admin/dashboard");
+      if (!rememberAdminSnapshot("overview", data)) return;
+      renderDashboardHome(data);
+      renderMetrics(data);
+      renderAdminCommandCenter(data);
+      renderCompactCustomers(data.latestCustomers);
+      renderCompactPayments(data.latestPayments);
+    }
+    if (currentView === "customers") {
+      const params = new URLSearchParams();
+      if (customerSearch.value.trim()) params.set("search", customerSearch.value.trim());
+      if (customerStatus.value) params.set("status", customerStatus.value);
+      const data = await apiRequest(`/api/admin/customers?${params.toString()}`);
+      if (!rememberAdminSnapshot("customers", data)) return;
+      renderCustomers(data.customers);
+    }
+    if (currentView === "payments") {
+      const params = new URLSearchParams();
+      const status = paymentStatus?.value || currentPaymentFilter;
+      if (status) params.set("status", status);
+      const data = await apiRequest(`/api/admin/payments?${params.toString()}`);
+      if (!rememberAdminSnapshot("payments", data)) return;
+      renderPayments(data.payments, data.summary);
+    }
+    window.requestAnimationFrame(() => window.scrollTo(scrollX, scrollY));
   } catch (error) {
-    setStatus(error.message, "error");
+    console.warn("Atualizacao silenciosa do admin falhou:", error.message);
   } finally {
     adminRefreshInProgress = false;
   }
@@ -2203,7 +2259,7 @@ async function openCustomer(customerId) {
             Status do cliente
             <select name="status">
               ${["pending", "active", "blocked", "cancelled"]
-                .map((status) => `<option value="${status}" ${customer.status === status ? "selected" : ""}>${status}</option>`)
+                .map((status) => `<option value="${status}" ${customer.status === status ? "selected" : ""}>${escapeHtml(statusLabel(status))}</option>`)
                 .join("")}
             </select>
           </label>
@@ -2234,7 +2290,7 @@ async function openCustomer(customerId) {
                       ${["pending", "authorized", "active", "paused", "cancelled", "expired", "rejected"]
                         .map(
                           (status) =>
-                            `<option value="${status}" ${latestSubscription.status === status ? "selected" : ""}>${status}</option>`,
+                            `<option value="${status}" ${latestSubscription.status === status ? "selected" : ""}>${escapeHtml(statusLabel(status))}</option>`,
                         )
                         .join("")}
                     </select>
@@ -2333,7 +2389,7 @@ async function openCustomerPlanManager(customerId) {
       .join("");
     const currentStatus = latestSubscription?.status || "active";
     const statusOptions = ["pending", "authorized", "active", "paused", "cancelled", "expired", "rejected"]
-      .map((status) => `<option value="${status}" ${currentStatus === status ? "selected" : ""}>${status}</option>`)
+      .map((status) => `<option value="${status}" ${currentStatus === status ? "selected" : ""}>${escapeHtml(statusLabel(status))}</option>`)
       .join("");
 
     openDrawer(`
@@ -2718,8 +2774,8 @@ function openPlan(planId) {
           <label>
             Tipo frequencia
             <select name="tipo_frequencia">
-              <option value="months" ${plan.tipo_frequencia === "months" ? "selected" : ""}>months</option>
-              <option value="days" ${plan.tipo_frequencia === "days" ? "selected" : ""}>days</option>
+              <option value="months" ${plan.tipo_frequencia === "months" ? "selected" : ""}>Meses</option>
+              <option value="days" ${plan.tipo_frequencia === "days" ? "selected" : ""}>Dias</option>
             </select>
           </label>
         </div>
@@ -2728,8 +2784,8 @@ function openPlan(planId) {
           <label>
             Tipo cobranca
             <select name="tipo_cobranca">
-              <option value="subscription" ${plan.tipo_cobranca === "subscription" ? "selected" : ""}>subscription</option>
-              <option value="single" ${plan.tipo_cobranca === "single" ? "selected" : ""}>single</option>
+              <option value="subscription" ${plan.tipo_cobranca === "subscription" ? "selected" : ""}>Assinatura</option>
+              <option value="single" ${plan.tipo_cobranca === "single" ? "selected" : ""}>Pagamento único</option>
             </select>
           </label>
           <label>
@@ -2769,8 +2825,8 @@ function openNewPlan() {
           <label>
             Tipo frequencia
             <select name="tipo_frequencia">
-              <option value="months">months</option>
-              <option value="days">days</option>
+              <option value="months">Meses</option>
+              <option value="days">Dias</option>
             </select>
           </label>
         </div>
@@ -2779,8 +2835,8 @@ function openNewPlan() {
           <label>
             Tipo cobranca
             <select name="tipo_cobranca">
-              <option value="subscription">subscription</option>
-              <option value="single">single</option>
+              <option value="subscription">Assinatura</option>
+              <option value="single">Pagamento único</option>
             </select>
           </label>
           <label>
