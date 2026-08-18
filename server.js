@@ -1841,8 +1841,13 @@ app.get("/api/admin/dashboard", requireAdminSession, async (_request, response) 
           SUM(status = 'pending') AS pending,
           SUM(status = 'blocked') AS blocked,
           SUM(status = 'cancelled') AS cancelled,
+          SUM(EXISTS(
+            SELECT 1 FROM payments paying_payment
+            WHERE paying_payment.user_id = users.id
+              AND paying_payment.status IN ('approved', 'paid', 'pago')
+          )) AS paying,
           SUM(created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)) AS newLast30
-         FROM users`,
+         FROM users users`,
       ),
       dbPool.execute(
         `SELECT
@@ -1856,10 +1861,11 @@ app.get("/api/admin/dashboard", requireAdminSession, async (_request, response) 
       dbPool.execute(
         `SELECT
           COUNT(*) AS total,
-          COALESCE(SUM(CASE WHEN status = 'approved' THEN valor ELSE 0 END), 0) AS approvedAmount,
-          COALESCE(SUM(CASE WHEN status = 'approved' AND COALESCE(data_pagamento, created_at) >= DATE_FORMAT(CURDATE(), '%Y-%m-01') THEN valor ELSE 0 END), 0) AS monthlyApprovedAmount,
-          COALESCE(AVG(CASE WHEN status = 'approved' THEN valor ELSE NULL END), 0) AS averageApprovedAmount,
-          SUM(status = 'approved') AS approved,
+          COALESCE(SUM(CASE WHEN status IN ('approved', 'paid', 'pago') THEN valor ELSE 0 END), 0) AS approvedAmount,
+          COALESCE(SUM(CASE WHEN status IN ('approved', 'paid', 'pago') AND COALESCE(data_pagamento, created_at) >= DATE_FORMAT(CURDATE(), '%Y-%m-01') THEN valor ELSE 0 END), 0) AS monthlyApprovedAmount,
+          COALESCE(SUM(CASE WHEN status IN ('approved', 'paid', 'pago') AND YEAR(COALESCE(data_pagamento, created_at)) = YEAR(CURDATE()) THEN valor ELSE 0 END), 0) AS annualApprovedAmount,
+          COALESCE(AVG(CASE WHEN status IN ('approved', 'paid', 'pago') THEN valor ELSE NULL END), 0) AS averageApprovedAmount,
+          SUM(status IN ('approved', 'paid', 'pago')) AS approved,
           SUM(status IN ('pending', 'in_process')) AS pending,
           SUM(status IN ('rejected', 'cancelled', 'refunded', 'charged_back')) AS failed
          FROM payments`,

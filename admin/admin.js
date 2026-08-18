@@ -375,10 +375,10 @@ function renderDashboardHome(data) {
   if (!dashboardKpis) return;
 
   const monthlyRevenue = Number(data.payments?.monthlyApprovedAmount || 0);
-  const annualRevenue = monthlyRevenue * 12;
+  const annualRevenue = Number(data.payments?.annualApprovedAmount || 0);
   const totalUsers = Number(data.users?.total || 0);
-  const activeUsers = Number(data.users?.active || 0);
-  const conversionRate = totalUsers ? `${((activeUsers / totalUsers) * 100).toFixed(1).replace(".", ",")}%` : "0%";
+  const payingUsers = Number(data.users?.paying || 0);
+  const conversionRate = totalUsers ? `${((payingUsers / totalUsers) * 100).toFixed(1).replace(".", ",")}%` : "0%";
 
   const kpis = [
     {
