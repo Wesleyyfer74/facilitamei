@@ -14,7 +14,7 @@ function validateProductionConfig(env = process.env) {
     "ADMIN_API_KEY",
     "EMAIL_HOST", "EMAIL_USER", "EMAIL_PASS",
     "SERPRO_TOKEN_URL", "SERPRO_CONSUMER_KEY", "SERPRO_CONSUMER_SECRET",
-    "S3_DOCUMENTS_BUCKET", "S3_DOCUMENTS_REGION", "CLAMAV_HOST", "DATA_ENCRYPTION_KEY",
+    "S3_DOCUMENTS_BUCKET", "S3_DOCUMENTS_REGION", "DATA_ENCRYPTION_KEY",
   ];
   const errors = required.filter((name) => !String(env[name] || "").trim()).map((name) => `${name} ausente`);
   if (!isHttpsUrl(env.SITE_URL)) errors.push("SITE_URL deve usar HTTPS");

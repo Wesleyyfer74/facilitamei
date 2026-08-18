@@ -47,7 +47,12 @@ async function scanWithClamAv(buffer, { host, port, timeoutMs }) {
 
 async function scanDocumentBuffer(buffer, options = {}) {
   const host = options.host ?? process.env.CLAMAV_HOST;
-  const required = options.required ?? (process.env.NODE_ENV === "production" || process.env.FILE_ANTIVIRUS_REQUIRED === "true");
+  const railwayProduction = Boolean(process.env.RAILWAY_ENVIRONMENT_ID || process.env.RAILWAY_SERVICE_ID);
+  const required = options.required ?? (
+    process.env.NODE_ENV === "production"
+    || railwayProduction
+    || process.env.FILE_ANTIVIRUS_REQUIRED === "true"
+  );
   if (!host) {
     if (required) throw serviceUnavailable("CLAMAV_HOST e obrigatorio para verificar documentos.");
     return { scanned: false, reason: "not-configured" };

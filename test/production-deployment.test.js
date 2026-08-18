@@ -18,6 +18,7 @@ test("desenvolvimento nao exige segredos de producao", () => {
 test("producao recusa configuracao incompleta e URL sem HTTPS", () => {
   const errors = validateProductionConfig({ NODE_ENV: "production", SITE_URL: "http://example.com" });
   assert.ok(errors.includes("REDIS_URL ausente"));
+  assert.ok(!errors.includes("CLAMAV_HOST ausente"));
   assert.ok(errors.includes("SITE_URL deve usar HTTPS"));
   assert.ok(errors.includes("DOCUMENT_STORAGE_DRIVER deve ser s3") === false);
 });

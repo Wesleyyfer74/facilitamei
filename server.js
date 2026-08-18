@@ -5865,6 +5865,9 @@ app.get("*", (_request, response) => {
 
 async function startServer() {
   assertProductionConfig();
+  if (isProduction && !String(process.env.CLAMAV_HOST || "").trim()) {
+    console.warn("CLAMAV_HOST ausente: a API iniciara, mas uploads de documentos serao recusados ate o antivirus ser configurado.");
+  }
   await sessionStore.connect();
   await rateLimitStore.connect();
 
