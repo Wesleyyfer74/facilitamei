@@ -28,6 +28,7 @@ import { isAdminAuthorized } from "./src/services/adminAuthService.js";
 import { hashIp, requestContextMiddleware } from "./src/services/structuredLogger.js";
 import { sendOperationalAlert } from "./src/services/alertService.js";
 import { metricsMiddleware, snapshotMetrics } from "./src/services/metricsService.js";
+import { isWhatsappCloudConfigured, sendBoletoWhatsappTemplate } from "./src/services/whatsappCloudService.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -2821,7 +2822,7 @@ function normalizeOptionalPhone(value) {
 
 app.get("/api/admin/settings/whatsapp", requireAdminSession, async (_request, response) => {
   try {
-    response.json({ settings: await getWhatsappSettings() });
+    response.json({ settings: await getWhatsappSettings(), cloudApiConfigured: isWhatsappCloudConfigured() });
   } catch (error) {
     console.error(error);
     response.status(500).json({ error: "Erro ao carregar configuracao de WhatsApp." });
@@ -4179,6 +4180,54 @@ function getBoletoExpirationDate(requestedDate, now = new Date()) {
   return `${selectedDate}T23:59:59.000-03:00`;
 }
 
+function formatBoletoDueDate(value) {
+  const [year, month, day] = String(value || "").slice(0, 10).split("-");
+  return year && month && day ? `${day}/${month}/${year}` : "-";
+}
+
+async function sendAutomaticBoletoWhatsapp({ paymentId, recipient, customerName, amount, dueDate, paymentLink }) {
+  if (!isWhatsappCloudConfigured()) return { status: "not_configured", sent: false };
+  const [claim] = await dbPool.execute(
+    `INSERT IGNORE INTO boleto_whatsapp_deliveries
+      (gateway_payment_id, recipient, status, created_at, updated_at)
+     VALUES (:paymentId, :recipient, 'sending', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+    { paymentId: String(paymentId), recipient: normalizeDigits(recipient) },
+  );
+  if (!claim.affectedRows) {
+    const [rows] = await dbPool.execute(
+      "SELECT status, provider_message_id AS messageId FROM boleto_whatsapp_deliveries WHERE gateway_payment_id = :paymentId LIMIT 1",
+      { paymentId: String(paymentId) },
+    );
+    return { status: rows[0]?.status || "duplicate", sent: rows[0]?.status === "sent", messageId: rows[0]?.messageId || null };
+  }
+
+  try {
+    const result = await sendBoletoWhatsappTemplate({
+      recipient,
+      customerName,
+      amount: formatMoneyBR(amount),
+      dueDate: formatBoletoDueDate(dueDate),
+      paymentLink,
+    });
+    await dbPool.execute(
+      `UPDATE boleto_whatsapp_deliveries
+       SET status = 'sent', provider_message_id = :messageId, sent_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+       WHERE gateway_payment_id = :paymentId`,
+      { paymentId: String(paymentId), messageId: result.messageId },
+    );
+    return { status: "sent", sent: true, messageId: result.messageId };
+  } catch (error) {
+    await dbPool.execute(
+      `UPDATE boleto_whatsapp_deliveries
+       SET status = 'failed', error_message = :errorMessage, updated_at = CURRENT_TIMESTAMP
+       WHERE gateway_payment_id = :paymentId`,
+      { paymentId: String(paymentId), errorMessage: String(error.message || "Falha no envio").slice(0, 500) },
+    );
+    console.error("Falha ao enviar boleto automaticamente pelo WhatsApp:", { paymentId: String(paymentId), message: error.message });
+    return { status: "failed", sent: false, error: "Boleto gerado, mas a mensagem de WhatsApp nao foi enviada." };
+  }
+}
+
 function statusLabelForApi(status = "") {
   const labels = {
     active: "Ativo",
@@ -4752,6 +4801,16 @@ async function createMercadoPagoSinglePayment({ customerId, customer, plan, paym
   await savePaymentRecord({ customerId, plan, paymentData: data, paymentMethod });
 
   const transactionData = data.point_of_interaction?.transaction_data || {};
+  const ticketUrl = isBoleto
+    ? data.transaction_details?.external_resource_url || data.transaction_details?.ticket_url
+    : transactionData.ticket_url;
+  const resolvedDueDate = isBoleto ? String(data.date_of_expiration || boletoExpiration).slice(0, 10) : null;
+  const whatsappDelivery = isBoleto
+    ? await sendAutomaticBoletoWhatsapp({
+        paymentId: data.id, recipient: profile.phone, customerName: profile.name,
+        amount: plan.price, dueDate: resolvedDueDate, paymentLink: ticketUrl,
+      })
+    : null;
 
   return {
     customerId,
@@ -4761,17 +4820,16 @@ async function createMercadoPagoSinglePayment({ customerId, customer, plan, paym
     message: getPaymentMessage(data.status, paymentMethod),
     qrCode: transactionData.qr_code,
     qrCodeBase64: transactionData.qr_code_base64,
-    ticketUrl: isBoleto
-      ? data.transaction_details?.external_resource_url || data.transaction_details?.ticket_url
-      : transactionData.ticket_url,
+    ticketUrl,
     externalResourceUrl: data.transaction_details?.external_resource_url,
     externalReference,
     amount: plan.price,
     planName: plan.title,
     paymentMethod,
-    dueDate: isBoleto ? String(data.date_of_expiration || boletoExpiration).slice(0, 10) : null,
+    dueDate: resolvedDueDate,
     customerName: profile.name,
     customerPhone: profile.phone,
+    whatsappDelivery,
   };
 }
 
@@ -5180,6 +5238,16 @@ app.post("/api/payments/boleto", paymentCreationLimiter, async (request, respons
     const customerId = await upsertCustomer({ userId, name, email, phone, document });
     const localPaymentId = await savePaymentRecord({ customerId, plan, paymentData: data, paymentMethod: "boleto" });
     const paymentStatusToken = await issuePaymentStatusToken(localPaymentId);
+    const ticketUrl = data.transaction_details?.external_resource_url || data.transaction_details?.ticket_url;
+    const resolvedDueDate = String(data.date_of_expiration || getBoletoExpirationDate(dueDate)).slice(0, 10);
+    const whatsappDelivery = await sendAutomaticBoletoWhatsapp({
+      paymentId: data.id,
+      recipient: phoneNumber,
+      customerName: name,
+      amount: plan.price,
+      dueDate: resolvedDueDate,
+      paymentLink: ticketUrl,
+    });
 
     response.json({
       customerId,
@@ -5188,10 +5256,11 @@ app.post("/api/payments/boleto", paymentCreationLimiter, async (request, respons
       status: data.status,
       statusDetail: data.status_detail,
       message: getPaymentMessage(data.status, "boleto"),
-      ticketUrl: data.transaction_details?.external_resource_url || data.transaction_details?.ticket_url,
+      ticketUrl,
       externalResourceUrl: data.transaction_details?.external_resource_url,
       externalReference,
-      dueDate: String(data.date_of_expiration || getBoletoExpirationDate(dueDate)).slice(0, 10),
+      dueDate: resolvedDueDate,
+      whatsappDelivery,
     });
   } catch (error) {
     console.error(error);

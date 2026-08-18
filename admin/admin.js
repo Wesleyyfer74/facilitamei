@@ -1749,6 +1749,7 @@ async function openWhatsappSettings() {
   setStatus("Carregando configuracao de WhatsApp...");
   const data = await apiRequest("/api/admin/settings/whatsapp");
   const settings = data.settings || {};
+  const cloudApiConfigured = Boolean(data.cloudApiConfigured);
 
   openDrawer(`
     <div class="drawer-content">
@@ -1788,17 +1789,17 @@ async function openWhatsappSettings() {
         <article class="panel whatsapp-automation-panel">
           <div>
             <h3>Mensagens automaticas</h3>
-            <p>Estrutura preparada para lembretes responsaveis por cliente. O disparo automatico sera habilitado em uma etapa futura.</p>
+            <p>Boletos gerados pelo checkout ou pelo admin sao enviados pelo modelo oficial aprovado na Meta.</p>
           </div>
-          <span class="settings-status warning">Em breve</span>
+          <span class="settings-status ${cloudApiConfigured ? "ok" : "warning"}">${cloudApiConfigured ? "API oficial ativa" : "Credenciais pendentes"}</span>
           <label>
-            Mensagem padrao futura
+            Mensagem de referencia
             <textarea name="lembretes_mensagem_padrao" rows="5" placeholder="Ex: Ola {{cliente_nome}}, passando para lembrar...">${escapeHtml(settings.lembretes_mensagem_padrao || "")}</textarea>
           </label>
         </article>
 
         <div class="drawer-helper">
-          Por enquanto esta tela salva apenas os numeros oficiais. Nenhuma mensagem automatica sera enviada pelo sistema nesta etapa.
+          O token e o identificador do numero oficial ficam protegidos nas variaveis do Railway. O envio automatico so ocorre quando todas as credenciais estao configuradas.
         </div>
 
         <div class="drawer-actions">
@@ -2533,6 +2534,14 @@ function renderAdminPaymentResult(resultNode, payment) {
   const whatsappLink = boletoMessage && whatsappPhone
     ? `https://wa.me/${whatsappPhone.startsWith("55") ? whatsappPhone : `55${whatsappPhone}`}?text=${encodeURIComponent(boletoMessage)}`
     : "";
+  const automaticDelivery = payment.whatsappDelivery || {};
+  const deliveryMessage = automaticDelivery.sent
+    ? "Mensagem enviada automaticamente pelo WhatsApp oficial."
+    : automaticDelivery.status === "not_configured"
+      ? "Envio automatico ainda nao configurado no Railway. Use o botao manual abaixo."
+      : automaticDelivery.status === "failed"
+        ? "Boleto gerado, mas o envio automatico falhou. Use o botao manual abaixo."
+        : "";
   resultNode.hidden = false;
   resultNode.innerHTML = `
     <h4>${isPix ? "Pix gerado" : "Boleto gerado"}</h4>
@@ -2540,6 +2549,7 @@ function renderAdminPaymentResult(resultNode, payment) {
     <p><strong>${escapeHtml(payment.planName || "Plano")}</strong> &bull; ${money(payment.amount)}</p>
     <p>ID Mercado Pago: <strong>${escapeHtml(payment.paymentId || "-")}</strong></p>
     ${!isPix && payment.dueDate ? `<p>Vencimento: <strong>${escapeHtml(formatDateInput(payment.dueDate))}</strong></p>` : ""}
+    ${deliveryMessage ? `<p><strong>WhatsApp:</strong> ${escapeHtml(deliveryMessage)}</p>` : ""}
     ${
       qrImage
         ? `<img src="${qrImage}" alt="QR Code Pix" class="admin-payment-qr" />`
