@@ -1930,13 +1930,13 @@ function openPasswordInfo() {
       <div>
         <p class="eyebrow">Seguranca</p>
         <h2>Alterar senha administrativa</h2>
-        <p>Administradores usam senha derivada, papel de acesso e autenticacao em dois fatores. A senha nao fica salva no frontend.</p>
+        <p>Administradores usam senha derivada e papel de acesso. A senha nao fica salva no frontend.</p>
       </div>
       <article class="panel">
         <h3>Modelo de acesso</h3>
         <div class="detail-grid">
           <p><span>Identidade</span><strong>admin_users</strong></p>
-          <p><span>Segundo fator</span><strong>TOTP obrigatorio</strong></p>
+          <p><span>Autenticacao</span><strong>E-mail e senha</strong></p>
           <p><span>Permissoes</span><strong>owner, finance, support ou viewer</strong></p>
         </div>
       </article>

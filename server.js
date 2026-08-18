@@ -23,8 +23,8 @@ import { validateUploadedDocument } from "./src/services/documentFileService.js"
 import { createDocumentStorage, documentSha256 } from "./src/services/documentStorageService.js";
 import { scanDocumentBuffer } from "./src/services/antivirusService.js";
 import { assertProductionConfig, isProductionEnvironment } from "./src/services/productionConfigService.js";
-import { decryptBankFields, decryptSensitive, encryptSensitive } from "./src/services/dataEncryptionService.js";
-import { isAdminAuthorized, verifyAdminPassword, verifyTotp } from "./src/services/adminAuthService.js";
+import { decryptBankFields, encryptSensitive } from "./src/services/dataEncryptionService.js";
+import { isAdminAuthorized } from "./src/services/adminAuthService.js";
 import { hashIp, requestContextMiddleware } from "./src/services/structuredLogger.js";
 import { sendOperationalAlert } from "./src/services/alertService.js";
 import { metricsMiddleware, snapshotMetrics } from "./src/services/metricsService.js";
@@ -1759,25 +1759,12 @@ app.get("/api/client/dashboard", requireClientSession, async (request, response)
 
 app.post("/api/admin/auth/login", adminLoginLimiter, async (request, response, next) => {
   try {
-  const { email, password, mfaCode } = request.body || {};
-  let admin;
-  if (isProduction) {
-    const [rows] = await dbPool.execute(
-      `SELECT id, email, password_hash, password_salt, role, mfa_secret, mfa_enabled
-       FROM admin_users WHERE email = :email AND active = 1 LIMIT 1`,
-      { email: String(email || "").trim().toLowerCase() },
-    );
-    admin = rows[0];
-    const passwordMatches = admin && verifyAdminPassword(password, admin.password_hash, admin.password_salt);
-    const mfaMatches = admin?.mfa_enabled && verifyTotp(decryptSensitive(admin.mfa_secret), mfaCode);
-    if (!passwordMatches || !mfaMatches) return response.status(401).json({ error: "Credenciais ou MFA invalidos." });
-    await dbPool.execute("UPDATE admin_users SET last_login_at = NOW() WHERE id = :id", { id: admin.id });
-  } else {
-    const adminEmail = process.env.ADMIN_EMAIL || "Atendimento@facilitameibr.com.br";
-    const matches = String(email || "").trim().toLowerCase() === adminEmail.toLowerCase() && safeCompare(password || "", process.env.ADMIN_PASSWORD || "");
-    if (!matches) return response.status(401).json({ error: "E-mail ou senha invalidos." });
-    admin = { id: null, email: adminEmail, role: "owner" };
-  }
+  const { email, password } = request.body || {};
+  const adminEmail = process.env.ADMIN_EMAIL || "Atendimento@facilitameibr.com.br";
+  const matches = String(email || "").trim().toLowerCase() === adminEmail.toLowerCase()
+    && safeCompare(password || "", process.env.ADMIN_PASSWORD || "");
+  if (!matches) return response.status(401).json({ error: "E-mail ou senha invalidos." });
+  const admin = { id: null, email: adminEmail, role: "owner" };
 
   const session = await createAdminSession(admin);
   setAdminCookie(response, session.token, session.expiresAt);
