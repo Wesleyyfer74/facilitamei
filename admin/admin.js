@@ -762,7 +762,7 @@ function renderCustomerPreview(data) {
               <button class="mini-action" type="button" data-open-customer="${customer.id}"><span>${iconSvg("renew")}</span>Renovar Assinatura</button>
               <button class="mini-action" type="button" data-manage-customer-plan="${customer.id}"><span>${iconSvg("swap")}</span>${subscription.id ? "Trocar Plano" : "Vincular Plano"}</button>
               <button class="mini-action" type="button" data-generate-customer-payment="${customer.id}" data-payment-method="pix"><span>${iconSvg("money")}</span>Gerar Pix</button>
-              <button class="mini-action" type="button" data-generate-customer-payment="${customer.id}" data-payment-method="boleto"><span>${iconSvg("ticket")}</span>Gerar Boleto</button>
+              <button class="mini-action" type="button" data-generate-customer-payment="${customer.id}" data-payment-method="boleto"><span>${iconSvg("ticket")}</span>Disparar Cobranca</button>
               <button class="mini-action danger" type="button" ${subscription.id ? `data-cancel-subscription="${subscription.id}"` : "disabled"}><span>${iconSvg("cancel")}</span>Cancelar Assinatura</button>
               <button class="mini-action" type="button" data-open-customer="${customer.id}"><span>${iconSvg("edit")}</span>Editar Cliente</button>
             </div>
@@ -2454,8 +2454,10 @@ async function openCustomerPaymentManager(customerId, method = "pix") {
       <div class="drawer-content">
         <div>
           <p class="eyebrow">Cobranca administrativa</p>
-          <h2>Gerar ${method === "boleto" ? "boleto" : "Pix"}</h2>
-          <p>${escapeHtml(customer.nome || "Cliente")} recebera uma cobranca avulsa vinculada ao plano selecionado.</p>
+          <h2>${method === "boleto" ? "Disparar cobranca por boleto" : "Gerar Pix"}</h2>
+          <p>${method === "boleto"
+            ? `O boleto de ${escapeHtml(customer.nome || "Cliente")} sera gerado no Mercado Pago e enviado ao WhatsApp cadastrado com o link para visualizar ou imprimir.`
+            : `${escapeHtml(customer.nome || "Cliente")} recebera uma cobranca avulsa vinculada ao plano selecionado.`}</p>
         </div>
 
         <form class="form-grid" data-admin-payment-form data-customer-id="${escapeHtml(customer.id)}">
@@ -2511,7 +2513,7 @@ async function openCustomerPaymentManager(customerId, method = "pix") {
           <div class="admin-payment-result" data-admin-payment-result hidden></div>
 
           <div class="drawer-actions">
-            <button class="gold-button" type="submit">Gerar cobranca</button>
+            <button class="gold-button" type="submit">${method === "boleto" ? "Gerar e enviar cobranca" : "Gerar cobranca"}</button>
             <button class="ghost-button" type="button" data-close-drawer>Cancelar</button>
           </div>
         </form>
