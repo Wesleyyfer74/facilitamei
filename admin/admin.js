@@ -678,6 +678,7 @@ function renderCustomerPreview(data) {
   const effectivePlanId = subscription.plan_id || latestPayment?.plan_id;
   const effectiveValue = subscription.valor || latestPayment?.valor;
   const effectiveStatus = subscription.status || latestPayment?.status;
+  const canSendPaymentReminder = ["pending", "in_process", "pendente"].includes(String(effectiveStatus || "").toLowerCase());
   const effectivePaymentMethod = subscription.metodo_pagamento || latestPayment?.payment_method;
   const paymentRows = payments.slice(0, 3).map(
     (payment) => `
@@ -763,6 +764,7 @@ function renderCustomerPreview(data) {
               <button class="mini-action" type="button" data-manage-customer-plan="${customer.id}"><span>${iconSvg("swap")}</span>${subscription.id ? "Trocar Plano" : "Vincular Plano"}</button>
               <button class="mini-action" type="button" data-generate-customer-payment="${customer.id}" data-payment-method="pix"><span>${iconSvg("money")}</span>Gerar Pix</button>
               <button class="mini-action" type="button" data-generate-customer-payment="${customer.id}" data-payment-method="boleto"><span>${iconSvg("ticket")}</span>Disparar Cobranca</button>
+              ${canSendPaymentReminder ? `<button class="mini-action" type="button" data-payment-reminder="${customer.id}"><span>${iconSvg("whatsapp")}</span>Enviar Lembrete</button>` : ""}
               <button class="mini-action danger" type="button" ${subscription.id ? `data-cancel-subscription="${subscription.id}"` : "disabled"}><span>${iconSvg("cancel")}</span>Cancelar Assinatura</button>
               <button class="mini-action" type="button" data-open-customer="${customer.id}"><span>${iconSvg("edit")}</span>Editar Cliente</button>
             </div>
@@ -2525,6 +2527,54 @@ async function openCustomerPaymentManager(customerId, method = "pix") {
   }
 }
 
+const pendingPaymentReminderMessage = `Olá, tudo bem? 😊
+
+A Facilita MEI ainda não identificou o pagamento referente ao seu plano.
+
+Caso você já tenha realizado o pagamento, por favor, envie o comprovante para verificarmos. Se ainda não realizou, podemos encaminhar uma nova cobrança.
+
+Se precisar de ajuda, estamos à disposição!`;
+
+async function openPaymentReminder(customerId) {
+  const data = await apiRequest(`/api/admin/customers/${customerId}`);
+  const customer = data.customer || {};
+  const phone = String(customer.whatsapp || customer.telefone || "").replace(/\D/g, "");
+  const whatsappUrl = phone
+    ? `https://wa.me/${phone.startsWith("55") ? phone : `55${phone}`}?text=${encodeURIComponent(pendingPaymentReminderMessage)}`
+    : "";
+
+  openDrawer(`
+    <div class="drawer-content">
+      <div>
+        <p class="eyebrow">Pagamento pendente</p>
+        <h2>Enviar lembrete de cobranca</h2>
+        <p>Confirme o envio para ${escapeHtml(customer.nome || "Cliente")} no WhatsApp ${escapeHtml(customer.whatsapp || customer.telefone || "nao cadastrado")}.</p>
+      </div>
+      <label>Mensagem programada
+        <textarea readonly rows="12">${escapeHtml(pendingPaymentReminderMessage)}</textarea>
+      </label>
+      <div class="drawer-helper">O envio oficial depende do modelo facilita_mei_pagamento_pendente estar aprovado na Meta.</div>
+      <div class="drawer-actions">
+        <button class="gold-button" type="button" data-confirm-payment-reminder="${escapeHtml(customerId)}">Enviar lembrete agora</button>
+        ${whatsappUrl ? `<a class="ghost-button" href="${escapeHtml(whatsappUrl)}" target="_blank" rel="noopener">Enviar manualmente</a>` : ""}
+        <button class="ghost-button" type="button" data-close-drawer>Cancelar</button>
+      </div>
+    </div>
+  `);
+}
+
+async function sendPaymentReminder(customerId, button) {
+  if (button) button.disabled = true;
+  try {
+    setStatus("Enviando lembrete de pagamento...");
+    await apiRequest(`/api/admin/customers/${customerId}/payment-reminder`, { method: "POST" });
+    setStatus("Lembrete de pagamento enviado pelo WhatsApp oficial.");
+    closeDrawer();
+  } finally {
+    if (button) button.disabled = false;
+  }
+}
+
 function renderAdminPaymentResult(resultNode, payment) {
   const isPix = payment.paymentMethod === "pix";
   const qrImage = isPix && payment.qrCodeBase64 ? `data:image/png;base64,${payment.qrCodeBase64}` : "";
@@ -3057,6 +3107,8 @@ document.addEventListener("click", (event) => {
   const cancelButton = event.target.closest("[data-cancel-subscription]");
   const manageCustomerPlanButton = event.target.closest("[data-manage-customer-plan]");
   const generateCustomerPaymentButton = event.target.closest("[data-generate-customer-payment]");
+  const paymentReminderButton = event.target.closest("[data-payment-reminder]");
+  const confirmPaymentReminderButton = event.target.closest("[data-confirm-payment-reminder]");
   const uploadDocumentButton = event.target.closest("[data-upload-document]");
   const adminDownloadDocumentButton = event.target.closest("[data-admin-download-document]");
   const newCustomerButton = event.target.closest("[data-new-customer]");
@@ -3105,6 +3157,11 @@ document.addEventListener("click", (event) => {
       generateCustomerPaymentButton.dataset.generateCustomerPayment,
       generateCustomerPaymentButton.dataset.paymentMethod || "pix",
     );
+  }
+  if (paymentReminderButton) openPaymentReminder(paymentReminderButton.dataset.paymentReminder).catch((error) => setStatus(error.message, "error"));
+  if (confirmPaymentReminderButton) {
+    sendPaymentReminder(confirmPaymentReminderButton.dataset.confirmPaymentReminder, confirmPaymentReminderButton)
+      .catch((error) => setStatus(error.message, "error"));
   }
   if (uploadDocumentButton) openUploadDocument(uploadDocumentButton.dataset.uploadDocument);
   if (adminDownloadDocumentButton) {

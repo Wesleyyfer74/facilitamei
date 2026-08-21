@@ -28,7 +28,12 @@ import { isAdminAuthorized } from "./src/services/adminAuthService.js";
 import { hashIp, requestContextMiddleware } from "./src/services/structuredLogger.js";
 import { sendOperationalAlert } from "./src/services/alertService.js";
 import { metricsMiddleware, snapshotMetrics } from "./src/services/metricsService.js";
-import { isWhatsappCloudConfigured, sendBoletoWhatsappTemplate } from "./src/services/whatsappCloudService.js";
+import {
+  isWhatsappCloudConfigured,
+  isWhatsappPendingTemplateConfigured,
+  sendBoletoWhatsappTemplate,
+  sendPendingPaymentWhatsappTemplate,
+} from "./src/services/whatsappCloudService.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -3946,6 +3951,65 @@ app.post("/api/admin/customers/:id/payments/:method", requireAdminSession, async
       error: error.message || "Erro ao gerar cobranca.",
       details: error.details,
     });
+  }
+});
+
+app.post("/api/admin/customers/:id/payment-reminder", requireAdminSession, async (request, response) => {
+  const userId = Number(request.params.id);
+  if (!Number.isFinite(userId) || userId <= 0) return response.status(400).json({ error: "Cliente invalido." });
+
+  try {
+    const [[customer]] = await dbPool.execute(
+      `SELECT id, nome, telefone, whatsapp
+       FROM users WHERE id = :userId LIMIT 1`,
+      { userId },
+    );
+    if (!customer) return response.status(404).json({ error: "Cliente nao encontrado." });
+
+    const [[subscription]] = await dbPool.execute(
+      `SELECT status FROM subscriptions WHERE user_id = :userId ORDER BY created_at DESC LIMIT 1`,
+      { userId },
+    );
+    const [[payment]] = await dbPool.execute(
+      `SELECT status FROM payments WHERE user_id = :userId ORDER BY created_at DESC LIMIT 1`,
+      { userId },
+    );
+    const financialStatus = String(subscription?.status || payment?.status || "").toLowerCase();
+    if (!["pending", "in_process", "pendente"].includes(financialStatus)) {
+      return response.status(409).json({ error: "O lembrete de pagamento esta disponivel apenas para clientes pendentes." });
+    }
+    if (!isWhatsappPendingTemplateConfigured()) {
+      return response.status(503).json({ error: "Configure e aprove o modelo de pagamento pendente na Meta antes do envio." });
+    }
+
+    const recipient = customer.whatsapp || customer.telefone;
+    const [logResult] = await dbPool.execute(
+      `INSERT INTO payment_reminder_deliveries (user_id, recipient, status)
+       VALUES (:userId, :recipient, 'sending')`,
+      { userId, recipient: normalizeDigits(recipient) },
+    );
+
+    try {
+      const sent = await sendPendingPaymentWhatsappTemplate({ recipient });
+      await dbPool.execute(
+        `UPDATE payment_reminder_deliveries
+         SET status = 'sent', provider_message_id = :messageId, sent_at = CURRENT_TIMESTAMP
+         WHERE id = :id`,
+        { id: logResult.insertId, messageId: sent.messageId },
+      );
+      response.json({ ok: true, sent: true, messageId: sent.messageId });
+    } catch (error) {
+      await dbPool.execute(
+        `UPDATE payment_reminder_deliveries
+         SET status = 'failed', error_message = :errorMessage
+         WHERE id = :id`,
+        { id: logResult.insertId, errorMessage: String(error.message || "Falha no envio").slice(0, 500) },
+      );
+      throw error;
+    }
+  } catch (error) {
+    console.error("Erro ao enviar lembrete de pagamento:", error);
+    response.status(error.status || 500).json({ error: error.message || "Erro ao enviar lembrete de pagamento." });
   }
 });
 

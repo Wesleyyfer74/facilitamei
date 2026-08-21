@@ -24,6 +24,7 @@ const requiredSchema = {
   contract_reminder_settings: ["id", "ativo"],
   whatsapp_settings: ["id"],
   boleto_whatsapp_deliveries: ["id", "gateway_payment_id", "recipient", "status", "provider_message_id"],
+  payment_reminder_deliveries: ["id", "user_id", "recipient", "status", "provider_message_id"],
   email_settings: ["id"],
   email_logs: ["dedupe_key", "status"],
   customer_contract_events: ["id", "acao"],

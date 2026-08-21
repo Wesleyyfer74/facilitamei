@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { normalizeWhatsappRecipient, sendBoletoWhatsappTemplate } from "../src/services/whatsappCloudService.js";
+import {
+  normalizeWhatsappRecipient,
+  sendBoletoWhatsappTemplate,
+  sendPendingPaymentWhatsappTemplate,
+} from "../src/services/whatsappCloudService.js";
 
 test("normaliza telefone brasileiro para WhatsApp Cloud", () => {
   assert.equal(normalizeWhatsappRecipient("(67) 99999-0000"), "5567999990000");
@@ -35,4 +39,24 @@ test("envia template de boleto com as quatro variaveis na ordem correta", async 
     "Cliente Teste", "R$ 99,90", "21/08/2026", "https://example.com/boleto",
   ]);
   assert.equal(result.messageId, "wamid.123");
+});
+
+test("envia modelo aprovado de lembrete de pagamento pendente", async () => {
+  let request;
+  await sendPendingPaymentWhatsappTemplate({ recipient: "67999990000" }, {
+    config: {
+      accessToken: "token-seguro",
+      phoneNumberId: "123456",
+      pendingTemplateName: "facilita_mei_pagamento_pendente",
+      languageCode: "pt_BR",
+      apiVersion: "v23.0",
+    },
+    fetchImpl: async (url, options) => {
+      request = { url, body: JSON.parse(options.body) };
+      return { ok: true, json: async () => ({ messages: [{ id: "wamid.456" }] }) };
+    },
+    signal: {},
+  });
+  assert.equal(request.body.template.name, "facilita_mei_pagamento_pendente");
+  assert.equal(request.body.template.components, undefined);
 });
