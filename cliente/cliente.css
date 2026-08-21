@@ -59,8 +59,8 @@ a {
 }
 
 .access-card {
-  width: min(460px, 100%);
-  padding: 34px;
+  width: min(520px, 100%);
+  padding: 36px 38px 38px;
   border: 1px solid rgba(240, 191, 90, 0.28);
   border-radius: 16px;
   background: linear-gradient(180deg, rgba(26, 21, 15, 0.94), rgba(8, 8, 7, 0.96));
@@ -71,6 +71,11 @@ a {
 .client-sidebar img {
   width: 150px;
   height: auto;
+}
+
+.access-card > img {
+  display: block;
+  margin-bottom: 18px;
 }
 
 .eyebrow {
@@ -89,9 +94,11 @@ p {
 }
 
 .access-card h1 {
+  max-width: 420px;
   margin-bottom: 12px;
-  font-size: clamp(2.2rem, 7vw, 3.8rem);
-  line-height: 0.94;
+  font-size: clamp(2.35rem, 6vw, 3.35rem);
+  line-height: 1;
+  letter-spacing: -0.035em;
 }
 
 .access-card p {
@@ -101,8 +108,8 @@ p {
 
 .access-tabs {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 5px;
   margin: 24px 0 16px;
   padding: 5px;
   border: 1px solid var(--line);
@@ -112,11 +119,33 @@ p {
 
 .access-tabs button {
   min-height: 42px;
+  padding: 8px 10px;
   color: var(--muted);
   border: 0;
   border-radius: 999px;
   background: transparent;
   font-weight: 800;
+  line-height: 1.15;
+}
+
+@media (max-width: 520px) {
+  .client-access {
+    align-items: start;
+    padding: 14px;
+  }
+
+  .access-card {
+    padding: 28px 22px 30px;
+  }
+
+  .access-card h1 {
+    font-size: clamp(2.15rem, 12vw, 3rem);
+  }
+
+  .access-tabs button {
+    padding-inline: 6px;
+    font-size: 0.84rem;
+  }
 }
 
 .access-tabs button.is-active {
